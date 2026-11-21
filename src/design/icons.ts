@@ -12,7 +12,7 @@ import {
   Pencil, PieChart, Plus, Presentation, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, Share, Shield, ShieldCheck,
   SignalHigh, SignalLow, SignalMedium, Smartphone, Sparkles, Star, Sun, Tag, Target, Timer, Trash2, TrendingDown, TrendingUp, Undo2,
   Upload, User, UserPlus, Users, Wallet, WifiOff, X, XCircle, Zap, Wrench, History, Flag, Layers, CircleCheckBig, Hourglass, Banknote,
-  Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact,
+  Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact, LayoutGrid, Camera,
   type LucideIcon,
 } from "lucide-react";
 
@@ -42,6 +42,8 @@ export const icons = {
   viewKanban: Kanban,
   viewCalendar: Calendar,
   viewGantt: GanttChart,
+  viewGrid: LayoutGrid,
+  camera: Camera,
   // ações
   add: Plus,
   edit: Pencil,
