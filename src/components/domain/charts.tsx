@@ -52,11 +52,11 @@ export function BarSeriesChart<T extends Record<string, unknown>>({ data, xKey, 
           {horizontal ? (
             <>
               <XAxis type="number" {...axis} tickFormatter={(v) => fmt(v, format)} />
-              <YAxis type="category" dataKey={xKey} {...axis} width={110} tickFormatter={xFormat} />
+              <YAxis type="category" dataKey={xKey as never} {...axis} width={110} tickFormatter={xFormat} />
             </>
           ) : (
             <>
-              <XAxis dataKey={xKey} {...axis} tickFormatter={xFormat} interval="preserveStartEnd" />
+              <XAxis dataKey={xKey as never} {...axis} tickFormatter={xFormat} interval="preserveStartEnd" />
               <YAxis {...axis} tickFormatter={(v) => fmt(v, format)} width={56} />
             </>
           )}
@@ -86,7 +86,7 @@ export function LineSeriesChart<T extends Record<string, unknown>>({ data, xKey,
             ))}
           </defs>
           <CartesianGrid stroke={t.chart.grid} vertical={false} strokeDasharray="3 3" />
-          <XAxis dataKey={xKey} {...axis} tickFormatter={xFormat} interval="preserveStartEnd" minTickGap={24} />
+          <XAxis dataKey={xKey as never} {...axis} tickFormatter={xFormat} interval="preserveStartEnd" minTickGap={24} />
           <YAxis {...axis} tickFormatter={(v) => fmt(v, format)} width={56} />
           <Tooltip content={<ChartTooltip format={format} labelFormat={xFormat} />} />
           {series.length > 1 && <Legend iconType="circle" iconSize={8} formatter={legendFormatter} />}
