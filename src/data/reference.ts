@@ -1,0 +1,150 @@
+/**
+ * Tabelas de referência (seção 6.3) — semeadas "por migração", somente leitura.
+ * Mudar processo = alterar este arquivo + deploy (P4).
+ */
+import type {
+  PriorityKey,
+  ProjectStageKey,
+  QuoteStageKey,
+  ReferenceItem,
+  TaskStatusKey,
+  ProjectStatus,
+  ReceivableStatus,
+  PayableStatus,
+  MemberRole,
+  Role,
+  Specialty,
+  FileCategory,
+  ProposalStatus,
+  ApprovalDecision,
+  ClientStatus,
+  ResourceCategory,
+} from "./types";
+
+export const QUOTE_STAGES: ReferenceItem<QuoteStageKey>[] = [
+  { key: "entrada", label: "Entrada", order: 1, category: "open" },
+  { key: "diagnostico", label: "Diagnóstico", order: 2, category: "open" },
+  { key: "elaboracao", label: "Elaboração", order: 3, category: "open" },
+  { key: "enviada", label: "Enviada", order: 4, category: "waiting" },
+  { key: "negociacao", label: "Negociação", order: 5, category: "waiting" },
+  { key: "aprovada", label: "Aprovada", order: 6, category: "done" },
+  { key: "perdida", label: "Perdida", order: 7, category: "lost" },
+];
+
+export const PROJECT_STAGES: ReferenceItem<ProjectStageKey>[] = [
+  { key: "entrada", label: "Entrada", order: 1, category: "open" },
+  { key: "roteiro", label: "Roteiro", order: 2, category: "open" },
+  { key: "ajustes_roteiro", label: "Ajustes de roteiro", order: 3, category: "open" },
+  { key: "validacao_cliente_roteiro", label: "Validação do cliente", order: 4, category: "waiting" },
+  { key: "design", label: "Design", order: 5, category: "open" },
+  { key: "ajustes_design", label: "Ajustes de design", order: 6, category: "open" },
+  { key: "validacao_final", label: "Validação final", order: 7, category: "waiting" },
+  { key: "concluido", label: "Concluído", order: 8, category: "done" },
+];
+
+export const TASK_STATUSES: ReferenceItem<TaskStatusKey>[] = [
+  { key: "a_fazer", label: "A fazer", order: 1, category: "open" },
+  { key: "em_andamento", label: "Em andamento", order: 2, category: "open" },
+  { key: "em_revisao", label: "Em revisão", order: 3, category: "waiting" },
+  { key: "concluida", label: "Concluída", order: 4, category: "done" },
+];
+
+export const PRIORITIES: ReferenceItem<PriorityKey>[] = [
+  { key: "urgente", label: "Urgente", order: 1, category: "open" },
+  { key: "alta", label: "Alta", order: 2, category: "open" },
+  { key: "media", label: "Média", order: 3, category: "open" },
+  { key: "baixa", label: "Baixa", order: 4, category: "open" },
+];
+
+export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
+  cotacao: "Em cotação",
+  ativo: "Ativo",
+  concluido: "Concluído",
+  arquivado: "Arquivado",
+  perdido: "Perdido",
+  cancelado: "Cancelado",
+};
+
+export const RECEIVABLE_STATUS_LABEL: Record<ReceivableStatus, string> = {
+  previsto: "Previsto",
+  faturado: "Faturado",
+  recebido: "Recebido",
+  vencido: "Vencido",
+  cancelado: "Cancelado",
+};
+
+export const PAYABLE_STATUS_LABEL: Record<PayableStatus, string> = {
+  aguardando_nf: "Aguardando NF",
+  em_conferencia: "Em conferência",
+  divergente: "Divergente",
+  aprovado: "Aprovado",
+  pago: "Pago",
+};
+
+export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
+  rascunho: "Rascunho",
+  enviada: "Enviada",
+  aprovada: "Aprovada",
+  recusada: "Recusada",
+};
+
+export const APPROVAL_DECISION_LABEL: Record<ApprovalDecision, string> = {
+  pendente: "Pendente",
+  aprovado: "Aprovado",
+  ajustes: "Ajustes",
+  negado: "Negado",
+};
+
+export const MEMBER_ROLE_LABEL: Record<MemberRole, string> = {
+  responsavel: "Responsável",
+  designer: "Designer",
+  roteirista: "Roteirista",
+  advogado: "Advogado",
+  apoio: "Apoio",
+};
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: "Administrador",
+  gestao: "Gestão",
+  comercial: "Comercial",
+  financeiro: "Financeiro",
+  operacao: "Operação",
+  freelancer: "Freelancer",
+};
+
+export const SPECIALTY_LABEL: Record<Specialty, string> = {
+  design: "Design",
+  roteiro: "Roteiro",
+  juridico: "Jurídico",
+  outro: "Outro",
+};
+
+export const FILE_CATEGORY_LABEL: Record<FileCategory, string> = {
+  entrega: "Entrega",
+  briefing: "Briefing",
+  marca_cliente: "Marca do cliente",
+  proposta: "Proposta",
+  nf: "Nota fiscal",
+  institucional: "Institucional",
+  outro: "Outro",
+};
+
+export const CLIENT_STATUS_LABEL: Record<ClientStatus, string> = {
+  ativo: "Ativo",
+  inativo: "Inativo",
+  prospect: "Prospect",
+};
+
+export const RESOURCE_CATEGORY_LABEL: Record<ResourceCategory, string> = {
+  ferramenta: "Ferramenta",
+  template: "Template",
+  playbook: "Playbook",
+  referencia: "Referência",
+};
+
+export const quoteStage = (key: QuoteStageKey | null | undefined) =>
+  QUOTE_STAGES.find((s) => s.key === key);
+export const projectStage = (key: ProjectStageKey | null | undefined) =>
+  PROJECT_STAGES.find((s) => s.key === key);
+export const taskStatus = (key: TaskStatusKey) => TASK_STATUSES.find((s) => s.key === key)!;
+export const priority = (key: PriorityKey) => PRIORITIES.find((s) => s.key === key)!;
