@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
-import { Button, Icon, TextField } from "@/components/ui";
+import { Button, Icon, PasswordField, TextField } from "@/components/ui";
 import { ApiError, authApi } from "@/data/services";
 
 const DEMO = [
@@ -22,7 +22,6 @@ function LoginForm() {
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [show, setShow] = useState(false);
   const [mfa, setMfa] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -96,21 +95,7 @@ function LoginForm() {
           </div>
         )}
         <TextField id="login-email" label="E-mail" type="email" name="email" autoComplete="email" spellCheck={false} autoFocus value={email} onChange={(e) => setEmail(e.target.value)} error={fieldErrors.email} />
-        <TextField
-          id="login-password"
-          label="Senha"
-          type={show ? "text" : "password"}
-          name="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={fieldErrors.password}
-          suffix={
-            <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Ocultar senha" : "Mostrar senha"} className="flex size-7 items-center justify-center rounded-sm text-fg-subtle hover:text-fg">
-              <Icon name={show ? "hide" : "reveal"} size="sm" />
-            </button>
-          }
-        />
+        <PasswordField id="login-password" label="Senha" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={fieldErrors.password} />
         <div className="flex justify-end">
           <Link href="/recuperar-senha" className="text-xs text-accent hover:underline">
             Esqueci minha senha
@@ -124,17 +109,18 @@ function LoginForm() {
         <p className="mb-2 text-xs font-medium text-fg-subtle">Acesso de demonstração (senha: draw123)</p>
         <div className="flex flex-wrap gap-1.5">
           {DEMO.map((d) => (
-            <button
+            <Button
               key={d.email}
-              type="button"
+              variant="outline"
+              size="xs"
+              className="max-md:h-9"
               onClick={() => {
                 setEmail(d.email);
                 setPassword("draw123");
               }}
-              className="rounded-md border border-line px-2 py-1 text-xs text-fg-muted hover:border-line-strong hover:bg-layer-hover max-md:py-2"
             >
               {d.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

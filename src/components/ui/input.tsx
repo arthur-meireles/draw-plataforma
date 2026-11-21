@@ -193,3 +193,22 @@ export function SearchInput({ value, onChange, placeholder = "Buscar…", classN
     </div>
   );
 }
+
+/** Senha com botão de mostrar/ocultar. */
+export const PasswordField = forwardRef<HTMLInputElement, InputProps & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string }>(
+  function PasswordField(props, ref) {
+    const [show, setShow] = useState(false);
+    return (
+      <TextField
+        ref={ref}
+        {...props}
+        type={show ? "text" : "password"}
+        suffix={
+          <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Ocultar senha" : "Mostrar senha"} className="flex size-7 items-center justify-center rounded-sm text-fg-subtle hover:text-fg max-md:size-9">
+            <Icon name={show ? "hide" : "reveal"} size="sm" />
+          </button>
+        }
+      />
+    );
+  },
+);
