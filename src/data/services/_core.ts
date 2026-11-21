@@ -46,7 +46,7 @@ export function actor(db: Database = loadDb()): User {
 }
 
 /** Latência simulada de rede para exercitar estados de carregamento. */
-export const latency = (ms = 160) => new Promise((r) => setTimeout(r, ms + Math.random() * 120));
+export const latency = (ms = 160) => (process.env.NODE_ENV === "test" ? Promise.resolve() : new Promise((r) => setTimeout(r, ms + Math.random() * 120)));
 
 export async function read<T>(fn: (db: Database, me: User) => T, ms?: number): Promise<T> {
   await latency(ms);
