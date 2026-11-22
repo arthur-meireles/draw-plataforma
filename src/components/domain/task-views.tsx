@@ -44,7 +44,6 @@ export interface TaskKanbanColumns {
   emptyColumnText?: string;
 }
 
-const DAY = 86_400_000;
 
 function taskTone(t: TaskView): Tone {
   if (t.statusKey === "concluida") return "success";
