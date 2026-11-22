@@ -22,7 +22,7 @@ const ROW_H = 36;
 const LABEL_W = "w-40 md:w-60";
 const LABEL_LEFT = "left-40 md:left-60";
 
-export function Gantt({ items, groups, emptyText = "Nenhum item com datas para exibir." }: { items: TimelineItem[]; groups?: GanttGroup[]; emptyText?: string }) {
+export function Gantt({ items, groups, emptyText = "Nenhum item com datas para exibir.", labelHeader = "Projeto" }: { items: TimelineItem[]; groups?: GanttGroup[]; emptyText?: string; labelHeader?: string }) {
   const [zoom, setZoom] = useState<Zoom>("semana");
   const scroller = useRef<HTMLDivElement>(null);
   const dayW = DAY_W[zoom];
@@ -85,7 +85,7 @@ export function Gantt({ items, groups, emptyText = "Nenhum item com datas para e
         <div className="relative flex w-max flex-col">
           {/* cabeçalho */}
           <div className="sticky top-0 z-20 flex border-b border-line bg-layer">
-            <div className={cn("sticky left-0 z-30 shrink-0 border-r border-line bg-layer px-3 py-2 text-xs font-medium text-fg-subtle", LABEL_W)}>Projeto</div>
+            <div className={cn("sticky left-0 z-30 shrink-0 border-r border-line bg-layer px-3 py-2 text-xs font-medium text-fg-subtle", LABEL_W)}>{labelHeader}</div>
             <div className="relative h-12 shrink-0" style={{ width }}>
               {months.map((m) => (
                 <div key={m.left} className="absolute top-0 h-6 truncate border-l border-line px-2 text-xs font-medium leading-6 first-letter:uppercase text-fg-muted" style={{ left: m.left, width: m.width }}>
@@ -151,6 +151,14 @@ function GanttRow({ item, origin, dayW, totalW }: { item: TimelineItem; origin: 
   );
   const cls = "flex border-b border-line hover:bg-layer-hover/50";
   const tip = `${item.title}${item.meta ? ` · ${item.meta}` : ""}`;
+  if (!item.href && item.onSelect)
+    return (
+      <Tooltip content={tip}>
+        <button type="button" onClick={item.onSelect} className={cn(cls, "text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50")} style={{ height: ROW_H }}>
+          {content}
+        </button>
+      </Tooltip>
+    );
   return item.href ? (
     <Tooltip content={tip}>
       <Link href={item.href} className={cls} style={{ height: ROW_H }}>

@@ -1,6 +1,6 @@
 "use client";
-import { SegmentedControl } from "@/components/ui";
-import { TaskList, TaskPeek, type PersonRef } from "@/components/domain";
+import { SegmentedControl, ViewSwitcher } from "@/components/ui";
+import { TASK_VIEW_OPTIONS, TaskPeek, TaskViews, useTaskView, type PersonRef } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskFilters } from "@/data/services";
@@ -14,6 +14,7 @@ export function ProjectTasks({ project }: { project: ProjectDetail }) {
   const { isFreelancer, canWrite } = usePermissions();
   const [url, setUrl] = useUrlState({ filtro: "todas", tarefa: undefined as string | undefined });
   const filtro = (["todas", "minhas", "abertas"].includes(url.filtro) ? url.filtro : "todas") as Filter;
+  const [view, setView] = useTaskView("lista");
   const members = useProjectMembers(project.id);
 
   const filters: TaskFilters = {
@@ -39,18 +40,24 @@ export function ProjectTasks({ project }: { project: ProjectDetail }) {
           ]}
         />
         <span className="text-xs text-fg-subtle">{tasks.data ? `${tasks.data.length} ${tasks.data.length === 1 ? "tarefa" : "tarefas"}` : ""}</span>
+        <span className="flex-1" />
+        <ViewSwitcher value={view} onChange={setView} views={TASK_VIEW_OPTIONS} />
       </div>
-      <TaskList
+      <TaskViews
         tasks={tasks.data}
         isLoading={tasks.isLoading}
         error={tasks.error}
         onRetry={() => tasks.refetch()}
-        groupBy="stage"
+        view={view}
+        onViewChange={setView}
         onOpen={(t) => setUrl({ tarefa: t.id })}
-        restrictAssignees={team}
         readOnly={["arquivado", "cancelado"].includes(project.status)}
-        quickAdd={canCreate ? { projectId: project.id } : undefined}
-        empty={{ title: filtro === "minhas" ? "Nenhuma tarefa sua neste projeto" : filtro === "abertas" ? "Nenhuma tarefa aberta" : "Nenhuma tarefa ainda", description: filtro === "todas" ? (canCreate ? "Crie a primeira tarefa abaixo. Ao ativar o projeto, as tarefas do modelo do tipo são geradas por etapa." : "As tarefas do projeto aparecem aqui.") : "Troque o filtro para ver as demais tarefas." }}
+        listProps={{
+          groupBy: "stage",
+          restrictAssignees: team,
+          quickAdd: canCreate ? { projectId: project.id } : undefined,
+          empty: { title: filtro === "minhas" ? "Nenhuma tarefa sua neste projeto" : filtro === "abertas" ? "Nenhuma tarefa aberta" : "Nenhuma tarefa ainda", description: filtro === "todas" ? (canCreate ? "Crie a primeira tarefa abaixo. Ao ativar o projeto, as tarefas do modelo do tipo são geradas por etapa." : "As tarefas do projeto aparecem aqui.") : "Troque o filtro para ver as demais tarefas." },
+        }}
       />
       <TaskPeek taskId={url.tarefa ?? null} onClose={() => setUrl({ tarefa: undefined })} restrictAssignees={team} />
     </div>

@@ -1,16 +1,15 @@
 "use client";
 import { Suspense, useMemo, useState } from "react";
-import { AccessGate, TaskPeek } from "@/components/domain";
+import { AccessGate, TASK_VIEW_OPTIONS, TaskPeek, TaskViews, useTaskView } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Button, ClearFiltersButton, Switch, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar } from "@/components/ui";
+import { Button, ClearFiltersButton, Switch, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar, ViewSwitcher } from "@/components/ui";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
 import type { AdmArea, TaskStatusKey } from "@/data/types";
 import { useUrlState } from "@/lib/use-url-state";
-import { AreaBoard } from "./area-board";
+import { areaKanbanColumns } from "./area-board";
 import { AdmTaskDialog } from "./adm-task-dialog";
 import { BacklogList } from "./backlog-list";
-import { SprintBoard } from "./sprint-board";
 import { SprintFormDialog } from "./sprint-form-dialog";
 import { SprintList, SprintStatusBadge } from "./sprint-list";
 
@@ -22,6 +21,7 @@ function Content() {
   const [url, setUrl] = useUrlState({ vista: "area" as string, concluidas: "", tarefa: undefined as string | undefined, sprint: undefined as string | undefined, q: "" });
   const vista = (["area", "sprint", "backlog", "sprints"].includes(url.vista) ? url.vista : "area") as Vista;
 
+  const [view, setView] = useTaskView(vista === "backlog" ? "lista" : "kanban");
   const sprints = useApiQuery(["sprints"], tasksApi.sprints);
   const tasks = useApiQuery(["tasks", "adm"], () => tasksApi.list({ module: "adm" }));
 
@@ -50,7 +50,9 @@ function Content() {
       <PageHeader
         crumbs={[{ label: "Administrativo", icon: "adm", href: "/adm/tarefas" }, { label: "Tarefas" }]}
         actions={
-          canEdit && (
+          <>
+            {vista !== "sprints" && <ViewSwitcher value={view} onChange={setView} views={TASK_VIEW_OPTIONS} />}
+            {canEdit && (
             <>
               <Button size="sm" variant="outline" icon="sprint" onClick={() => setSprintDialog(true)} className="max-md:hidden">
                 Nova sprint
@@ -59,7 +61,8 @@ function Content() {
                 Nova tarefa
               </Button>
             </>
-          )
+            )}
+          </>
         }
       />
       <Tabs
@@ -93,14 +96,43 @@ function Content() {
       )}
 
       <PageBody padded={false} className="flex flex-col">
-        {vista === "area" && <AreaBoard tasks={areaTasks} isLoading={tasks.isLoading} canEdit={canEdit} onOpen={openTask} />}
+        {vista === "area" && (
+          <TaskViews
+            tasks={areaTasks}
+            isLoading={tasks.isLoading}
+            error={tasks.error}
+            onRetry={() => tasks.refetch()}
+            view={view}
+            onViewChange={setView}
+            onOpen={openTask}
+            readOnly={!canEdit}
+            kanbanColumns={areaKanbanColumns(canEdit)}
+            listProps={{ groupBy: "area", quickAdd: canEdit ? { module: "adm", sprintId: null } : undefined, empty: { title: q ? "Nenhuma tarefa encontrada" : "Nenhuma pendência", description: q ? "Tente outro termo de busca." : "As tarefas internas aparecem aqui, por área." } }}
+          />
+        )}
         {vista === "sprint" &&
           (sprints.isLoading || !sprints.data || current ? (
-            <SprintBoard tasks={sprintTasks} isLoading={sprints.isLoading || tasks.isLoading} canEdit={canEdit} onOpen={openTask} onAdd={(statusKey) => setTaskDialog({ statusKey, sprintId: current?.id })} />
+            <TaskViews
+              tasks={sprintTasks}
+              isLoading={sprints.isLoading || tasks.isLoading}
+              error={tasks.error}
+              onRetry={() => tasks.refetch()}
+              view={view}
+              onViewChange={setView}
+              onOpen={openTask}
+              readOnly={!canEdit}
+              onAdd={(statusKey) => setTaskDialog({ statusKey: statusKey as TaskStatusKey, sprintId: current?.id })}
+              listProps={{ groupBy: "status", quickAdd: canEdit && current ? { module: "adm", sprintId: current.id } : undefined, empty: { title: "Nenhuma tarefa na sprint", description: "Adicione tarefas a esta sprint pelo backlog ou crie uma nova." } }}
+            />
           ) : (
             <EmptyState icon="sprint" title="Nenhuma sprint ainda" description="Crie uma sprint para organizar o quadro de tarefas internas." action={canEdit ? { label: "Nova sprint", icon: "add", onClick: () => setSprintDialog(true) } : undefined} />
           ))}
-        {vista === "backlog" && <BacklogList tasks={backlogTasks} sprints={sprints.data ?? []} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} canEdit={canEdit} onOpen={openTask} />}
+        {vista === "backlog" &&
+          (view === "lista" ? (
+            <BacklogList tasks={backlogTasks} sprints={sprints.data ?? []} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} canEdit={canEdit} onOpen={openTask} />
+          ) : (
+            <TaskViews tasks={backlogTasks} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} view={view} onViewChange={setView} onOpen={openTask} readOnly={!canEdit} onAdd={(statusKey) => setTaskDialog({ statusKey: statusKey as TaskStatusKey, sprintId: null })} />
+          ))}
         {vista === "sprints" && <SprintList sprints={sprints.data} tasks={tasks.data} isLoading={sprints.isLoading} error={sprints.error} onRetry={() => sprints.refetch()} canEdit={canEdit} onCreate={() => setSprintDialog(true)} onOpenBoard={(s) => setUrl({ vista: "sprint", sprint: s.id })} />}
       </PageBody>
 

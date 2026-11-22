@@ -16,3 +16,5 @@ export * from "./proposals";
 export * from "./access-gate";
 export * from "./project-flags";
 export * from "./additional-charge-dialog";
+export * from "./task-card";
+export * from "./task-views";

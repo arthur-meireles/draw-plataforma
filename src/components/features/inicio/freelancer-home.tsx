@@ -1,8 +1,8 @@
 "use client";
 /** Início do freelancer (RF-M9-01..05): seus projetos, tarefas por prazo, NFs pendentes, agenda e materiais. */
 import Link from "next/link";
-import { Button, EmptyState, ErrorState, Section, Skeleton, Stat } from "@/components/ui";
-import { ProjectCard, TaskList, TaskPeek } from "@/components/domain";
+import { Button, EmptyState, ErrorState, Section, Skeleton, Stat, ViewSwitcher } from "@/components/ui";
+import { ProjectCard, TaskPeek, TaskViews, useTaskView } from "@/components/domain";
 import { InstallPromptCard } from "@/components/pwa/pwa-ui";
 import { useApiQuery } from "@/data/hooks";
 import { metricsApi, projectsApi, tasksApi } from "@/data/services";
@@ -14,6 +14,7 @@ import { WeekAgenda } from "./week-agenda";
 
 export function FreelancerHome() {
   const [url, setUrl] = useUrlState({ tarefa: undefined as string | undefined });
+  const [view, setView] = useTaskView("lista");
   const home = useApiQuery(["metrics", "freelancer-home"], metricsApi.freelancerHome);
   const projects = useApiQuery(["projects", "mine-active"], () => projectsApi.list({ status: ["ativo"] }));
   const tasks = useApiQuery(["tasks", "mine"], () => tasksApi.list({ assignee: "me" }));
@@ -39,8 +40,23 @@ export function FreelancerHome() {
 
       <div className="grid gap-4 md:gap-6 xl:grid-cols-3">
         <div className="min-w-0 space-y-4 md:space-y-6 xl:col-span-2">
-          <Section title="Suas tarefas" icon="myTasks" bodyClassName="p-0" actions={<Link href="/minhas-tarefas" className="text-xs text-accent hover:underline">Ver todas</Link>}>
-            <TaskList tasks={open?.slice(0, 12)} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} groupBy="due" showProject onOpen={(t) => setUrl({ tarefa: t.id })} empty={{ icon: "success", title: "Nenhuma tarefa aberta", description: "Quando a gestão atribuir uma tarefa, ela aparece aqui." }} />
+          <Section title="Suas tarefas" icon="myTasks" bodyClassName="p-0" actions={
+              <>
+                <ViewSwitcher value={view} onChange={setView} views={["lista", "kanban", "calendario"]} />
+                <Link href="/minhas-tarefas" className="text-xs text-accent hover:underline">Ver todas</Link>
+              </>
+            }>
+            <TaskViews
+              tasks={view === "lista" ? open?.slice(0, 12) : open}
+              isLoading={tasks.isLoading}
+              error={tasks.error}
+              onRetry={() => tasks.refetch()}
+              view={view}
+              onViewChange={setView}
+              showProject
+              onOpen={(t) => setUrl({ tarefa: t.id })}
+              listProps={{ groupBy: "due", empty: { icon: "success", title: "Nenhuma tarefa aberta", description: "Quando a gestão atribuir uma tarefa, ela aparece aqui." } }}
+            />
           </Section>
         </div>
         <div className="min-w-0 space-y-4 md:space-y-6">
