@@ -108,7 +108,7 @@ export function Calendar({ items, month, onMonthChange, emptyText = "Nada neste 
       <div className="flex items-center gap-1.5 px-3 py-2 md:px-4">
         <IconButton icon="chevronLeft" label="Mês anterior" size="sm" onClick={() => shift(-1)} />
         <IconButton icon="chevronRight" label="Próximo mês" size="sm" onClick={() => shift(1)} />
-        <h2 className="min-w-36 text-base font-semibold capitalize text-fg">{monthLabel(first)}</h2>
+        <h2 className="min-w-36 text-base font-semibold text-fg first-letter:uppercase">{monthLabel(first)}</h2>
         <Button size="sm" variant="outline" onClick={() => onMonthChange(monthKey(new Date()))}>
           Hoje
         </Button>
@@ -168,7 +168,7 @@ export function Calendar({ items, month, onMonthChange, emptyText = "Nada neste 
           <ul className="space-y-3">
             {agendaDays.map((d) => (
               <li key={dayKey(d)}>
-                <p className={cn("mb-1.5 text-xs font-medium capitalize", dayKey(d) === today ? "text-accent" : "text-fg-subtle")}>{d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short" })}</p>
+                <p className={cn("mb-1.5 text-xs font-medium first-letter:uppercase", dayKey(d) === today ? "text-accent" : "text-fg-subtle")}>{d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short" })}</p>
                 <div className="flex flex-col gap-1.5">
                   {(byDay.get(dayKey(d)) ?? []).map((it) => (
                     <ItemChip key={it.id} item={it} />

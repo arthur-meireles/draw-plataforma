@@ -88,7 +88,7 @@ export function Gantt({ items, groups, emptyText = "Nenhum item com datas para e
             <div className={cn("sticky left-0 z-30 shrink-0 border-r border-line bg-layer px-3 py-2 text-xs font-medium text-fg-subtle", LABEL_W)}>Projeto</div>
             <div className="relative h-12 shrink-0" style={{ width }}>
               {months.map((m) => (
-                <div key={m.left} className="absolute top-0 h-6 truncate border-l border-line px-2 text-xs font-medium capitalize leading-6 text-fg-muted" style={{ left: m.left, width: m.width }}>
+                <div key={m.left} className="absolute top-0 h-6 truncate border-l border-line px-2 text-xs font-medium leading-6 first-letter:uppercase text-fg-muted" style={{ left: m.left, width: m.width }}>
                   {m.label}
                 </div>
               ))}

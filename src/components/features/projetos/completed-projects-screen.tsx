@@ -75,6 +75,7 @@ export function CompletedProjectsScreen() {
       id: "type",
       header: "Tipo",
       hideBelow: "lg",
+      mobile: "hidden",
       cell: (p) => (
         <span className="inline-flex items-center gap-1.5 text-fg-muted">
           <ProjectTypeIcon icon={p.typeIcon} size="xs" />
@@ -92,12 +93,15 @@ export function CompletedProjectsScreen() {
   return (
     <>
       <PageHeader crumbs={[{ label: "Projetos", icon: "project", href: "/projetos" }, { label: "Concluídos" }]} count={rows?.length} />
-      <Toolbar end={<Switch size="sm" checked={includeArchived} onCheckedChange={(v) => set({ arquivados: v ? "1" : "" })} label="Incluir arquivados" />}>
+      <Toolbar>
         <SearchInput value={state.q} onChange={(q) => set({ q })} placeholder="Buscar projeto, código ou cliente…" className="sm:w-72 max-md:w-56 max-md:shrink-0" />
         <FilterSelect label="Cliente" icon="client" options={clientOptions} value={state.cliente || null} onChange={(v) => set({ cliente: v ?? "" })} searchPlaceholder="Buscar cliente…" />
         <FilterSelect label="Tipo" icon="project" options={typeOptions} value={state.tipo || null} onChange={(v) => set({ tipo: v ?? "" })} />
         <FilterSelect label="Período" icon="due" options={PERIOD_OPTIONS} value={state.periodo || null} onChange={(v) => set({ periodo: v ?? "" })} />
         <ClearFiltersButton show={hasFilters} onClick={clear} />
+        <span className="shrink-0 md:ml-auto">
+          <Switch size="sm" checked={includeArchived} onCheckedChange={(v) => set({ arquivados: v ? "1" : "" })} label="Incluir arquivados" />
+        </span>
       </Toolbar>
       <PageBody padded={false}>
         <DataTable
