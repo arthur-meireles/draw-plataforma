@@ -42,3 +42,11 @@ next-env.d.ts
 # local
 .env*.local
 .claude/
+
+# cloudflare
+.open-next/
+.wrangler/
+.dev.vars
+
+# anotações locais (credenciais)
+*.local.md

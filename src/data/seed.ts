@@ -49,7 +49,7 @@ import type {
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -132,6 +132,22 @@ export function createSeed(): Database {
     lastLoginAt: d(-int(0, 3)),
     passwordMock: "draw123",
   }));
+  // Conta de administração do ambiente publicado (credencial no README → "Acesso").
+  users.unshift({
+    ...base("usr", -400),
+    id: "usr_admin",
+    name: "Administrador Draw",
+    email: "admin@drawthelaw.com.br",
+    role: "admin",
+    jobTitle: "Administração da plataforma",
+    userType: "internal",
+    status: "ativo",
+    avatarColor: AVATAR_COLORS[0],
+    phone: null,
+    mfaEnabled: false,
+    lastLoginAt: null,
+    passwordMock: process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "draw123",
+  });
   users.push({
     ...base("usr", -3),
     id: "usr_convite",

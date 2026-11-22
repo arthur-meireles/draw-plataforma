@@ -1,0 +1,16 @@
+{
+  // Worker da plataforma Draw (Next.js via OpenNext). Deploy: `npm run deploy`
+  // ou integração Git da Cloudflare (Workers Builds) com o comando de build `npx opennextjs-cloudflare build`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "draw-plataforma",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // evita `__name is not defined` em scripts inline serializados (next-themes)
+  "keep_names": false
+}

@@ -7,6 +7,9 @@ import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
 import { Button, Icon, PasswordField, TextField } from "@/components/ui";
 import { ApiError, authApi } from "@/data/services";
 
+/** Atalhos de demonstração: visíveis em desenvolvimento ou com NEXT_PUBLIC_DEMO_LOGIN=1. */
+const SHOW_DEMO = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_DEMO_LOGIN === "1";
+
 const DEMO = [
   { email: "paula@draw.com.br", label: "Paula · Admin" },
   { email: "beatriz@draw.com.br", label: "Beatriz · Gestão" },
@@ -105,6 +108,7 @@ function LoginForm() {
           Entrar
         </Button>
       </form>
+      {SHOW_DEMO && (
       <div className="mt-6 border-t border-line pt-4">
         <p className="mb-2 text-xs font-medium text-fg-subtle">Acesso de demonstração (senha: draw123)</p>
         <div className="flex flex-wrap gap-1.5">
@@ -124,6 +128,7 @@ function LoginForm() {
           ))}
         </div>
       </div>
+      )}
     </>
   );
 }
