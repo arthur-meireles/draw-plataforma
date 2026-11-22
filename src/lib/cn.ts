@@ -7,6 +7,7 @@ const twMerge = extendTailwindMerge({
     theme: {
       text: ["2xs", "xs", "sm", "base", "md", "lg", "xl"],
       shadow: ["raised", "raised-2", "overlay"],
+      font: ["sans", "display", "mono"],
     },
   },
 });

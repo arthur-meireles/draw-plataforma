@@ -24,7 +24,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" }, // token-ok: theme-color exige literal (= --surface)
-    { media: "(prefers-color-scheme: dark)", color: "#151618" }, // token-ok: = --surface (escuro)
+    { media: "(prefers-color-scheme: dark)", color: "#091238" }, // token-ok: = --surface (escuro)
   ],
 };
 

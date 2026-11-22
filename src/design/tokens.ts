@@ -5,6 +5,10 @@
 export const t = {
   color: {
     accent: "var(--accent)",
+    accentSolid: "var(--accent-solid)",
+    navy: "var(--navy)",
+    orchid: "var(--orchid)",
+    magenta: "var(--magenta)",
     success: "var(--success)",
     warning: "var(--warning)",
     danger: "var(--danger)",

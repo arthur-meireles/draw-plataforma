@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Avatar, Button, DropdownMenu, Icon, Kbd, Tooltip, type MenuItem } from "@/components/ui";
+import { Avatar, BrandMark, Button, DropdownMenu, Icon, Kbd, Tooltip, type MenuItem } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUnreadCount } from "@/data/hooks";
 import { authApi } from "@/data/services";
@@ -29,15 +29,15 @@ export function Rail() {
   const pathname = usePathname();
   const visible = useVisible();
   return (
-    <nav aria-label="Atalhos" className="flex w-rail shrink-0 flex-col items-center gap-1 border-r border-line bg-canvas py-3 max-xl:hidden">
-      <Link href="/" aria-label="Draw — início" className="mb-3 flex size-8 items-center justify-center rounded-lg bg-fg text-sm font-bold text-surface">
-        D
+    <nav aria-label="Atalhos" className="flex w-rail shrink-0 flex-col items-center gap-1 bg-navy py-3 max-xl:hidden">
+      <Link href="/" aria-label="Draw — início" className="mb-3 rounded-lg">
+        <BrandMark size="md" />
       </Link>
       {visible(RAIL).map((item) => {
         const active = item.href === "/projetos" ? pathname.startsWith("/projetos") || pathname.startsWith("/comercial") : isActive(pathname, item);
         return (
           <Tooltip key={item.href} content={item.label} side="right">
-            <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-surface text-fg shadow-raised" : "text-fg-subtle hover:bg-layer-hover hover:text-fg")}>
+            <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10 hover:text-white")}>
               <Icon name={item.icon} size="md" />
             </Link>
           </Tooltip>
@@ -64,7 +64,7 @@ function SideLink({ item, badge, onNavigate, depth = 0 }: { item: NavItem; badge
     >
       {depth === 0 && <Icon name={item.icon} size="sm" className={active ? "text-fg" : "text-fg-subtle group-hover:text-fg-muted"} />}
       <span className="flex-1 truncate">{item.label}</span>
-      {!!badge && <span className="rounded-full bg-accent px-1.5 text-2xs font-semibold leading-4 text-accent-fg tabular-nums">{badge > 99 ? "99+" : badge}</span>}
+      {!!badge && <span className="rounded-full bg-accent-solid px-1.5 text-2xs font-semibold leading-4 text-accent-fg tabular-nums">{badge > 99 ? "99+" : badge}</span>}
     </Link>
   );
 }
@@ -167,8 +167,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-header shrink-0 items-center gap-2 px-3">
-        <span className="flex size-6 items-center justify-center rounded-md bg-fg text-xs font-bold text-surface xl:hidden">D</span>
-        <span className="flex-1 truncate text-sm font-semibold text-fg">Draw Legal Design</span>
+        <BrandMark size="sm" className="xl:hidden" />
+        <span className="flex-1 truncate font-display text-sm font-bold text-fg">Draw the Law</span>
       </div>
       <div className="flex flex-col gap-2 px-3 pb-2">
         {perm.canWriteAll("projects") && (

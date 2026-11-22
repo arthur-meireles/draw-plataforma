@@ -20,7 +20,7 @@ export function StageStepper({ project }: { project: ProjectDetail }) {
         const current = !finished && i === currentIdx;
         return (
           <li key={s.key} aria-current={current ? "step" : undefined} className="flex min-w-[6.5rem] flex-1 flex-col gap-1.5">
-            <span className={cn("h-1 rounded-full", past ? "bg-accent" : current ? (lost ? "bg-danger" : "bg-accent/60") : "bg-layer-active")} />
+            <span className={cn("h-1 rounded-full", past ? "bg-accent-solid" : current ? (lost ? "bg-danger" : "bg-accent/60") : "bg-layer-active")} />
             <span className={cn("flex items-center gap-1.5 text-xs", current ? "font-medium text-fg" : past ? "text-fg-muted" : "text-fg-subtle")}>
               <StageIcon category={past ? "done" : current ? s.category : "open"} progress={current && s.category === "open" ? (quote ? (s.order - 1) / 5 : stageProgress(s.key as never)) : undefined} size={12} />
               <span className="truncate">{s.label}</span>

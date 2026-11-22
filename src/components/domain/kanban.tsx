@@ -65,7 +65,7 @@ function Column<T, K extends string>({ column, items, props, count, className }:
     <section aria-label={column.label} className={cn("flex w-column shrink-0 flex-col rounded-lg bg-layer/70 max-md:w-full", isOver && !column.locked && "ring-2 ring-accent/40", className)}>
       <header className="flex items-center gap-1.5 px-3 pb-1 pt-2.5">
         {column.icon}
-        <h3 className="truncate text-sm font-medium text-fg">{column.label}</h3>
+        <h3 className="truncate font-display text-sm font-semibold text-fg">{column.label}</h3>
         <span className="pl-1 text-xs tabular-nums text-fg-subtle">{count}</span>
         <span className="flex-1" />
         {props.onAdd && !column.locked && <IconButton icon="add" label={`Adicionar em ${column.label}`} size="xs" onClick={() => props.onAdd!(column.key)} />}

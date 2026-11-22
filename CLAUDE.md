@@ -13,8 +13,10 @@ front é **completo e funcional com dados locais** (localStorage + seed). O back
 - Radix UI (primitivas acessíveis), cmdk, dnd-kit, Recharts, sonner, next-themes
 - TanStack Query sobre a "API" local (`src/data/services`)
 - Ícones: lucide, **somente** via registro `src/design/icons.ts`
-- Fonte: Inter Variable (pacote `@fontsource-variable/inter`, sem CDN)
-- Referência visual: **Plane** (superfícies em camadas, bordas finas, alta densidade, peek lateral)
+- Fontes: **Roboto** (corpo) e **Manrope** (títulos, rótulos, tags, números de KPI → `font-display`), via `@fontsource-variable/*`, sem CDN
+- Estrutura/fluxos: **Plane** (superfícies em camadas, bordas finas, alta densidade, peek lateral)
+- Identidade: **Draw the Law** — marinho `#071445` (neutros com matiz marinho), violeta `#784BFD` (ação),
+  orquídea `#B549D5` e magenta `#CC3366` (acentos), gradiente-assinatura orquídea→violeta só decorativo
 
 ## Comandos
 
@@ -86,6 +88,15 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 - Escala tipográfica densa estilo Plane: `text-2xs` 11 · `text-xs` 12 · `text-sm` 13 (padrão)
   · `text-base` 14 · `text-md` 16 · `text-lg` 20 · `text-xl` 24.
 - Para JS (Recharts/SVG), use `t.*` de `src/design/tokens.ts` (sempre `var(--…)`).
+- **Cor de ação tem dois papéis:** `bg-accent-solid` (+ `hover:bg-accent-solid-hover`) para FUNDOS com texto
+  branco; `text-accent` / `border-accent` / `bg-accent-subtle` para texto, borda e tinta. Nunca `bg-accent`
+  como fundo de botão (o contraste do texto quebra no tema escuro).
+- **Marca:** `BrandMark`/`BrandLogo` do kit; gradiente via `bg-brand-gradient` **somente** em formas decorativas
+  (círculos, logo) — nunca atrás de texto pequeno (branco sobre orquídea reprova AA). Botões são pílula
+  sólida, sem brilho. Rail lateral em `bg-navy`.
+- **Datas:** sempre `DateField`/`DateInput`/`DatePicker` do kit (dd/mm/aaaa no desktop, nativo no celular);
+  nunca `<input type="date">`.
+- **Gráficos:** sempre de `components/domain/charts` (carregam sob demanda); nunca importar `charts-impl` ou recharts.
 - Todo componente funciona nos **dois temas** (claro/escuro). Nunca cor dependente de tema fixa.
 
 ### Lei 4 — Commits obrigatórios, push sob demanda

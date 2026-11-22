@@ -101,7 +101,7 @@ export function InstallPromptCard() {
   };
   return (
     <div className="flex items-center gap-3 rounded-lg border border-line bg-surface p-3 md:hidden">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-fg">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-solid text-accent-fg">
         <Icon name="install" size="md" />
       </span>
       <div className="min-w-0 flex-1">

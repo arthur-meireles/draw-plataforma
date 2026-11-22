@@ -26,7 +26,7 @@ const toneClasses: Record<Tone, string> = {
 
 export function Badge({ tone = "neutral", icon, dot, children, className, size = "sm" }: { tone?: Tone; icon?: IconName; dot?: boolean; children: React.ReactNode; className?: string; size?: "xs" | "sm" }) {
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border font-medium", size === "xs" ? "h-[18px] px-1 text-2xs" : "h-5 px-1.5 text-xs", toneClasses[tone], className)}>
+    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border font-display font-semibold", size === "xs" ? "h-[18px] px-1 text-2xs" : "h-5 px-1.5 text-xs", toneClasses[tone], className)}>
       {dot && <span className="size-1.5 rounded-full bg-current" />}
       {icon && <Icon name={icon} size="xs" />}
       {children}
@@ -101,7 +101,7 @@ export function Spinner({ className, label = "Carregando" }: { className?: strin
 
 export function Progress({ value, max = 100, tone = "accent", className, label }: { value: number; max?: number; tone?: "accent" | "success" | "warning" | "danger"; className?: string; label?: string }) {
   const pct = max ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
-  const bar = { accent: "bg-accent", success: "bg-success", warning: "bg-warning", danger: "bg-danger" }[tone];
+  const bar = { accent: "bg-accent-solid", success: "bg-success", warning: "bg-warning", danger: "bg-danger" }[tone];
   return (
     <div role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label} className={cn("h-1.5 w-full overflow-hidden rounded-full bg-layer-active", className)}>
       <div className={cn("h-full rounded-full transition-[width] duration-300", bar)} style={{ width: `${pct}%` }} />
@@ -133,7 +133,7 @@ export function Separator({ className, vertical }: { className?: string; vertica
 /* ───────── Superfícies ───────── */
 export function Card({ className, children, interactive, ...props }: React.HTMLAttributes<HTMLDivElement> & { interactive?: boolean }) {
   return (
-    <div className={cn("rounded-lg border border-line bg-surface", interactive && "transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2 cursor-pointer", className)} {...props}>
+    <div className={cn("rounded-xl border border-line bg-surface", interactive && "transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2 cursor-pointer", className)} {...props}>
       {children}
     </div>
   );
@@ -142,11 +142,11 @@ export function Card({ className, children, interactive, ...props }: React.HTMLA
 /** Bloco com título (usado em prontuário, fichas, configurações). */
 export function Section({ title, description, actions, children, className, bodyClassName, icon }: { title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string; bodyClassName?: string; icon?: IconName }) {
   return (
-    <section className={cn("rounded-lg border border-line bg-surface", className)}>
+    <section className={cn("rounded-xl border border-line bg-surface", className)}>
       <header className="flex min-h-11 flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {icon && <Icon name={icon} size="sm" className="text-fg-subtle" />}
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          <h2 className="font-display text-sm font-bold text-fg">{title}</h2>
           {description && <p className="text-xs text-fg-subtle">{description}</p>}
         </div>
         {actions && <div className="flex items-center gap-1.5">{actions}</div>}
@@ -160,7 +160,7 @@ export function Section({ title, description, actions, children, className, body
 export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loading }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: IconName; tone?: Tone; trend?: { value: string; up: boolean; good?: boolean }; href?: string; onClick?: () => void; loading?: boolean }) {
   const Comp = href ? Link : onClick ? "button" : "div";
   return (
-    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("flex min-w-0 flex-col gap-1 rounded-lg border border-line bg-surface p-4 text-left", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
+    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-left", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
       <div className="flex items-center gap-2 text-xs font-medium text-fg-subtle">
         {icon && (
           <span className={cn("flex size-6 items-center justify-center rounded-md", tone ? toneClasses[tone] : "bg-layer text-fg-muted")}>
@@ -169,7 +169,7 @@ export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loa
         )}
         <span className="truncate">{label}</span>
       </div>
-      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate text-xl font-semibold tabular-nums text-fg">{value}</div>}
+      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate font-display text-xl font-bold tabular-nums text-fg">{value}</div>}
       {(hint || trend) && (
         <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
           {trend && (
@@ -220,7 +220,7 @@ export function EmptyState({ icon = "inbox", title, description, action, seconda
         <Icon name={icon} size={compact ? "md" : "lg"} />
       </span>
       <div className="max-w-sm space-y-1">
-        <p className={cn("font-semibold text-fg", compact ? "text-sm" : "text-base")}>{title}</p>
+        <p className={cn("font-display font-bold text-fg", compact ? "text-sm" : "text-base")}>{title}</p>
         {description && <p className="text-sm text-fg-subtle">{description}</p>}
       </div>
       {(action || secondaryAction) && (
@@ -322,7 +322,7 @@ export function Tabs<V extends string>({ value, onChange, items, children, class
             <TabsPrimitive.Trigger
               key={i.value}
               value={i.value}
-              className="relative flex h-10 shrink-0 items-center gap-1.5 px-2 text-sm text-fg-subtle transition-colors hover:text-fg data-[state=active]:text-fg data-[state=active]:after:absolute data-[state=active]:after:inset-x-1 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-accent"
+              className="relative flex h-10 shrink-0 items-center gap-1.5 px-2 text-sm text-fg-subtle transition-colors hover:text-fg data-[state=active]:text-fg data-[state=active]:after:absolute data-[state=active]:after:inset-x-1 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-accent-solid"
             >
               {i.icon && <Icon name={i.icon} size="sm" />}
               {i.label}

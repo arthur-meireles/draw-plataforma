@@ -10,19 +10,19 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-fg hover:bg-accent-hover shadow-raised",
+        primary: "bg-accent-solid text-accent-fg hover:bg-accent-solid-hover shadow-raised",
         secondary: "bg-layer-2 text-fg border border-line hover:bg-layer-hover hover:border-line-strong",
         ghost: "text-fg-muted hover:bg-layer-hover hover:text-fg",
         outline: "border border-line text-fg-muted hover:bg-layer-hover hover:text-fg",
         destructive: "bg-danger text-white hover:opacity-90 shadow-raised",
         "destructive-ghost": "text-danger hover:bg-danger-subtle",
-        link: "text-accent hover:underline underline-offset-2 px-0 h-auto",
+        link: "text-accent hover:underline underline-offset-2 !px-0 h-auto !rounded-none",
       },
       size: {
-        xs: "h-6 px-2 text-xs rounded-sm",
-        sm: "h-7 px-2.5 text-xs rounded-md",
-        md: "h-8 px-3 text-sm rounded-md",
-        lg: "h-10 px-4 text-base rounded-md max-md:h-11",
+        xs: "h-6 px-2.5 text-xs rounded-full",
+        sm: "h-7 px-3 text-xs rounded-full",
+        md: "h-8 px-3.5 text-sm rounded-full",
+        lg: "h-10 px-5 text-base rounded-full max-md:h-11",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },
@@ -73,7 +73,7 @@ const iconButtonVariants = cva(
       variant: {
         ghost: "hover:bg-layer-hover",
         secondary: "border border-line bg-layer-2 hover:bg-layer-hover",
-        primary: "bg-accent text-accent-fg hover:bg-accent-hover hover:text-accent-fg",
+        primary: "bg-accent-solid text-accent-fg hover:bg-accent-solid-hover hover:text-accent-fg",
         destructive: "hover:bg-danger-subtle hover:text-danger",
       },
       size: {

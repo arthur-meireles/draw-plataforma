@@ -26,7 +26,7 @@ function Stepper({ step }: { step: Step }) {
     <ol className="flex items-center gap-2" aria-label="Etapas da importação">
       {STEPS.map((s, i) => (
         <li key={s.id} aria-current={i === idx ? "step" : undefined} className="flex items-center gap-2">
-          <span className={cn("flex size-6 items-center justify-center rounded-full text-xs font-semibold", i < idx ? "bg-success text-accent-fg" : i === idx ? "bg-accent text-accent-fg" : "bg-layer text-fg-subtle")}>
+          <span className={cn("flex size-6 items-center justify-center rounded-full text-xs font-semibold", i < idx ? "bg-success text-accent-fg" : i === idx ? "bg-accent-solid text-accent-fg" : "bg-layer text-fg-subtle")}>
             {i < idx ? <Icon name="check" size="xs" /> : i + 1}
           </span>
           <span className={cn("text-xs max-sm:hidden", i === idx ? "font-medium text-fg" : "text-fg-subtle")}>{s.label}</span>
@@ -168,7 +168,7 @@ export function ImportWizard() {
                 onClick={() => setKind(k.value)}
                 className={cn("flex flex-col gap-2 rounded-lg border p-4 text-left transition-colors max-md:min-h-11", kind === k.value ? "border-accent bg-accent-subtle" : "border-line hover:bg-layer-hover")}
               >
-                <span className={cn("flex size-8 items-center justify-center rounded-md", kind === k.value ? "bg-accent text-accent-fg" : "bg-layer text-fg-muted")}>
+                <span className={cn("flex size-8 items-center justify-center rounded-md", kind === k.value ? "bg-accent-solid text-accent-fg" : "bg-layer text-fg-muted")}>
                   <Icon name={k.icon} size="md" />
                 </span>
                 <span className="text-sm font-medium text-fg">{k.label}</span>

@@ -44,7 +44,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
         >
           <div className="flex items-start gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="text-base font-semibold text-fg">{title}</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="font-display text-base font-bold text-fg">{title}</DialogPrimitive.Title>
               {description ? (
                 <DialogPrimitive.Description className="mt-0.5 text-xs text-fg-subtle">{description}</DialogPrimitive.Description>
               ) : (

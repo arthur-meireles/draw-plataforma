@@ -36,7 +36,7 @@ export function InboxItem({ item: n, selected, onSelect }: { item: InboxNotifica
             {n.projectCode && <span className="font-mono">{n.projectCode}</span>}
           </span>
         </span>
-        {unread && <span aria-label="Não lida" className="mt-2 size-2 shrink-0 rounded-full bg-accent" />}
+        {unread && <span aria-label="Não lida" className="mt-2 size-2 shrink-0 rounded-full bg-accent-solid" />}
       </div>
     </li>
   );

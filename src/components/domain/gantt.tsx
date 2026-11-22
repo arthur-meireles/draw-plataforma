@@ -102,8 +102,8 @@ export function Gantt({ items, groups, emptyText = "Nenhum item com datas para e
           {/* corpo */}
           <div className="relative">
             <div className={cn("pointer-events-none absolute bottom-0 top-0 z-[5]", LABEL_LEFT)} style={{ width }}>
-              <div className="absolute bottom-0 top-0 w-px bg-accent" style={{ left: todayX + dayW / 2 }}>
-                <span className="absolute left-1/2 top-0 -translate-x-1/2 rounded-b-sm bg-accent px-1 text-2xs font-medium text-accent-fg">Hoje</span>
+              <div className="absolute bottom-0 top-0 w-px bg-accent-solid" style={{ left: todayX + dayW / 2 }}>
+                <span className="absolute left-1/2 top-0 -translate-x-1/2 rounded-b-sm bg-accent-solid px-1 text-2xs font-medium text-accent-fg">Hoje</span>
               </div>
             </div>
             {rows.map((r) =>

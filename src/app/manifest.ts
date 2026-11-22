@@ -4,7 +4,7 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Draw — Gestão Integrada",
+    name: "Draw the Law — Gestão Integrada",
     short_name: "Draw",
     description: "Projetos, comercial, financeiro e freelancers da Draw Legal Design.",
     start_url: "/",
@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "pt-BR",
     dir: "ltr",
     theme_color: "#ffffff",
-    background_color: "#f3f4f6",
+    background_color: "#f6f5fb",
     categories: ["business", "productivity"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

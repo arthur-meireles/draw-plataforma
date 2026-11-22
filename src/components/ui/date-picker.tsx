@@ -126,7 +126,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
                   onClick={() => pick(key)}
                   className={cn(
                     "flex h-8 items-center justify-center rounded-md text-xs tabular-nums transition-colors disabled:opacity-30",
-                    selected ? "bg-accent font-semibold text-accent-fg" : key === todayKey ? "font-semibold text-accent ring-1 ring-inset ring-accent-line hover:bg-layer-hover" : inMonth ? "text-fg hover:bg-layer-hover" : "text-fg-placeholder hover:bg-layer-hover",
+                    selected ? "bg-accent-solid font-semibold text-accent-fg" : key === todayKey ? "font-semibold text-accent ring-1 ring-inset ring-accent-line hover:bg-layer-hover" : inMonth ? "text-fg hover:bg-layer-hover" : "text-fg-placeholder hover:bg-layer-hover",
                   )}
                 >
                   {d.getDate()}

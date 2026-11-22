@@ -18,7 +18,7 @@ export function RankBars({ items, format = "number", max: maxProp, className }: 
             <span className="font-medium tabular-nums text-fg">{fmt(i.value, format)}</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-layer-active">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${(i.value / max) * 100}%` }} />
+            <div className="h-full rounded-full bg-accent-solid" style={{ width: `${(i.value / max) * 100}%` }} />
           </div>
         </li>
       ))}

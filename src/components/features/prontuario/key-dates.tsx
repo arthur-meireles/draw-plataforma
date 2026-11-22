@@ -21,7 +21,7 @@ export function KeyDates({ project }: { project: ProjectDetail }) {
         const overdue = r.planned && !!r.at && !project.completedAt && new Date(r.at).getTime() < Date.now();
         return (
           <li key={r.key} className="flex min-w-0 items-start gap-2">
-            <span className={cn("mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border", done ? "border-accent bg-accent text-accent-fg" : r.planned && r.at ? (overdue ? "border-danger text-danger" : "border-accent text-accent") : "border-line-strong text-transparent")}>
+            <span className={cn("mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border", done ? "border-accent bg-accent-solid text-accent-fg" : r.planned && r.at ? (overdue ? "border-danger text-danger" : "border-accent text-accent") : "border-line-strong text-transparent")}>
               {done ? <Icon name="check" size="xs" /> : r.planned && r.at ? <Icon name="due" size="xs" /> : null}
             </span>
             <div className="min-w-0">

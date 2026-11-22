@@ -126,7 +126,7 @@ export function ViewSwitcher({ value, onChange, views = ["lista", "kanban"] }: {
 
 /** Botão flutuante de ação principal no celular (10.6). */
 export function Fab({ label, icon = "add", onClick, href }: { label: string; icon?: IconName; onClick?: () => void; href?: string }) {
-  const cls = "fixed bottom-[calc(var(--spacing-bottomnav)+env(safe-area-inset-bottom)+1rem)] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-accent text-accent-fg shadow-overlay active:scale-95 transition-transform md:hidden";
+  const cls = "fixed bottom-[calc(var(--spacing-bottomnav)+env(safe-area-inset-bottom)+1rem)] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-accent-solid text-accent-fg shadow-overlay active:scale-95 transition-transform md:hidden";
   if (href)
     return (
       <Link href={href} aria-label={label} className={cls}>

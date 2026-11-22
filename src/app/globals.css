@@ -1,89 +1,102 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/roboto";
+@import "@fontsource-variable/manrope";
 
 /*
  * Tokens de design — FONTE ÚNICA de cores, superfícies, raios, sombras e tipografia.
  * Espelhados em `src/design/tokens.ts` (para uso em JS: gráficos, SVG).
- * Inspiração visual: Plane (superfícies em camadas, bordas finas, densidade alta).
+ * Estrutura visual inspirada no Plane; identidade Draw the Law (marinho #071445, violeta #784BFD,
+ * orquídea #B549D5, magenta #CC3366; Roboto + Manrope).
  * Telas NUNCA usam hex/px soltos: só as classes geradas daqui (bg-surface, text-fg-muted…).
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --canvas: #f3f4f6;
+  --canvas: #f6f5fb;
   --surface: #ffffff;
-  --surface-2: #f9fafb;
-  --layer: #f3f4f6;
-  --layer-hover: #ebecef;
-  --layer-active: #e3e5e9;
+  --surface-2: #faf9fd;
+  --layer: #f2f1f8;
+  --layer-hover: #eae9f3;
+  --layer-active: #e0dfec;
   --layer-2: #ffffff;
-  --line: #e5e7eb;
-  --line-strong: #d1d5db;
-  --fg: #16181d;
-  --fg-muted: #3d424b;
-  --fg-subtle: #6b717c;
-  --fg-placeholder: #9ca2ad;
-  --accent: #3f76ff;
-  --accent-hover: #2f63eb;
-  --accent-subtle: #eaf0ff;
-  --accent-line: #b9cdff;
+  --line: #e4e3ee;
+  --line-strong: #c6c5d8;
+  --fg: #071445;
+  --fg-muted: #2e3456;
+  --fg-subtle: #5b5f7a;
+  --fg-placeholder: #8d8fa9;
+  --accent: #5f35e0;
+  --accent-hover: #4a27b5;
+  --accent-solid: #784bfd;
+  --accent-solid-hover: #5f35e0;
+  --accent-subtle: #f6f2ff;
+  --accent-line: #d8c8ff;
   --accent-fg: #ffffff;
-  --success: #12875a;
-  --success-subtle: #e7f6ef;
-  --warning: #b45309;
-  --warning-subtle: #fdf3e2;
-  --danger: #d92d20;
-  --danger-subtle: #fdecea;
-  --info: #2563eb;
-  --info-subtle: #e8effd;
-  --orange: #ea6a0c;
-  --violet: #7c3aed;
-  --violet-subtle: #f1eafe;
-  --backdrop: rgb(15 17 21 / 0.45);
-  --shadow-color: 220 15% 20%;
-  --chart-1: #3f76ff;
-  --chart-2: #0fa37f;
-  --chart-3: #f59e0b;
-  --chart-4: #8b5cf6;
-  --chart-5: #ec4899;
-  --chart-6: #06b6d4;
-  --chart-grid: #e5e7eb;
+  --navy: #071445;
+  --navy-2: #0a1448;
+  --orchid: #b549d5;
+  --magenta: #cc3366;
+  --brand-gradient: linear-gradient(90deg, #b549d5 0%, #784bfd 100%);
+  --success: #22703a;
+  --success-subtle: #e1f4e6;
+  --warning: #a35a06;
+  --warning-subtle: #fdf1df;
+  --danger: #c8324f;
+  --danger-subtle: #fbe6ee;
+  --info: #2b45a6;
+  --info-subtle: #e7edff;
+  --orange: #c2570c;
+  --violet: #7d2896;
+  --violet-subtle: #f4e9fb;
+  --backdrop: rgb(7 20 69 / 0.45);
+  --shadow-color: 229 82% 15%;
+  --chart-1: #784bfd;
+  --chart-2: #3fa557;
+  --chart-3: #f0a83a;
+  --chart-4: #b549d5;
+  --chart-5: #cc3366;
+  --chart-6: #3a7bd5;
+  --chart-grid: #e4e3ee;
 }
 
 .dark {
-  --canvas: #0d0e10;
-  --surface: #151618;
-  --surface-2: #1a1b1e;
-  --layer: #1e1f22;
-  --layer-hover: #25272b;
-  --layer-active: #2c2e33;
-  --layer-2: #1b1c1f;
-  --line: #2a2c30;
-  --line-strong: #3b3e44;
-  --fg: #eceef1;
-  --fg-muted: #c3c7ce;
-  --fg-subtle: #8e939c;
-  --fg-placeholder: #636871;
-  --accent: #4f83ff;
-  --accent-hover: #6b97ff;
-  --accent-subtle: #1b2540;
-  --accent-line: #2f4275;
+  --canvas: #040a26;
+  --surface: #091238;
+  --surface-2: #0c1640;
+  --layer: #101b4b;
+  --layer-hover: #152257;
+  --layer-active: #1b2a66;
+  --layer-2: #0d1744;
+  --line: #1c2860;
+  --line-strong: #2b3a7a;
+  --fg: #eeedf6;
+  --fg-muted: #c6c5d8;
+  --fg-subtle: #9799b5;
+  --fg-placeholder: #6a6e8f;
+  --accent: #b99eff;
+  --accent-hover: #d8c8ff;
+  --accent-solid: #784bfd;
+  --accent-solid-hover: #8b63fe;
+  --accent-subtle: #1d1650;
+  --accent-line: #3a2d8a;
   --accent-fg: #ffffff;
-  --success: #34c38f;
-  --success-subtle: #12291f;
+  --navy: #050c30;
+  --navy-2: #071445;
+  --success: #5ccf7d;
+  --success-subtle: #0f2a1c;
   --warning: #f0a83a;
   --warning-subtle: #2d2111;
-  --danger: #ff6b5e;
-  --danger-subtle: #321615;
-  --info: #6b9bff;
-  --info-subtle: #17223b;
+  --danger: #ff6b86;
+  --danger-subtle: #3a1222;
+  --info: #8ea6ff;
+  --info-subtle: #17225a;
   --orange: #fb923c;
-  --violet: #a78bfa;
-  --violet-subtle: #241b38;
-  --backdrop: rgb(0 0 0 / 0.6);
-  --shadow-color: 0 0% 0%;
-  --chart-grid: #2a2c30;
+  --violet: #dc9eed;
+  --violet-subtle: #2a1640;
+  --backdrop: rgb(2 5 20 / 0.65);
+  --shadow-color: 230 80% 3%;
+  --chart-grid: #1c2860;
 }
 
 @theme inline {
@@ -102,6 +115,12 @@
   --color-fg-placeholder: var(--fg-placeholder);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-orchid: var(--orchid);
+  --color-magenta: var(--magenta);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-line: var(--accent-line);
   --color-accent-fg: var(--accent-fg);
@@ -118,7 +137,8 @@
   --color-violet-subtle: var(--violet-subtle);
   --color-backdrop: var(--backdrop);
 
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Roboto Variable", "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   /* escala densa estilo Plane: 11 / 12 / 13 / 14 / 16 / 20 / 24 */
@@ -140,8 +160,8 @@
   --radius-xs: 3px;
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
 
   --shadow-raised: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 1px 3px hsl(var(--shadow-color) / 0.08);
   --shadow-raised-2: 0 2px 4px hsl(var(--shadow-color) / 0.06), 0 4px 12px hsl(var(--shadow-color) / 0.1);
@@ -185,7 +205,6 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    font-feature-settings: "cv11", "ss01";
   }
   html.dark {
     color-scheme: dark;
@@ -247,4 +266,9 @@
 }
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
+}
+
+/* Gradiente-assinatura Draw (orquídea → violeta) — SOMENTE decorativo (formas, logo), nunca fundo de texto pequeno. */
+@utility bg-brand-gradient {
+  background-image: var(--brand-gradient);
 }

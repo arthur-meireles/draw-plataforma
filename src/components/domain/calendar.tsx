@@ -132,7 +132,7 @@ export function Calendar({ items, month, onMonthChange, emptyText = "Nada neste 
               const visible = list.slice(0, 3);
               return (
                 <div key={k} className={cn("min-h-28 border-line p-1.5", i % 7 !== 6 && "border-r", i < cells.length - 7 && "border-b", !inMonth && "bg-layer/50")}>
-                  <span className={cn("mb-1 inline-flex size-5 items-center justify-center rounded-full text-xs tabular-nums", k === today ? "bg-accent font-semibold text-accent-fg" : inMonth ? "text-fg-muted" : "text-fg-placeholder")}>{d.getDate()}</span>
+                  <span className={cn("mb-1 inline-flex size-5 items-center justify-center rounded-full text-xs tabular-nums", k === today ? "bg-accent-solid font-semibold text-accent-fg" : inMonth ? "text-fg-muted" : "text-fg-placeholder")}>{d.getDate()}</span>
                   <div className="flex flex-col gap-1">
                     {visible.map((it) => (
                       <ItemChip key={it.id} item={it} compact />

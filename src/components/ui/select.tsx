@@ -73,7 +73,7 @@ function OptionsList<V extends string>({ options, isSelected, onPick, emptyText,
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted outline-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-layer-hover data-[selected=true]:text-fg max-md:py-2.5"
                 >
                   {multi && (
-                    <span className={cn("flex size-4 items-center justify-center rounded-xs border", isSelected(o.value) ? "border-accent bg-accent text-accent-fg" : "border-line-strong")}>
+                    <span className={cn("flex size-4 items-center justify-center rounded-xs border", isSelected(o.value) ? "border-accent bg-accent-solid text-accent-fg" : "border-line-strong")}>
                       {isSelected(o.value) && <Icon name="check" size="xs" />}
                     </span>
                   )}
@@ -201,7 +201,7 @@ export function Checkbox({ checked, onCheckedChange, label, description, disable
       onCheckedChange={(v) => onCheckedChange(v === true)}
       onClick={(e) => e.stopPropagation()}
       aria-label={typeof label === "string" ? undefined : "Selecionar"}
-      className="peer flex size-4 shrink-0 items-center justify-center rounded-xs border border-line-strong bg-layer-2 transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent text-accent-fg disabled:opacity-50 max-md:size-5"
+      className="peer flex size-4 shrink-0 items-center justify-center rounded-xs border border-line-strong bg-layer-2 transition-colors data-[state=checked]:border-accent data-[state=checked]:bg-accent-solid data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent-solid text-accent-fg disabled:opacity-50 max-md:size-5"
     >
       <CheckboxPrimitive.Indicator>
         <Icon name={checked === "indeterminate" ? "minus" : "check"} size="xs" />
@@ -227,7 +227,7 @@ export function Switch({ checked, onCheckedChange, label, description, disabled,
       disabled={disabled}
       onCheckedChange={onCheckedChange}
       aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
-      className={cn("relative inline-flex shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors data-[state=checked]:bg-accent disabled:opacity-50", size === "sm" ? "h-4 w-7" : "h-5 w-9")}
+      className={cn("relative inline-flex shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors data-[state=checked]:bg-accent-solid disabled:opacity-50", size === "sm" ? "h-4 w-7" : "h-5 w-9")}
     >
       <SwitchPrimitive.Thumb className={cn("block rounded-full bg-white shadow-raised transition-transform", size === "sm" ? "size-3 translate-x-0.5 data-[state=checked]:translate-x-3.5" : "size-4 translate-x-0.5 data-[state=checked]:translate-x-[18px]")} />
     </SwitchPrimitive.Root>
@@ -250,7 +250,7 @@ export function RadioGroup<V extends string>({ value, onChange, options, classNa
       {options.map((o) => (
         <label key={o.value} className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors", value === o.value ? "border-accent bg-accent-subtle" : "border-line hover:border-line-strong", o.disabled && "cursor-not-allowed opacity-50")}>
           <RadioPrimitive.Item value={o.value} disabled={o.disabled} className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-line-strong data-[state=checked]:border-accent">
-            <RadioPrimitive.Indicator className="size-2 rounded-full bg-accent" />
+            <RadioPrimitive.Indicator className="size-2 rounded-full bg-accent-solid" />
           </RadioPrimitive.Item>
           {o.icon && <Icon name={o.icon} size="md" className={value === o.value ? "text-accent" : "text-fg-subtle"} />}
           <span className="min-w-0">
