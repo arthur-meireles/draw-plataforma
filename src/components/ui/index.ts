@@ -7,3 +7,5 @@ export * from "./overlay";
 export * from "./display";
 export * from "./data-table";
 export * from "./page";
+export * from "./file-dropzone";
+export * from "./filter-chips";
