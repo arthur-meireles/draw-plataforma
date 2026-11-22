@@ -114,7 +114,7 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
           <TextField label="CEP" inputMode="numeric" value={form.address.zip} onChange={(e) => setAddr("zip", e.target.value.replace(/\D/g, "").slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"))} autoComplete="postal-code" />
         </div>
         <TextField label="Política de pagamento" containerClassName="sm:col-span-2" value={form.paymentTermsNote ?? ""} onChange={(e) => set("paymentTermsNote", e.target.value)} placeholder="Ex.: pagamento em 20 dias após a emissão da NF" hint="Como este cliente costuma pagar. Aparece na ficha do cliente e ao emitir NF." />
-        <TextField id="client-paymentTermDays" label="Prazo (dias após a NF)" type="number" inputMode="numeric" min={0} max={365} value={form.paymentTermDays ?? ""} onChange={(e) => set("paymentTermDays", e.target.value === "" ? null : Number(e.target.value))} error={errors.paymentTermDays} hint="Usado para sugerir o vencimento ao emitir a NF." />
+        <TextField label="Prazo (dias após a NF)" type="number" inputMode="numeric" min={0} max={365} value={form.paymentTermDays ?? ""} onChange={(e) => set("paymentTermDays", e.target.value === "" ? null : Number(e.target.value))} error={errors.paymentTermDays} hint="Usado para sugerir o vencimento ao emitir a NF." />
         <TextareaField label="Observações" containerClassName="sm:col-span-2" rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
       </form>
     </Dialog>

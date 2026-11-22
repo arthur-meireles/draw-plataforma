@@ -17,15 +17,14 @@ export function PausedBanner({ project }: { project: ProjectDetail }) {
       icon="pause"
       title={`Projeto parado desde ${dateFull(project.pausedAt)}`}
       className="mx-4 mb-1 md:mx-6"
-      action={
-        canWriteAll("projects") && project.status === "ativo" ? (
-          <Button size="sm" icon="resume" loading={resume.isPending} onClick={() => resume.mutate(undefined)}>
-            Retomar projeto
-          </Button>
-        ) : undefined
-      }
     >
-      {project.pausedReason ? <>Motivo: {project.pausedReason}</> : "Sem motivo registrado."} Enquanto estiver parado, o prazo não gera alerta de atraso.
+      <span className="block">{project.pausedReason ? `Motivo: ${project.pausedReason}` : "Sem motivo registrado."}</span>
+      <span className="block text-xs text-fg-subtle">Enquanto estiver parado, o prazo não gera alerta de atraso.</span>
+      {canWriteAll("projects") && project.status === "ativo" && (
+        <Button size="sm" icon="resume" className="mt-2" loading={resume.isPending} onClick={() => resume.mutate(undefined)}>
+          Retomar projeto
+        </Button>
+      )}
     </Callout>
   );
 }

@@ -21,7 +21,7 @@ export function CompanyOverview() {
   if (q.error) return null;
   return (
     <section aria-label="Visão geral da empresa" className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-xl border border-line bg-surface px-3 py-2">
-      <span className="mr-2 flex items-center gap-1.5 font-display text-sm font-bold text-fg">
+      <span className="mr-2 flex items-center gap-1.5 font-display text-sm font-bold text-fg max-sm:w-full">
         <Icon name="adm" size="sm" className="text-fg-subtle" />
         Visão geral da empresa
       </span>
@@ -30,9 +30,9 @@ export function CompanyOverview() {
       ) : (
         <>
           <Figure value={d.cases} label={d.cases === 1 ? "caso" : "casos"} href="/projetos" />
-          <span aria-hidden className="text-fg-placeholder">·</span>
+          <span aria-hidden className="text-fg-placeholder max-sm:hidden">·</span>
           <Figure value={d.internalProjects} label={d.internalProjects === 1 ? "projeto interno" : "projetos internos"} href="/adm/tarefas?vista=area" />
-          <span aria-hidden className="text-fg-placeholder">·</span>
+          <span aria-hidden className="text-fg-placeholder max-sm:hidden">·</span>
           <Figure value={d.pending} label={d.pending === 1 ? "pendência" : "pendências"} href="/adm/tarefas?vista=area" />
           {d.paused > 0 && (
             <Link href="/projetos?situacao=parados" className="ml-1" aria-label={plural(d.paused, "projeto parado", "projetos parados")}>

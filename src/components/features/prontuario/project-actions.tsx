@@ -93,9 +93,9 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
           Nova proposta
         </Button>
       )}
-      {s === "ativo" && manage && (
-        <Button size="sm" icon={project.pausedAt ? "resume" : "pause"} loading={resume.isPending} onClick={() => (project.pausedAt ? resume.mutate(undefined) : setPending("pause"))} className="max-md:hidden">
-          {project.pausedAt ? "Retomar projeto" : "Pausar projeto…"}
+      {s === "ativo" && manage && !project.pausedAt && (
+        <Button size="sm" icon="pause" onClick={() => setPending("pause")} className="max-md:hidden">
+          Pausar projeto…
         </Button>
       )}
       {s === "ativo" && manage && (
