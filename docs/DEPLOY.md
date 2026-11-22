@@ -12,20 +12,43 @@ O front roda em **Cloudflare Workers** via [OpenNext](https://opennext.js.org/cl
 
 Localmente, coloque-as em `.env.production.local`, que está fora do Git.
 
-## Opção A — Integração Git (recomendada)
+## Opção A — Integração Git (Workers Builds) — em uso
 
-1. Crie um repositório **privado** no GitHub e envie o código:
-   ```bash
-   git remote add origin git@github.com:<usuario>/draw-plataforma.git
-   ```
-   ```bash
-   git push -u origin main
-   ```
-2. Na Cloudflare, vá em **Workers & Pages → Create → Import a repository**, escolha o repositório e preencha:
-   - **Build command:** `npx opennextjs-cloudflare build`
-   - **Deploy command:** `npx opennextjs-cloudflare deploy`
-   - **Variables (build):** `NEXT_PUBLIC_ADMIN_PASSWORD=<senha>`
-3. A partir daí, cada push na `main` publica sozinho.
+Repositório: `github.com/arthur-meireles/draw-plataforma`, branch `main`. Todo push na `main` gera build e deploy.
+
+1. **Workers & Pages → Create application → Import a repository.**
+   - Conecte o GitHub `arthur-meireles`. Na primeira vez, a Cloudflare pede para instalar o app "Cloudflare Workers and Pages"; dê acesso ao repositório `draw-plataforma`.
+   - Escolha o repositório.
+2. **Configure o projeto:**
+
+   | Campo | Valor |
+   |---|---|
+   | Project name | `draw-plataforma` (tem que ser igual a `name` no `wrangler.jsonc`) |
+   | Production branch | `main` |
+   | Build command | `npx opennextjs-cloudflare build` |
+   | Deploy command | `npx opennextjs-cloudflare deploy` |
+   | Non-production branch deploy command (opcional) | `npx opennextjs-cloudflare upload` (gera URL de preview por branch, sem afetar produção) |
+   | Root directory | vazio (raiz) |
+
+3. **Variáveis de BUILD** — no mesmo formulário, em *Advanced settings → Build variables*, ou depois em *Settings → Build → Variables and secrets*:
+
+   | Nome | Valor | Tipo |
+   |---|---|---|
+   | `NEXT_PUBLIC_ADMIN_PASSWORD` | senha do admin | Secret |
+   | `NODE_VERSION` | `22` | Text |
+   | `NEXT_PUBLIC_DEMO_LOGIN` | `1` só se quiser os atalhos de demonstração no login | Text |
+
+   ⚠️ Precisam ser **variáveis de build**. Não use *Settings → Variables and Secrets* do Worker (runtime): `NEXT_PUBLIC_*` é embutido no JavaScript durante o build. Variável colocada só no runtime não muda nada.
+
+4. **Save and Deploy.**
+   - O primeiro build leva de 3 a 5 minutos.
+   - A URL fica em `https://draw-plataforma.<subdominio>.workers.dev`.
+   - Domínio próprio (ex.: `app.drawthelaw.com.br`): *Settings → Domains & Routes → Add → Custom domain*.
+5. **Mudou uma variável?** Faça *Deployments → Retry build* (ou um novo push); o valor só entra no próximo build.
+
+**Fluxo de trabalho:** desenvolvimento nesta sessão → commit → `git push origin main` → Cloudflare publica sozinha. O histórico fica em *Deployments*, onde dá para voltar a uma versão anterior com *Rollback*.
+
+**Instalação:** o `.npmrc` (`legacy-peer-deps=true`) é necessário porque o build roda `npm ci` limpo. Validado com uma instalação limpa + `opennextjs-cloudflare build` simulando o ambiente da Cloudflare.
 
 ## Opção B — Pelo terminal
 
