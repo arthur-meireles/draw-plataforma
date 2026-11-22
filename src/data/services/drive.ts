@@ -110,7 +110,7 @@ export const driveApi = {
       }
 
       const folder = db.folders.find((f) => f.id === id && !f.deletedAt);
-      if (!folder || !canSee(folder, me)) throw new ApiError(404, "Pasta não encontrada.");
+      if (!folder || (!canSee(folder, me) && !(me.role === "freelancer" && folder.id === PROJECTS_ROOT))) throw new ApiError(404, "Pasta não encontrada.");
       const breadcrumb = [root, ...pathOf(db, folder.id)];
       const sub = realChildren(db, me, folder.id).map<DriveFolder>((f) => ({ id: f.id, name: f.name, kind: "pasta", systemKey: f.systemKey, restricted: f.allowedRoles.length > 0, count: countReal(db, me, f.id), updatedAt: f.updatedAt }));
       if (folder.id === PROJECTS_ROOT) {

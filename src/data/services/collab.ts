@@ -72,7 +72,7 @@ export const filesApi = {
     return write((db, me) => {
       const p = input.projectId ? assertProjectVisible(db, me, input.projectId) : null;
       if (me.role === "freelancer" && !p) throw new ApiError(403, "Sem permissão.");
-      let file = input.fileId ? db.files.find((x) => x.id === input.fileId) : db.files.find((x) => !x.deletedAt && x.projectId === (p?.id ?? null) && x.name === input.file.name && x.module === (input.module ?? (p ? "projeto" : "adm")));
+      let file = input.fileId ? db.files.find((x) => x.id === input.fileId) : db.files.find((x) => !x.deletedAt && x.projectId === (p?.id ?? null) && (p ? true : (x.folderId ?? null) === (input.folderId ?? null)) && x.name === input.file.name && x.module === (input.module ?? (p ? "projeto" : "adm")));
       const version = file ? Math.max(...db.fileVersions.filter((v) => v.fileId === file!.id).map((v) => v.version)) + 1 : 1;
       const fileId = file?.id ?? `file_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const v = { ...baseFields(me.id), fileId, version, storageKey: `org_draw/${p?.id ?? "adm"}/${fileId}/v${version}`, size: input.file.size, mime: input.file.type || "application/octet-stream", sha256: hash, uploadedBy: me.id, note: input.note ?? null, dataUrl };

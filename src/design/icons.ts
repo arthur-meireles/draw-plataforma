@@ -12,7 +12,7 @@ import {
   Pencil, PieChart, Plus, Presentation, Receipt, RefreshCw, RotateCcw, Scale, Search, Send, Settings, Share, Shield, ShieldCheck,
   SignalHigh, SignalLow, SignalMedium, Smartphone, Sparkles, Star, Sun, Tag, Target, Timer, Trash2, TrendingDown, TrendingUp, Undo2,
   Upload, User, UserPlus, Users, Wallet, WifiOff, X, XCircle, Zap, Wrench, History, Flag, Layers, CircleCheckBig, Hourglass, Banknote,
-  Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact, LayoutGrid, Camera,
+  FolderOpen, FolderLock, FolderInput, FolderPlus, Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact, LayoutGrid, Camera,
   type LucideIcon,
 } from "lucide-react";
 
@@ -158,6 +158,10 @@ export const icons = {
   "book-open": BookOpen,
   "file-bar-chart": FileBarChart,
   folder: Folder,
+  folderOpen: FolderOpen,
+  folderLock: FolderLock,
+  folderMove: FolderInput,
+  folderAdd: FolderPlus,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

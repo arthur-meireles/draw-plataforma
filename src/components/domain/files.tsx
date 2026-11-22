@@ -84,6 +84,8 @@ export function useFileDownload() {
 
 interface UploadTarget {
   projectId?: ID | null;
+  /** Pasta real do Drive que recebe os arquivos (sem projeto). */
+  folderId?: ID | null;
 }
 
 /** Diálogo de envio: confirma categoria, projeto (biblioteca) e liberação, e envia um a um. */
@@ -100,7 +102,7 @@ function UploadDialog({ files, onClose, target, askProject, defaultCategory }: {
       let done = 0;
       setProgress({ done, total: files.length });
       for (const file of files) {
-        await filesApi.upload({ projectId, category, file, releasedToFreelancers: isFreelancer ? true : released });
+        await filesApi.upload({ projectId, folderId: target.folderId ?? null, category, file, releasedToFreelancers: isFreelancer ? true : released });
         done++;
         setProgress({ done, total: files.length });
       }
@@ -392,16 +394,31 @@ export interface FileManagerProps {
   /** Filtro de categoria padrão para novos envios. */
   defaultCategory?: FileCategory;
   className?: string;
+  /** Drive: restringe a uma pasta real e envia para ela. */
+  folderId?: ID;
+  /** Drive: oculta área de envio e barra de filtros (o chamador fornece a própria). */
+  bare?: boolean;
+  /** Drive: arquivos aguardando envio, controlado pelo chamador (arrastar/soltar, botão do cabeçalho). */
+  pending?: File[] | null;
+  onPendingChange?: (files: File[] | null) => void;
+  /** Drive: ativa "Mover para…" nos arquivos que não são de projeto. */
+  onMove?: (file: FileRow) => void;
+  /** Visão inicial quando a URL não define `vista`. */
+  defaultView?: "lista" | "grade";
+  /** Substitui o estado vazio padrão (`null` não mostra nada). */
+  emptyState?: React.ReactNode;
 }
 
 /** Gerenciador de arquivos (ver topo do arquivo). Estado de busca/filtros/visão fica na URL. */
-export function FileManager({ projectId, library, defaultCategory = "entrega", className }: FileManagerProps) {
+export function FileManager({ projectId, library, defaultCategory = "entrega", className, folderId, bare, pending: pendingProp, onPendingChange, onMove, emptyState, defaultView = "lista" }: FileManagerProps) {
   const { canWrite, canWriteAll, isFreelancer } = usePermissions();
-  const [url, setUrl, activeCount] = useUrlState({ q: "", cat: undefined as string | undefined, vista: "lista", projeto: undefined as string | undefined, cliente: undefined as string | undefined, modulo: undefined as string | undefined, arquivo: undefined as string | undefined });
-  const [pending, setPending] = useState<File[] | null>(null);
+  const [url, setUrl, activeCount] = useUrlState({ q: "", cat: undefined as string | undefined, vista: defaultView as string, projeto: undefined as string | undefined, cliente: undefined as string | undefined, modulo: undefined as string | undefined, arquivo: undefined as string | undefined });
+  const [pendingLocal, setPendingLocal] = useState<File[] | null>(null);
+  const pending = onPendingChange ? (pendingProp ?? null) : pendingLocal;
+  const setPending = onPendingChange ?? setPendingLocal;
   const [toDelete, setToDelete] = useState<FileRow | null>(null);
 
-  const filters: FileFilters = { projectId: projectId ?? url.projeto, clientId: url.cliente, module: url.modulo as FileFilters["module"], category: url.cat as FileCategory | undefined, q: url.q };
+  const filters: FileFilters = { projectId: projectId ?? url.projeto, folderId, clientId: url.cliente, module: url.modulo as FileFilters["module"], category: url.cat as FileCategory | undefined, q: url.q };
   const query = useApiQuery(["files", filters], () => filesApi.list(filters));
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list(), { enabled: !!library, staleTime: 30_000 });
   const download = useFileDownload();
@@ -418,6 +435,7 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
     { label: "Abrir detalhes e versões", icon: "file", onSelect: () => setUrl({ arquivo: f.id }) },
     { label: "Baixar versão atual", icon: "download", onSelect: () => download.mutate({ versionId: f.currentVersionId }) },
     { label: f.releasedToFreelancers ? "Remover liberação para freelancers" : "Liberar para freelancers", icon: "share", hidden: !manage || !f.projectId || isFreelancer, onSelect: () => release.mutate({ id: f.id, value: !f.releasedToFreelancers }) },
+    { label: "Mover para…", icon: "folderMove", hidden: !onMove || !manage || !!f.projectId, onSelect: () => onMove?.(f) },
     { label: "Excluir arquivo…", icon: "delete", destructive: true, separatorBefore: true, hidden: !manage, onSelect: () => setToDelete(f) },
   ];
 
@@ -445,7 +463,7 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
     { id: "version", width: "8.5rem", header: "Versão", mobile: "meta", hideBelow: "md", sortValue: (f) => f.current?.version ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">v{f.current?.version}<span className="ml-1.5 font-mono text-2xs text-fg-subtle">{shortHash(f.current?.sha256)}</span></span> },
     { id: "uploader", width: "11rem", header: "Enviado por", mobile: "subtitle", hideBelow: "lg", sortValue: (f) => f.uploaderName, cell: (f) => <span className="text-fg-muted">{f.uploaderName}</span> },
     { id: "size", width: "6rem", header: "Tamanho", align: "right", mobile: "meta", hideBelow: "lg", sortValue: (f) => f.current?.size ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">{fileSize(f.current?.size ?? 0)}</span> },
-    { id: "date", width: "8.5rem", header: "Data", mobile: "meta", sortValue: (f) => f.current?.createdAt ?? "", cell: (f) => <span className="text-fg-muted" title={dateTime(f.current?.createdAt)}>{relative(f.current?.createdAt)}</span> },
+    { id: "date", width: "10.5rem", header: "Data", mobile: "meta", sortValue: (f) => f.current?.createdAt ?? "", cell: (f) => <span className="whitespace-nowrap text-fg-muted" title={dateTime(f.current?.createdAt)}>{relative(f.current?.createdAt)}</span> },
     { id: "actions", header: <span className="sr-only">Ações</span>, align: "right", width: "48px", mobile: "trailing", cell: (f) => <RowActions items={menuFor(f)} /> },
   ];
 
@@ -484,6 +502,7 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
       ) : (
         <DataTable rows={undefined} isLoading columns={columns} getRowId={(f: FileRow) => f.id} />
       );
+    if (!files.length && emptyState !== undefined) return <>{emptyState}</>;
     if (!files.length)
       return (
         <EmptyState
@@ -520,12 +539,12 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      {canUpload && (
+      {canUpload && !bare && (
         <div className="p-3 md:p-4">
           <DropZone compact={!!files?.length} onFiles={setPending} />
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2 border-y border-line bg-surface px-3 py-2 md:px-4">
+      {!bare && <div className="flex flex-wrap items-center gap-2 border-y border-line bg-surface px-3 py-2 md:px-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 max-md:flex-nowrap max-md:overflow-x-auto max-md:scrollbar-none">
           <SearchInput value={url.q} onChange={(v) => setUrl({ q: v })} placeholder="Buscar arquivo…" />
           <Combobox options={categoryOptions} value={url.cat ?? null} onChange={(v) => setUrl({ cat: v ?? undefined })} clearable contentClassName="w-52" trigger={<FilterChip label="Categoria" value={labelOf(categoryOptions, url.cat)} onClear={() => setUrl({ cat: undefined })} />} />
@@ -547,10 +566,10 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
             { value: "grade", label: "Grade", icon: "viewGrid", iconOnly: true },
           ]}
         />
-      </div>
+      </div>}
       {body()}
 
-      {pending && <UploadDialog files={pending} onClose={() => setPending(null)} target={{ projectId }} askProject={!projectId} defaultCategory={defaultCategory} />}
+      {pending && <UploadDialog files={pending} onClose={() => setPending(null)} target={{ projectId, folderId }} askProject={!projectId && !folderId} defaultCategory={defaultCategory} />}
       <FileDetailSheet file={opened} onClose={() => setUrl({ arquivo: undefined })} showProject={library} />
       <ConfirmDialog
         open={!!toDelete}

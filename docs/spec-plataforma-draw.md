@@ -337,6 +337,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M7-02 | Versões com `sha256`; anteriores preservadas. | R1 |
 | RF-M7-03 | Biblioteca por projeto e por cliente, com categorias e busca. | R2 |
 | RF-M7-04 | Download por permissão, com link assinado de curta duração. | R1 |
+| RF-M7-05 | **Drive** em `/arquivos?pasta=<id>` seguindo a estrutura de pastas da Draw (01. Projetos … Planilha Projetos Marina e equipe): árvore lateral, breadcrumb, grade/lista, busca na pasta, nova pasta, renomear, excluir (só vazia), enviar por arrastar e "Mover para…". Em 01. Projetos as pastas são virtuais por cliente (`cli:<id>`) e projeto (`prj:<id>`); os arquivos do projeto continuam ligados ao projeto (aba Arquivos do prontuário). Freelancer só vê 01. Projetos. | R1 |
 
 ### M8 — Painel e indicadores
 
@@ -413,6 +414,7 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 | RN-10 | Exclusões são *soft delete*; exclusão definitiva só por `admin`, registrada. |
 | RN-11 | Datas de envio e aprovação de proposta são registradas pelo sistema, não digitadas. |
 | RN-12 | Um projeto nunca troca de cliente depois de ter recebível emitido. |
+| RN-13 | Drive: pastas-raiz da estrutura da Draw não são renomeadas nem excluídas; nome único por pasta-mãe; pasta só é excluída vazia; arquivo de projeto não é movido (fica na pasta do projeto); arquivos de mesmo nome em pastas diferentes são arquivos distintos (só viram versão dentro da mesma pasta ou projeto). |
 
 ---
 
