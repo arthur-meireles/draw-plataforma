@@ -130,7 +130,7 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
   isLoading?: boolean;
   error?: { message?: string; status?: number } | null;
   onRetry?: () => void;
-  groupBy?: "none" | "stage" | "status" | "due";
+  groupBy?: "none" | "stage" | "status" | "due" | "project";
   onOpen?: (t: TaskView) => void;
   showProject?: boolean;
   restrictAssignees?: PersonRef[];
@@ -165,6 +165,12 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
     (["em_andamento", "em_revisao", "a_fazer", "concluida"] as TaskStatusKey[]).forEach((s) => {
       const items = tasks.filter((t) => t.statusKey === s);
       if (items.length) groups.push({ key: s, label: { a_fazer: "A fazer", em_andamento: "Em andamento", em_revisao: "Em revisão", concluida: "Concluída" }[s], icon: <TaskStatusIcon status={s} />, items });
+    });
+  } else if (groupBy === "project") {
+    const keys = [...new Set(tasks.map((t) => t.projectCode ?? ""))].sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+    keys.forEach((k) => {
+      const items = tasks.filter((t) => (t.projectCode ?? "") === k);
+      groups.push({ key: k || "adm", label: k ? `${k} · ${items[0].projectTitle ?? ""}` : "Administrativo", icon: <Icon name={k ? "project" : "adm"} size="sm" className="text-fg-subtle" />, items });
     });
   } else if (groupBy === "stage") {
     const keys = [...new Set(tasks.map((t) => t.stageKey ?? "sem"))];

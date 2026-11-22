@@ -1,5 +1,11 @@
 "use client";
-import { PageBody, PageHeader } from "@/components/ui";
+import { Suspense } from "react";
+import { HomeView } from "@/components/features/inicio/home-view";
+
 export default function Home() {
-  return (<><PageHeader crumbs={[{ label: "Início", icon: "home" }]} /><PageBody>Em construção</PageBody></>);
+  return (
+    <Suspense>
+      <HomeView />
+    </Suspense>
+  );
 }
