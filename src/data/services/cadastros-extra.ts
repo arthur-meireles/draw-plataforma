@@ -1,8 +1,8 @@
 /** Comercial (M3): funil de cotações com a última proposta de cada projeto (RF-M3-01, RF-M3-06). */
 import type { ID, Project, ProposalStatus, QuoteStageKey } from "../types";
-import { ApiError, read, redactProject } from "./_core";
+import { ApiError, emit, read, redactProject, touch, write } from "./_core";
 import { toListItem, type ProjectListItem } from "./projects";
-import { access, canRead, canSeeMoney } from "@/lib/permissions";
+import { access, canRead, canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 const DAY = 86_400_000;
 
@@ -75,5 +75,20 @@ export const commercialApi = {
         canMove: access(me, "commercial") === "T",
         money,
       };
+    }),
+};
+
+/** Cadastros (M2): ações complementares de freelancers. */
+export const freelancersExtraApi = {
+  /** Ativa ou inativa um freelancer sem reenviar dados fiscais (RF-M2-03). */
+  setStatus: (id: ID, status: "ativo" | "inativo") =>
+    write((db, me) => {
+      if (!canWriteAll(me, "freelancers")) throw new ApiError(403, "Só quem gerencia freelancers pode alterar o status.");
+      const f = db.freelancers.find((x) => x.id === id && !x.deletedAt);
+      if (!f) throw new ApiError(404, "Freelancer não encontrado.");
+      f.status = status;
+      touch(f);
+      emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: { status } });
+      return f;
     }),
 };

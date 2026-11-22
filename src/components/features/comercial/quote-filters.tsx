@@ -15,7 +15,7 @@ export function QuoteFiltersBar({ filters: f, end }: { filters: ReturnType<typeo
   const typeOpts: Option[] = (types.data ?? []).map((t) => ({ value: t.id, label: t.name }));
   return (
     <Toolbar end={end}>
-      <SearchInput value={state.q ?? ""} onChange={(q) => set({ q })} placeholder="Buscar cotação ou cliente…" className="sm:w-56" />
+      <SearchInput value={state.q ?? ""} onChange={(q) => set({ q })} placeholder="Buscar cotação ou cliente…" className="sm:w-56 max-sm:w-44 max-sm:shrink-0" />
       <FilterSelect label="Etapa" icon="stageOpen" options={quoteStageOptions()} value={state.etapa} onChange={(v) => set({ etapa: v ?? undefined })} />
       <FilterSelect label="Cliente" icon="client" options={clientOpts} value={state.cliente} onChange={(v) => set({ cliente: v ?? undefined })} />
       <FilterSelect label="Responsável" icon="user" options={ownerOpts} value={state.resp} onChange={(v) => set({ resp: v ?? undefined })} />
