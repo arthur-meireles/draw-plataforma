@@ -11,3 +11,4 @@ export { financeApi, publicInvoiceApi, type ReceivableFilters, type PayableFilte
 export { filesApi, commentsApi, approvalsApi, eventsApi, notificationsApi, type FileFilters } from "./collab";
 export { authApi, usersApi, admApi, mailApi, importsApi, searchApi, peopleApi } from "./admin";
 export { metricsApi, type MetricsFilter } from "./metrics";
+export { admExtraApi } from "./adm-extra";

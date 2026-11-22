@@ -68,3 +68,6 @@ export const canSeeMoney = (user: Pick<User, "role"> | null | undefined) => acce
 /** Perfis que só enxergam projetos onde estão alocados. */
 export const isScopedToMembership = (user: Pick<User, "role"> | null | undefined) =>
   access(user, "projects") === "P";
+
+/** Matriz completa, somente leitura (tela "Matriz de permissões" em Configurações → Usuários). */
+export const PERMISSION_MATRIX: Readonly<Record<Resource, Readonly<Record<Role, Access>>>> = MATRIX;

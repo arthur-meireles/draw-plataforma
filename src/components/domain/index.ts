@@ -7,3 +7,4 @@ export * from "./project-card";
 export * from "./timeline";
 export * from "./tasks";
 export * from "./charts";
+export * from "./access-gate";
