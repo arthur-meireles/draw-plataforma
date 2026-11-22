@@ -8,3 +8,4 @@ export * from "./display";
 export * from "./data-table";
 export * from "./page";
 export * from "./filter-select";
+export * from "./stepper";
