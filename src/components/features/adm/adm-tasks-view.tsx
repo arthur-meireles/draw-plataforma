@@ -1,0 +1,116 @@
+"use client";
+import { Suspense, useMemo, useState } from "react";
+import { AccessGate, TaskPeek } from "@/components/domain";
+import { usePermissions } from "@/components/layout/session";
+import { Button, ClearFiltersButton, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar } from "@/components/ui";
+import { useApiQuery } from "@/data/hooks";
+import { tasksApi, type TaskView } from "@/data/services";
+import type { TaskStatusKey } from "@/data/types";
+import { useUrlState } from "@/lib/use-url-state";
+import { AdmTaskDialog } from "./adm-task-dialog";
+import { BacklogList } from "./backlog-list";
+import { SprintBoard } from "./sprint-board";
+import { SprintFormDialog } from "./sprint-form-dialog";
+import { SprintList, SprintStatusBadge } from "./sprint-list";
+
+type Vista = "sprint" | "backlog" | "sprints";
+
+function Content() {
+  const p = usePermissions();
+  const canEdit = p.canWriteAll("adm");
+  const [url, setUrl] = useUrlState({ vista: "sprint" as string, tarefa: undefined as string | undefined, sprint: undefined as string | undefined, q: "" });
+  const vista = (["sprint", "backlog", "sprints"].includes(url.vista) ? url.vista : "sprint") as Vista;
+
+  const sprints = useApiQuery(["sprints"], tasksApi.sprints);
+  const tasks = useApiQuery(["tasks", "adm"], () => tasksApi.list({ module: "adm" }));
+
+  const [sprintDialog, setSprintDialog] = useState(false);
+  const [taskDialog, setTaskDialog] = useState<{ statusKey?: TaskStatusKey; sprintId?: string | null } | null>(null);
+
+  const current = useMemo(() => {
+    const list = sprints.data ?? [];
+    return list.find((s) => s.id === url.sprint) ?? list.find((s) => s.status === "ativa") ?? [...list].sort((a, b) => b.startAt.localeCompare(a.startAt))[0];
+  }, [sprints.data, url.sprint]);
+
+  const q = url.q.trim().toLowerCase();
+  const match = (t: TaskView) => !q || t.title.toLowerCase().includes(q);
+  const sprintTasks = tasks.data?.filter((t) => t.sprintId === current?.id).filter(match);
+  const backlogTasks = tasks.data?.filter((t) => !t.sprintId).filter(match);
+  const backlogCount = tasks.data?.filter((t) => !t.sprintId).length;
+
+  const openTask = (t: TaskView) => setUrl({ tarefa: t.id });
+  const sprintOptions = (sprints.data ?? []).filter((s) => s.status !== "concluida").map((s) => ({ value: s.id, label: s.name }));
+
+  return (
+    <>
+      <PageHeader
+        crumbs={[{ label: "Administrativo", icon: "adm", href: "/adm/tarefas" }, { label: "Tarefas" }]}
+        actions={
+          canEdit && (
+            <>
+              <Button size="sm" variant="outline" icon="sprint" onClick={() => setSprintDialog(true)} className="max-md:hidden">
+                Nova sprint
+              </Button>
+              <Button size="sm" variant="primary" icon="add" onClick={() => setTaskDialog({ sprintId: vista === "sprint" ? current?.id : null })} className="max-md:hidden">
+                Nova tarefa
+              </Button>
+            </>
+          )
+        }
+      />
+      <Tabs
+        value={vista}
+        onChange={(v) => setUrl({ vista: v })}
+        items={[
+          { value: "sprint", label: "Sprint atual", icon: "viewKanban" },
+          { value: "backlog", label: "Backlog", icon: "viewList", count: backlogCount },
+          { value: "sprints", label: "Sprints", icon: "sprint", count: sprints.data?.length },
+        ]}
+      />
+      {vista !== "sprints" && (
+        <Toolbar>
+          {vista === "sprint" && (sprints.data?.length ?? 0) > 0 && (
+            <div className="w-56 max-md:w-48 shrink-0">
+              <SelectField
+                aria-label="Sprint exibida"
+                options={(sprints.data ?? []).map((s) => ({ value: s.id, label: s.name, description: s.status === "ativa" ? "Sprint atual" : s.status === "planejada" ? "Planejada" : "Concluída" }))}
+                value={current?.id}
+                onChange={(v) => setUrl({ sprint: v ?? undefined })}
+                className="h-7 max-md:h-9"
+              />
+            </div>
+          )}
+          {vista === "sprint" && current && <SprintStatusBadge status={current.status} />}
+          <SearchInput value={url.q} onChange={(v) => setUrl({ q: v })} placeholder="Buscar tarefa…" className="max-md:w-44 max-md:shrink-0" />
+          <ClearFiltersButton show={!!url.q} onClick={() => setUrl({ q: "" })} />
+        </Toolbar>
+      )}
+
+      <PageBody padded={false} className="flex flex-col">
+        {vista === "sprint" &&
+          (sprints.isLoading || !sprints.data || current ? (
+            <SprintBoard tasks={sprintTasks} isLoading={sprints.isLoading || tasks.isLoading} canEdit={canEdit} onOpen={openTask} onAdd={(statusKey) => setTaskDialog({ statusKey, sprintId: current?.id })} />
+          ) : (
+            <EmptyState icon="sprint" title="Nenhuma sprint ainda" description="Crie uma sprint para organizar o quadro de tarefas internas." action={canEdit ? { label: "Nova sprint", icon: "add", onClick: () => setSprintDialog(true) } : undefined} />
+          ))}
+        {vista === "backlog" && <BacklogList tasks={backlogTasks} sprints={sprints.data ?? []} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} canEdit={canEdit} onOpen={openTask} />}
+        {vista === "sprints" && <SprintList sprints={sprints.data} tasks={tasks.data} isLoading={sprints.isLoading} error={sprints.error} onRetry={() => sprints.refetch()} canEdit={canEdit} onCreate={() => setSprintDialog(true)} onOpenBoard={(s) => setUrl({ vista: "sprint", sprint: s.id })} />}
+      </PageBody>
+
+      {canEdit && <Fab label={vista === "sprints" ? "Nova sprint" : "Nova tarefa"} onClick={() => (vista === "sprints" ? setSprintDialog(true) : setTaskDialog({ sprintId: vista === "sprint" ? current?.id : null }))} />}
+      <SprintFormDialog open={sprintDialog} onOpenChange={setSprintDialog} />
+      <AdmTaskDialog open={!!taskDialog} onOpenChange={(o) => !o && setTaskDialog(null)} defaults={taskDialog ?? undefined} sprintOptions={sprintOptions} />
+      <TaskPeek taskId={url.tarefa ?? null} onClose={() => setUrl({ tarefa: undefined })} />
+    </>
+  );
+}
+
+export function AdmTasksView() {
+  return (
+    <AccessGate resource="adm">
+      <Suspense>
+        <Content />
+      </Suspense>
+    </AccessGate>
+  );
+}

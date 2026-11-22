@@ -13,3 +13,4 @@ export * from "./installments-editor";
 export * from "./team-editor";
 export * from "./files";
 export * from "./proposals";
+export * from "./access-gate";

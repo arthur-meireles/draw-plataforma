@@ -14,3 +14,4 @@ export { metricsApi, type MetricsFilter } from "./metrics";
 export { financeExtraApi, publicInvoiceExtraApi, INVOICE_MAX_BYTES } from "./finance-extra";
 export { commercialApi, freelancersExtraApi, type QuoteFilters, type QuoteItem } from "./cadastros-extra";
 export { milestonesApi, deliverableMetricsApi, proposalsExtraApi, projectsExtraApi, projectMailApi, type DeliverableMetrics, type MailTemplateKey } from "./prontuario-extra";
+export { admExtraApi } from "./adm-extra";
