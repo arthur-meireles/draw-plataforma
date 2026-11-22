@@ -93,7 +93,11 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
   como fundo de botão (o contraste do texto quebra no tema escuro).
 - **Marca:** `BrandMark`/`BrandLogo` do kit; gradiente via `bg-brand-gradient` **somente** em formas decorativas
   (círculos, logo) — nunca atrás de texto pequeno (branco sobre orquídea reprova AA). Botões são pílula
-  sólida, sem brilho. Rail lateral em `bg-navy`.
+  sólida, sem brilho. Rail lateral pelos tokens `bg-rail`/`text-rail-fg*` (claro no tema claro, violeta
+  profundo no escuro).
+- **Temas partem do violeta da marca:** claro = superfícies brancas com neutros levemente lavanda (limpo,
+  sem peso); escuro = violeta profundo/berinjela (nunca preto neutro), texto lavanda, destaque violeta.
+  Profissional e sóbrio: saturação só no destaque, nunca em grandes áreas.
 - **Datas:** sempre `DateField`/`DateInput`/`DatePicker` do kit (dd/mm/aaaa no desktop, nativo no celular);
   nunca `<input type="date">`.
 - **Gráficos:** sempre de `components/domain/charts` (carregam sob demanda); nunca importar `charts-impl` ou recharts.

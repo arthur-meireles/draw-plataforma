@@ -471,6 +471,8 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 
 ### 10.1 Direção visual
 
+> **Atualizado na 0.4:** identidade Draw the Law. Tema claro em branco com neutros lavanda e violeta `#784BFD` nas ações. Tema escuro em violeta profundo (`#0D0A1C` → `#141026` superfícies), com texto lavanda e destaque violeta, sem preto neutro. Tipografia Roboto + Manrope; botões em pílula, sem brilho; gradiente orquídea→violeta só decorativo. Tokens em `src/app/globals.css`.
+
 - Estilo **shadcn/ui** neutro (zinc), raio 8–10px, sombras mínimas, Inter/Geist.
 - Cor só com significado: status (âmbar aguardando, vermelho atraso, verde concluído, azul ativo) e tipo de projeto (ícone no cartão).
 - Referência: `tela-kanban.png`.

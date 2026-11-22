@@ -5,7 +5,8 @@
 /*
  * Tokens de design — FONTE ÚNICA de cores, superfícies, raios, sombras e tipografia.
  * Espelhados em `src/design/tokens.ts` (para uso em JS: gráficos, SVG).
- * Estrutura visual inspirada no Plane; identidade Draw the Law (marinho #071445, violeta #784BFD,
+ * Temas partem do violeta da marca: claro = branco com neutros lavanda; escuro = violeta profundo (berinjela/índigo),
+ * nunca preto neutro. Estrutura visual inspirada no Plane; identidade Draw the Law (marinho #071445, violeta #784BFD,
  * orquídea #B549D5, magenta #CC3366; Roboto + Manrope).
  * Telas NUNCA usam hex/px soltos: só as classes geradas daqui (bg-surface, text-fg-muted…).
  */
@@ -13,30 +14,36 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --canvas: #f6f5fb;
+  --canvas: #f8f7fc;
   --surface: #ffffff;
-  --surface-2: #faf9fd;
-  --layer: #f2f1f8;
-  --layer-hover: #eae9f3;
-  --layer-active: #e0dfec;
+  --surface-2: #fcfbfe;
+  --layer: #f5f3fb;
+  --layer-hover: #efecf8;
+  --layer-active: #e6e2f4;
   --layer-2: #ffffff;
-  --line: #e4e3ee;
-  --line-strong: #c6c5d8;
-  --fg: #071445;
-  --fg-muted: #2e3456;
-  --fg-subtle: #5b5f7a;
-  --fg-placeholder: #8d8fa9;
+  --line: #ebe8f4;
+  --line-strong: #d5d0e6;
+  --fg: #17122f;
+  --fg-muted: #3b3557;
+  --fg-subtle: #67618a;
+  --fg-placeholder: #9e99b7;
   --accent: #5f35e0;
   --accent-hover: #4a27b5;
   --accent-solid: #784bfd;
-  --accent-solid-hover: #5f35e0;
-  --accent-subtle: #f6f2ff;
-  --accent-line: #d8c8ff;
+  --accent-solid-hover: #6a3cf2;
+  --accent-subtle: #f4f0ff;
+  --accent-line: #ddd2ff;
   --accent-fg: #ffffff;
   --navy: #071445;
   --navy-2: #0a1448;
   --orchid: #b549d5;
   --magenta: #cc3366;
+  --rail-bg: #ffffff;
+  --rail-fg: #8a84a8;
+  --rail-fg-active: #5f35e0;
+  --rail-active: #f1ecff;
+  --rail-hover: #f5f3fb;
+  --rail-line: #ebe8f4;
   --brand-gradient: linear-gradient(90deg, #b549d5 0%, #784bfd 100%);
   --success: #22703a;
   --success-subtle: #e1f4e6;
@@ -45,58 +52,64 @@
   --danger: #c8324f;
   --danger-subtle: #fbe6ee;
   --info: #2b45a6;
-  --info-subtle: #e7edff;
+  --info-subtle: #ebefff;
   --orange: #c2570c;
   --violet: #7d2896;
-  --violet-subtle: #f4e9fb;
-  --backdrop: rgb(7 20 69 / 0.45);
-  --shadow-color: 229 82% 15%;
+  --violet-subtle: #f6ecfb;
+  --backdrop: rgb(23 18 47 / 0.4);
+  --shadow-color: 258 40% 20%;
   --chart-1: #784bfd;
   --chart-2: #3fa557;
   --chart-3: #f0a83a;
   --chart-4: #b549d5;
   --chart-5: #cc3366;
   --chart-6: #3a7bd5;
-  --chart-grid: #e4e3ee;
+  --chart-grid: #ebe8f4;
 }
 
 .dark {
-  --canvas: #040a26;
-  --surface: #091238;
-  --surface-2: #0c1640;
-  --layer: #101b4b;
-  --layer-hover: #152257;
-  --layer-active: #1b2a66;
-  --layer-2: #0d1744;
-  --line: #1c2860;
-  --line-strong: #2b3a7a;
-  --fg: #eeedf6;
-  --fg-muted: #c6c5d8;
-  --fg-subtle: #9799b5;
-  --fg-placeholder: #6a6e8f;
-  --accent: #b99eff;
-  --accent-hover: #d8c8ff;
+  --canvas: #0d0a1c;
+  --surface: #141026;
+  --surface-2: #18132d;
+  --layer: #1e1836;
+  --layer-hover: #251e42;
+  --layer-active: #2e264f;
+  --layer-2: #1a1531;
+  --line: #2a2347;
+  --line-strong: #3c3363;
+  --fg: #f0ecfa;
+  --fg-muted: #cdc5e6;
+  --fg-subtle: #9e95c0;
+  --fg-placeholder: #6e6693;
+  --accent: #c3b0ff;
+  --accent-hover: #ddd1ff;
   --accent-solid: #784bfd;
-  --accent-solid-hover: #8b63fe;
-  --accent-subtle: #1d1650;
-  --accent-line: #3a2d8a;
+  --accent-solid-hover: #8a62ff;
+  --accent-subtle: #271b55;
+  --accent-line: #46358f;
   --accent-fg: #ffffff;
-  --navy: #050c30;
-  --navy-2: #071445;
+  --navy: #1a1138;
+  --rail-bg: #0a0717;
+  --rail-fg: #7f77a3;
+  --rail-fg-active: #ffffff;
+  --rail-active: #2a1f55;
+  --rail-hover: #1b1533;
+  --rail-line: #1e1838;
+  --navy-2: #221747;
   --success: #5ccf7d;
-  --success-subtle: #0f2a1c;
+  --success-subtle: #10281f;
   --warning: #f0a83a;
-  --warning-subtle: #2d2111;
+  --warning-subtle: #2c2015;
   --danger: #ff6b86;
-  --danger-subtle: #3a1222;
-  --info: #8ea6ff;
-  --info-subtle: #17225a;
+  --danger-subtle: #391428;
+  --info: #9fb0ff;
+  --info-subtle: #1b1c4a;
   --orange: #fb923c;
-  --violet: #dc9eed;
-  --violet-subtle: #2a1640;
-  --backdrop: rgb(2 5 20 / 0.65);
-  --shadow-color: 230 80% 3%;
-  --chart-grid: #1c2860;
+  --violet: #e0a6f2;
+  --violet-subtle: #2e1944;
+  --backdrop: rgb(6 3 16 / 0.7);
+  --shadow-color: 262 60% 2%;
+  --chart-grid: #2a2347;
 }
 
 @theme inline {
@@ -118,6 +131,12 @@
   --color-accent-solid: var(--accent-solid);
   --color-accent-solid-hover: var(--accent-solid-hover);
   --color-navy: var(--navy);
+  --color-rail: var(--rail-bg);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-fg-active: var(--rail-fg-active);
+  --color-rail-active: var(--rail-active);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-line: var(--rail-line);
   --color-navy-2: var(--navy-2);
   --color-orchid: var(--orchid);
   --color-magenta: var(--magenta);

@@ -29,7 +29,7 @@ export function Rail() {
   const pathname = usePathname();
   const visible = useVisible();
   return (
-    <nav aria-label="Atalhos" className="flex w-rail shrink-0 flex-col items-center gap-1 bg-navy py-3 max-xl:hidden">
+    <nav aria-label="Atalhos" className="flex w-rail shrink-0 flex-col items-center gap-1 border-r border-rail-line bg-rail py-3 max-xl:hidden">
       <Link href="/" aria-label="Draw — início" className="mb-3 rounded-lg">
         <BrandMark size="md" />
       </Link>
@@ -37,7 +37,7 @@ export function Rail() {
         const active = item.href === "/projetos" ? pathname.startsWith("/projetos") || pathname.startsWith("/comercial") : isActive(pathname, item);
         return (
           <Tooltip key={item.href} content={item.label} side="right">
-            <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10 hover:text-white")}>
+            <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-rail-active text-rail-fg-active" : "text-rail-fg hover:bg-rail-hover hover:text-rail-fg-active")}>
               <Icon name={item.icon} size="md" />
             </Link>
           </Tooltip>
