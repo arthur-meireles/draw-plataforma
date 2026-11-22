@@ -22,7 +22,7 @@ const ChipTrigger = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTM
   );
 });
 
-export function FilterSelect<V extends string>({ label, icon, options, value, onChange, searchPlaceholder, contentClassName }: { label: string; icon?: IconName; options: Option<V>[]; value: V | null | undefined; onChange: (v: V | null) => void; searchPlaceholder?: string; contentClassName?: string }) {
+export function FilterSelect<V extends string>({ label, icon, options, value, onChange, searchPlaceholder, contentClassName, emptyText }: { label: string; icon?: IconName; options: Option<V>[]; value: V | null | undefined; onChange: (v: V | null) => void; searchPlaceholder?: string; contentClassName?: string; emptyText?: string }) {
   const selected = options.find((o) => o.value === value);
   const active = !!value;
   return (
@@ -32,6 +32,7 @@ export function FilterSelect<V extends string>({ label, icon, options, value, on
         value={value}
         onChange={onChange}
         searchPlaceholder={searchPlaceholder}
+        emptyText={emptyText}
         contentClassName={cn("min-w-56 w-64", contentClassName)}
         trigger={<ChipTrigger label={label} valueLabel={selected?.label} icon={icon} />}
       />

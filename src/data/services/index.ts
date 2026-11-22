@@ -12,3 +12,4 @@ export { filesApi, commentsApi, approvalsApi, eventsApi, notificationsApi, type 
 export { authApi, usersApi, admApi, mailApi, importsApi, searchApi, peopleApi } from "./admin";
 export { metricsApi, type MetricsFilter } from "./metrics";
 export { financeExtraApi, publicInvoiceExtraApi, INVOICE_MAX_BYTES } from "./finance-extra";
+export { commercialApi, freelancersExtraApi, type QuoteFilters, type QuoteItem } from "./cadastros-extra";
