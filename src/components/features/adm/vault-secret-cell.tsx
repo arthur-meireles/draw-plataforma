@@ -50,7 +50,7 @@ export function VaultSecretCell({ id, title }: { id: string; title: string }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+    <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap" onClick={(e) => e.stopPropagation()}>
       <code aria-live="polite" className="min-w-24 max-w-52 select-all truncate rounded-sm bg-layer px-1.5 py-0.5 font-mono text-xs text-fg" aria-label={secret ? "Senha revelada" : "Senha oculta"}>
         {secret ?? "••••••••••"}
       </code>
