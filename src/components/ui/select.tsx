@@ -220,13 +220,13 @@ export function Checkbox({ checked, onCheckedChange, label, description, disable
   );
 }
 
-export function Switch({ checked, onCheckedChange, label, description, disabled, size = "md" }: { checked: boolean; onCheckedChange: (v: boolean) => void; label?: React.ReactNode; description?: React.ReactNode; disabled?: boolean; size?: "sm" | "md" }) {
+export function Switch({ checked, onCheckedChange, label, description, disabled, size = "md", ariaLabel }: { checked: boolean; onCheckedChange: (v: boolean) => void; label?: React.ReactNode; description?: React.ReactNode; disabled?: boolean; size?: "sm" | "md"; /** Rótulo acessível quando não há `label` visível. */ ariaLabel?: string }) {
   const sw = (
     <SwitchPrimitive.Root
       checked={checked}
       disabled={disabled}
       onCheckedChange={onCheckedChange}
-      aria-label={typeof label === "string" ? label : undefined}
+      aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
       className={cn("relative inline-flex shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors data-[state=checked]:bg-accent disabled:opacity-50", size === "sm" ? "h-4 w-7" : "h-5 w-9")}
     >
       <SwitchPrimitive.Thumb className={cn("block rounded-full bg-white shadow-raised transition-transform", size === "sm" ? "size-3 translate-x-0.5 data-[state=checked]:translate-x-3.5" : "size-4 translate-x-0.5 data-[state=checked]:translate-x-[18px]")} />

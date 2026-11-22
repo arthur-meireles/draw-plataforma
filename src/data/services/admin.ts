@@ -207,6 +207,7 @@ export const usersApi = {
     write((db, me) => {
       if (!canWriteAll(me, "settings")) throw new ApiError(403, "Sem permissão.");
       if (settings.freelancerPaymentDay < 1 || settings.freelancerPaymentDay > 28) throw new ApiError(422, "Escolha um dia entre 1 e 28.", { freelancerPaymentDay: "Escolha um dia entre 1 e 28" });
+      if (!Number.isInteger(settings.dueSoonDays) || settings.dueSoonDays < 1 || settings.dueSoonDays > 30) throw new ApiError(422, "Use de 1 a 30 dias de alerta.", { dueSoonDays: "Use de 1 a 30 dias" });
       db.organizations[0].settings = settings;
       emit(db, me, { type: "organization.settings_changed", entityType: "organization", entityId: db.organizations[0].id, data: settings });
     }),
