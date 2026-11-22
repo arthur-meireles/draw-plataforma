@@ -5,18 +5,23 @@
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Avatar, Button, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing } from "@/components/ui";
+import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
-import type { ID, PriorityKey, TaskStatusKey } from "@/data/types";
+import type { AdmArea, ID, PriorityKey, TaskStatusKey } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
-import { projectStage, quoteStage } from "@/data/reference";
+import { ADM_AREAS, projectStage, quoteStage } from "@/data/reference";
 import { AssigneePill, type PersonRef } from "./pickers";
 import { DueChip, PriorityPill, ProjectCode, TaskStatusIcon, TaskStatusPill } from "./badges";
 import { CommentThread, EventTimeline } from "./timeline";
 
 const personOf = (t: Pick<TaskView, "assigneeUserId" | "assigneeFreelancerId">): PersonRef | null => (t.assigneeUserId ? { kind: "user", id: t.assigneeUserId } : t.assigneeFreelancerId ? { kind: "freelancer", id: t.assigneeFreelancerId } : null);
+
+const areaLabel = (area: AdmArea | null) => {
+  const a = ADM_AREAS.find((x) => x.key === (area ?? "outros"))!;
+  return `${a.number}. ${a.label}`;
+};
 
 export function useTaskUpdate() {
   return useApiMutation(({ id, patch }: { id: ID; patch: Parameters<typeof tasksApi.update>[1] }) => tasksApi.update(id, patch));
@@ -292,6 +297,15 @@ export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | 
             <PropertyRow label="Estimativa" icon="estimate">
               <Input type="text" inputMode="numeric" disabled={ro} defaultValue={t.estimateMinutes ? String(t.estimateMinutes / 60) : ""} onBlur={(e) => patch({ estimateMinutes: e.target.value ? Math.round(Number(e.target.value.replace(",", ".")) * 60) : null })} placeholder="horas" className="h-7 w-24" aria-label="Estimativa em horas" />
             </PropertyRow>
+            {t.module === "adm" && (
+              <PropertyRow label="Área" icon="adm">
+                {ro ? (
+                  <span className="text-sm text-fg-muted">{areaLabel(t.area)}</span>
+                ) : (
+                  <Combobox<AdmArea> options={ADM_AREAS.map((a) => ({ value: a.key, label: `${a.number}. ${a.label}` }))} value={t.area ?? "outros"} onChange={(v) => v && v !== t.area && patch({ area: v })} trigger={<Pill icon="adm">{areaLabel(t.area)}</Pill>} contentClassName="w-60" aria-label="Área da tarefa" />
+                )}
+              </PropertyRow>
+            )}
             {t.stageKey && (
               <PropertyRow label="Etapa" icon="projects">
                 <span className="text-sm text-fg-muted">{projectStage(t.stageKey as never)?.label ?? quoteStage(t.stageKey as never)?.label}</span>

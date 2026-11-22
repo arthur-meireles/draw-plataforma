@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AvatarStack, Combobox, Icon, Input, Pill } from "@/components/ui";
-import { DueChip, PriorityPill, ProjectCode, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel, projectStageOptions, quoteStageOptions } from "@/components/domain";
+import { PausedBadge, ProjectSizeChip, DueChip, PriorityPill, ProjectCode, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel, projectStageOptions, quoteStageOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
@@ -90,6 +90,8 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
         <ProjectTypeIcon icon={project.typeIcon} size="sm" />
         <ProjectCode code={project.code} className="text-sm" />
         <ProjectStatusBadge status={project.status} />
+        {project.pausedAt && <PausedBadge size="sm" />}
+        <ProjectSizeChip size={project.size} />
         {project.isOverdue && <span className="text-xs font-medium text-danger">Atrasado</span>}
         {project.lostReason && (project.status === "perdido" || project.status === "cancelado" || project.status === "arquivado") && <span className="min-w-0 truncate text-xs text-fg-subtle">Motivo: {project.lostReason}</span>}
       </div>

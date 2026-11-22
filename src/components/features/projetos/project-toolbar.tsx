@@ -2,7 +2,7 @@
 import { ClearFiltersButton, FilterSelect, SearchInput, Toolbar, type Option } from "@/components/ui";
 import { priorityOptions, usePeopleOptions } from "@/components/domain";
 import { useClientOptions, useProjectTypes } from "@/data/hooks";
-import { DUE_OPTIONS, type ProjectFilterState } from "./use-project-filters";
+import { DUE_OPTIONS, SITUATION_OPTIONS, type ProjectFilterState } from "./use-project-filters";
 
 /** Barra de filtros de projetos (busca, cliente, tipo, pessoa, prioridade, prazo). `include` permite ocultar filtros. */
 export function ProjectToolbar({ state, set, hasFilters, clear, hide = [], end }: { state: ProjectFilterState; set: (p: Partial<ProjectFilterState>) => void; hasFilters: boolean; clear: () => void; hide?: ("pessoa" | "prioridade" | "prazo")[]; end?: React.ReactNode }) {
@@ -19,6 +19,7 @@ export function ProjectToolbar({ state, set, hasFilters, clear, hide = [], end }
       {!hide.includes("pessoa") && <FilterSelect label="Pessoa" icon="user" options={people.options} value={state.pessoa || null} onChange={(v) => set({ pessoa: v ?? "" })} searchPlaceholder="Buscar pessoa…" />}
       {!hide.includes("prioridade") && <FilterSelect label="Prioridade" icon="priority" options={priorityOptions} value={state.prioridade || null} onChange={(v) => set({ prioridade: v ?? "" })} />}
       {!hide.includes("prazo") && <FilterSelect label="Prazo" icon="due" options={DUE_OPTIONS} value={state.prazo || null} onChange={(v) => set({ prazo: v ?? "" })} />}
+      <FilterSelect label="Situação" icon="pause" options={SITUATION_OPTIONS} value={state.situacao || null} onChange={(v) => set({ situacao: v ?? "" })} />
       <ClearFiltersButton show={hasFilters} onClick={clear} />
     </Toolbar>
   );

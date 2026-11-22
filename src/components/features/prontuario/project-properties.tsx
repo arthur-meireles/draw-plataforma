@@ -2,13 +2,18 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Avatar, Combobox, DateInput, Icon, Pill, PropertyRow, Section, IconButton, type Option } from "@/components/ui";
-import { Money, PriorityPill, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel, usePeopleOptions } from "@/components/domain";
+import { PausedBadge, Money, PriorityPill, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel, usePeopleOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
 import { clientsApi } from "@/data/services";
+import { PAYMENT_CONDITION_LABEL, PROJECT_SIZE_LABEL } from "@/data/reference";
+import type { PaymentCondition, ProjectSize } from "@/data/types";
 import { cn } from "@/lib/cn";
 import { dateFull, dateTime, formatCnpj, fromDateInput, toDateInput } from "@/lib/format";
 import { useCanEditProject, useProjectUpdate, type ProjectDetail } from "./use-project";
+
+const sizeOptions: Option<ProjectSize>[] = (Object.keys(PROJECT_SIZE_LABEL) as ProjectSize[]).map((k) => ({ value: k, label: PROJECT_SIZE_LABEL[k] }));
+const conditionOptions: Option<PaymentCondition>[] = (Object.keys(PAYMENT_CONDITION_LABEL) as PaymentCondition[]).map((k) => ({ value: k, label: PAYMENT_CONDITION_LABEL[k] }));
 
 const ORIGIN_LABEL = { cotacao: "Veio de cotação", direto: "Projeto direto" } as const;
 
@@ -67,6 +72,25 @@ export function ProjectProperties({ project, className }: { project: ProjectDeta
       <PropertyRow label="Prioridade" icon="priority">
         <PriorityPill value={project.priorityKey} onChange={editable ? (v) => update.mutate({ priorityKey: v }) : undefined} />
       </PropertyRow>
+      <PropertyRow label="Tamanho" icon="projects">
+        {editable ? (
+          <Combobox options={sizeOptions} value={project.size} onChange={(v) => v !== project.size && update.mutate({ size: v })} clearable trigger={<Pill icon="projects">{project.size ? PROJECT_SIZE_LABEL[project.size] : "Definir tamanho"}</Pill>} contentClassName="w-44" aria-label="Tamanho do projeto" />
+        ) : (
+          <span className="text-fg-muted">{project.size ? PROJECT_SIZE_LABEL[project.size] : "—"}</span>
+        )}
+      </PropertyRow>
+      {!isFreelancer && (
+        <PropertyRow label="Condição de pagamento" icon="payment">
+          {manage && money ? (
+            <Combobox options={conditionOptions} value={project.paymentCondition} onChange={(v) => v !== project.paymentCondition && update.mutate({ paymentCondition: v })} clearable trigger={<Pill icon="payment">{project.paymentCondition ? PAYMENT_CONDITION_LABEL[project.paymentCondition] : "Definir condição"}</Pill>} contentClassName="w-44" aria-label="Condição de pagamento" />
+          ) : (
+            <span className="text-fg-muted">{project.paymentCondition ? PAYMENT_CONDITION_LABEL[project.paymentCondition] : "—"}</span>
+          )}
+        </PropertyRow>
+      )}
+      {project.pausedAt && (
+        <PropertyRow label="Situação" icon="pause"><PausedBadge size="sm" /></PropertyRow>
+      )}
       <PropertyRow label="Prazo" icon="due">
         {editable ? <DateInput aria-label="Prazo de entrega" value={toDateInput(project.dueAt)} onChange={(e) => update.mutate({ dueAt: fromDateInput(e.target.value) })} className="h-7" /> : <span className="text-fg-muted">{dateFull(project.dueAt)}</span>}
       </PropertyRow>
@@ -76,6 +100,7 @@ export function ProjectProperties({ project, className }: { project: ProjectDeta
       {(money || project.contractedAmountCents != null) && (
         <PropertyRow label="Valor contratado" icon="money"><Money cents={project.contractedAmountCents} className="font-medium" /></PropertyRow>
       )}
+      {project.legacyCode && <PropertyRow label="ID legado" icon="tag"><span className="font-mono text-xs tabular-nums text-fg-muted">{project.legacyCode}</span></PropertyRow>}
       <PropertyRow label="Entrada" icon="date"><span className="text-fg-muted">{dateFull(project.enteredAt)}</span></PropertyRow>
       {project.quoteSentAt && <PropertyRow label="Proposta enviada" icon="send"><span className="text-fg-muted">{dateFull(project.quoteSentAt)}</span></PropertyRow>}
       {project.approvedAt && <PropertyRow label="Aprovação" icon="approval"><span className="text-fg-muted">{dateFull(project.approvedAt)}</span></PropertyRow>}

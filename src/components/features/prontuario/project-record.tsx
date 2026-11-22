@@ -9,6 +9,7 @@ import { ProjectEmails } from "./project-emails";
 import { ProjectFinance } from "./project-finance";
 import { ProjectHeader } from "./project-header";
 import { ProjectOverview } from "./project-overview";
+import { PausedBanner } from "./paused-banner";
 import { ProjectProperties } from "./project-properties";
 import { ProjectTasks } from "./project-tasks";
 import { ProjectTeam } from "./project-team";
@@ -109,6 +110,7 @@ export function ProjectRecord({ code }: { code: string }) {
         ) : (
           <>
             <ProjectHeader project={project} />
+            <PausedBanner project={project} />
             <div className="grid grid-cols-1 gap-4 px-4 pb-8 md:px-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-6">
               <aside className="xl:col-start-2 xl:row-start-1" aria-label="Propriedades do projeto">
                 <ProjectProperties project={project} className="xl:sticky xl:top-4" />

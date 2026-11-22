@@ -2,30 +2,31 @@
 import { Suspense, useMemo, useState } from "react";
 import { AccessGate, TaskPeek } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Button, ClearFiltersButton, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar } from "@/components/ui";
+import { Button, ClearFiltersButton, Switch, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar } from "@/components/ui";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
-import type { TaskStatusKey } from "@/data/types";
+import type { AdmArea, TaskStatusKey } from "@/data/types";
 import { useUrlState } from "@/lib/use-url-state";
+import { AreaBoard } from "./area-board";
 import { AdmTaskDialog } from "./adm-task-dialog";
 import { BacklogList } from "./backlog-list";
 import { SprintBoard } from "./sprint-board";
 import { SprintFormDialog } from "./sprint-form-dialog";
 import { SprintList, SprintStatusBadge } from "./sprint-list";
 
-type Vista = "sprint" | "backlog" | "sprints";
+type Vista = "area" | "sprint" | "backlog" | "sprints";
 
 function Content() {
   const p = usePermissions();
   const canEdit = p.canWriteAll("adm");
-  const [url, setUrl] = useUrlState({ vista: "sprint" as string, tarefa: undefined as string | undefined, sprint: undefined as string | undefined, q: "" });
-  const vista = (["sprint", "backlog", "sprints"].includes(url.vista) ? url.vista : "sprint") as Vista;
+  const [url, setUrl] = useUrlState({ vista: "area" as string, concluidas: "", tarefa: undefined as string | undefined, sprint: undefined as string | undefined, q: "" });
+  const vista = (["area", "sprint", "backlog", "sprints"].includes(url.vista) ? url.vista : "area") as Vista;
 
   const sprints = useApiQuery(["sprints"], tasksApi.sprints);
   const tasks = useApiQuery(["tasks", "adm"], () => tasksApi.list({ module: "adm" }));
 
   const [sprintDialog, setSprintDialog] = useState(false);
-  const [taskDialog, setTaskDialog] = useState<{ statusKey?: TaskStatusKey; sprintId?: string | null } | null>(null);
+  const [taskDialog, setTaskDialog] = useState<{ statusKey?: TaskStatusKey; sprintId?: string | null; area?: AdmArea | null } | null>(null);
 
   const current = useMemo(() => {
     const list = sprints.data ?? [];
@@ -34,6 +35,9 @@ function Content() {
 
   const q = url.q.trim().toLowerCase();
   const match = (t: TaskView) => !q || t.title.toLowerCase().includes(q);
+  const showDone = url.concluidas === "1";
+  const areaTasks = tasks.data?.filter((t) => !t.parentTaskId && (showDone || t.statusKey !== "concluida")).filter(match);
+  const areaCount = tasks.data?.filter((t) => !t.parentTaskId && t.statusKey !== "concluida").length;
   const sprintTasks = tasks.data?.filter((t) => t.sprintId === current?.id).filter(match);
   const backlogTasks = tasks.data?.filter((t) => !t.sprintId).filter(match);
   const backlogCount = tasks.data?.filter((t) => !t.sprintId).length;
@@ -62,6 +66,7 @@ function Content() {
         value={vista}
         onChange={(v) => setUrl({ vista: v })}
         items={[
+          { value: "area", label: "Por área", icon: "adm", count: areaCount },
           { value: "sprint", label: "Sprint atual", icon: "viewKanban" },
           { value: "backlog", label: "Backlog", icon: "viewList", count: backlogCount },
           { value: "sprints", label: "Sprints", icon: "sprint", count: sprints.data?.length },
@@ -82,11 +87,13 @@ function Content() {
           )}
           {vista === "sprint" && current && <SprintStatusBadge status={current.status} />}
           <SearchInput value={url.q} onChange={(v) => setUrl({ q: v })} placeholder="Buscar tarefa…" className="max-md:w-44 max-md:shrink-0" />
+          {vista === "area" && <Switch size="sm" checked={showDone} onCheckedChange={(v) => setUrl({ concluidas: v ? "1" : "" })} label="Mostrar concluídas" />}
           <ClearFiltersButton show={!!url.q} onClick={() => setUrl({ q: "" })} />
         </Toolbar>
       )}
 
       <PageBody padded={false} className="flex flex-col">
+        {vista === "area" && <AreaBoard tasks={areaTasks} isLoading={tasks.isLoading} canEdit={canEdit} onOpen={openTask} />}
         {vista === "sprint" &&
           (sprints.isLoading || !sprints.data || current ? (
             <SprintBoard tasks={sprintTasks} isLoading={sprints.isLoading || tasks.isLoading} canEdit={canEdit} onOpen={openTask} onAdd={(statusKey) => setTaskDialog({ statusKey, sprintId: current?.id })} />

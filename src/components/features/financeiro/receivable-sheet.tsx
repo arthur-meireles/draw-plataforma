@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { EventTimeline, Money, ProjectCode, ReceivableStatusBadge } from "@/components/domain";
+import { EventTimeline, Money, ProjectCode, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { Button, ConfirmDialog, DescriptionList, Section, Sheet } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { financeApi } from "@/data/services";
 import { dateFull, formatCnpj } from "@/lib/format";
+import { CollectionNoteEditor } from "./collection-note-editor";
 import { EditReceivableDialog, IssueInvoiceDialog, ReceiveDialog } from "./receivable-dialogs";
 import type { ReceivableRow } from "./types";
 
@@ -55,7 +56,10 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
         {row && (
           <div className="space-y-5 p-4">
             <div className="space-y-2">
-              <ReceivableStatusBadge status={row.status} />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ReceivableStatusBadge status={row.status} />
+                <ReceivableKindBadge kind={row.kind} />
+              </div>
               <h2 className="text-md font-semibold text-fg">{row.description}</h2>
               <p className="text-xl font-semibold tabular-nums text-fg">
                 <Money cents={row.amountCents} />
@@ -75,13 +79,14 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
                 },
                 { label: "Cliente", value: row.clientName },
                 { label: "CNPJ", value: formatCnpj(row.clientCnpj) },
-                { label: "Origem", value: row.proposalInstallmentId ? "Parcela da proposta aprovada (RN-01/RN-02)" : "Lançamento avulso ou importado" },
+                { label: "Origem", value: row.kind === "adicional" ? "Cobrança adicional" : row.proposalInstallmentId ? "Parcela da proposta aprovada (RN-01/RN-02)" : "Lançamento avulso ou importado" },
                 { label: "Vencimento", value: dateFull(row.expectedAt) },
                 { label: "Impostos", value: <Money cents={row.taxCents} /> },
                 { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.issuedAt ? ` · emitida em ${dateFull(row.issuedAt)}` : ""}` : "Ainda não emitida" },
                 { label: "Recebimento", value: row.receivedAt ? dateFull(row.receivedAt) : "—" },
               ]}
             />
+            <CollectionNoteEditor row={row} writable={writable} />
             <Section title="Histórico" icon="history">
               <EventTimeline entityType="receivable" entityId={row.id} compact />
             </Section>

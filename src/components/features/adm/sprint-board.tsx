@@ -1,5 +1,5 @@
 "use client";
-import { AssigneePill, DueChip, Kanban, PriorityPill, TaskStatusIcon, useTaskUpdate, type PersonRef } from "@/components/domain";
+import { AssigneePill, DueChip, Kanban, PriorityPill, TaskStatusIcon, TaskStatusPill, useTaskUpdate, type PersonRef } from "@/components/domain";
 import { Icon, ProgressRing } from "@/components/ui";
 import { TASK_STATUSES } from "@/data/reference";
 import type { TaskView } from "@/data/services";
@@ -8,7 +8,8 @@ import { cn } from "@/lib/cn";
 
 const personOf = (t: TaskView): PersonRef | null => (t.assigneeUserId ? { kind: "user", id: t.assigneeUserId } : t.assigneeFreelancerId ? { kind: "freelancer", id: t.assigneeFreelancerId } : null);
 
-function AdmTaskCard({ task: t, onOpen }: { task: TaskView; onOpen: (t: TaskView) => void }) {
+/** Cartão de tarefa interna. `showStatus` mostra o status (útil no quadro por área, onde as colunas não são status). */
+export function AdmTaskCard({ task: t, onOpen, showStatus }: { task: TaskView; onOpen: (t: TaskView) => void; showStatus?: boolean }) {
   const done = t.statusKey === "concluida";
   return (
     <div
@@ -20,6 +21,7 @@ function AdmTaskCard({ task: t, onOpen }: { task: TaskView; onOpen: (t: TaskView
     >
       <p className={cn("text-sm font-medium leading-snug text-fg", done && "text-fg-subtle line-through")}>{t.title}</p>
       <div className="flex flex-wrap items-center gap-1.5">
+        {showStatus && <TaskStatusPill value={t.statusKey} size="sm" />}
         <PriorityPill value={t.priorityKey} size="sm" />
         {t.dueAt && <DueChip date={t.dueAt} done={done} size="sm" />}
         {t.subtasksTotal > 0 && (

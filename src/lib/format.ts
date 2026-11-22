@@ -125,3 +125,11 @@ export function initials(name: string) {
 }
 
 export const plural = (n: number, one: string, many: string) => `${number(n)} ${n === 1 ? one : many}`;
+
+/** Soma dias a uma data "aaaa-mm-dd" (valor de DateField) e devolve no mesmo formato. */
+export function addDaysToDateInput(v: string, days: number) {
+  if (!v) return "";
+  const d = new Date(`${v}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Money, ProjectCode, ReceivableStatusBadge } from "@/components/domain";
+import { Money, ProjectCode, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { Button, ClearFiltersButton, DataTable, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, type Column } from "@/components/ui";
 import { useApiQuery, useClientOptions } from "@/data/hooks";
@@ -33,7 +33,14 @@ const columns: Column<ReceivableRow>[] = [
     ),
   },
   { id: "client", header: "Cliente", hideBelow: "lg", sortValue: (r) => r.clientName, mobile: "meta", cell: (r) => <span className="text-fg-muted">{r.clientName}</span> },
-  { id: "desc", header: "Descrição", hideBelow: "md", sortValue: (r) => r.description, mobile: "hidden", cell: (r) => <span className="line-clamp-1 max-w-72">{r.description}</span> },
+  { id: "desc", header: "Descrição", hideBelow: "md", sortValue: (r) => r.description, mobile: "hidden", cell: (r) => (
+      <span className="flex items-center gap-1.5">
+        <span className="line-clamp-1 max-w-72">{r.description}</span>
+        <ReceivableKindBadge kind={r.kind} />
+      </span>
+    ),
+  },
+  { id: "note", header: "Cobrança", hideBelow: "xl", mobile: "hidden", cell: (r) => <span className="line-clamp-1 max-w-56 text-fg-muted" title={r.collectionNote ?? undefined}>{r.collectionNote ?? "—"}</span> },
   { id: "amount", header: "Valor", align: "right", sortValue: (r) => r.amountCents, mobile: "trailing", cell: (r) => <Money cents={r.amountCents} className="font-medium" /> },
   { id: "tax", header: "Impostos", align: "right", hideBelow: "xl", sortValue: (r) => r.taxCents, mobile: "hidden", cell: (r) => <Money cents={r.taxCents} className="text-fg-muted" /> },
   { id: "nf", header: "NF nº", hideBelow: "lg", sortValue: (r) => r.invoiceNumber ?? "", mobile: "hidden", cell: (r) => <span className="text-fg-muted">{r.invoiceNumber ?? "—"}</span> },
@@ -66,8 +73,8 @@ export function ReceivablesView() {
   const exportCsv = () => {
     const chosen = (rows ?? []).filter((r) => selected.includes(r.id));
     const csv = toCsv(
-      ["Vencimento", "Projeto", "Cliente", "CNPJ", "Descrição", "Valor", "Impostos", "NF nº", "Status"],
-      chosen.map((r) => [dateFull(r.expectedAt), r.projectCode, r.clientName, formatCnpj(r.clientCnpj), r.description, (r.amountCents / 100).toFixed(2).replace(".", ","), (r.taxCents / 100).toFixed(2).replace(".", ","), r.invoiceNumber, RECEIVABLE_STATUS_LABEL[r.status]]),
+      ["Vencimento", "Projeto", "Cliente", "CNPJ", "Descrição", "Valor", "Impostos", "NF nº", "Status", "Tipo", "Cobrança"],
+      chosen.map((r) => [dateFull(r.expectedAt), r.projectCode, r.clientName, formatCnpj(r.clientCnpj), r.description, (r.amountCents / 100).toFixed(2).replace(".", ","), (r.taxCents / 100).toFixed(2).replace(".", ","), r.invoiceNumber, RECEIVABLE_STATUS_LABEL[r.status], r.kind === "adicional" ? "Adicional" : "Parcela", r.collectionNote]),
     );
     downloadTextFile(`contas-a-receber-${new Date().toISOString().slice(0, 10)}.csv`, csv);
     toast.success(`${chosen.length} lançamento(s) exportado(s) em CSV.`);

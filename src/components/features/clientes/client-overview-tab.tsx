@@ -39,6 +39,8 @@ export function ClientOverviewTab({ client: c }: { client: ClientDetail }) {
                 { label: "Segmento", value: c.segment },
                 { label: "Grupo econômico", value: c.group?.name ?? "Sem grupo" },
                 { label: "Endereço", value: address || "Não informado" },
+                { label: "Política de pagamento", value: c.paymentTermsNote || "Não informada" },
+                { label: "Prazo após a NF", value: c.paymentTermDays != null ? `${c.paymentTermDays} dias` : "Não informado" },
               ]}
             />
           </Section>

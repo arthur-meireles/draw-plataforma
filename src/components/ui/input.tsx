@@ -64,8 +64,9 @@ export interface FieldProps {
 }
 
 /** Envelope de campo: label + controle + dica/erro com aria-live. */
-export function Field({ label, hint, error, required, className, children }: FieldProps) {
-  const id = useId();
+export function Field({ label, hint, error, required, className, children, id: idProp }: FieldProps & { id?: string }) {
+  const generated = useId();
+  const id = idProp ?? generated;
   const msgId = `${id}-msg`;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
@@ -87,8 +88,8 @@ export function Field({ label, hint, error, required, className, children }: Fie
 export const TextField = forwardRef<HTMLInputElement, InputProps & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string }>(
   function TextField({ label, hint, error, required, containerClassName, ...props }, ref) {
     return (
-      <Field label={label} hint={hint} error={error} required={required} className={containerClassName}>
-        {({ id, describedBy, invalid }) => <Input ref={ref} id={id} aria-describedby={describedBy} invalid={invalid} required={required} {...props} />}
+      <Field id={props.id} label={label} hint={hint} error={error} required={required} className={containerClassName}>
+        {({ id, describedBy, invalid }) => <Input ref={ref} aria-describedby={describedBy} invalid={invalid} required={required} {...props} id={id} />}
       </Field>
     );
   },
@@ -97,8 +98,8 @@ export const TextField = forwardRef<HTMLInputElement, InputProps & { label?: Rea
 export const TextareaField = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string; onSubmitShortcut?: () => void }>(
   function TextareaField({ label, hint, error, required, containerClassName, ...props }, ref) {
     return (
-      <Field label={label} hint={hint} error={error} required={required} className={containerClassName}>
-        {({ id, describedBy, invalid }) => <Textarea ref={ref} id={id} aria-describedby={describedBy} invalid={invalid} required={required} {...props} />}
+      <Field id={props.id} label={label} hint={hint} error={error} required={required} className={containerClassName}>
+        {({ id, describedBy, invalid }) => <Textarea ref={ref} aria-describedby={describedBy} invalid={invalid} required={required} {...props} id={id} />}
       </Field>
     );
   },

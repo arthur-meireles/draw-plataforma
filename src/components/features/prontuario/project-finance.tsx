@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import { Button, DataTable, Section, Stat, type Column } from "@/components/ui";
-import { Money, PayableStatusBadge, ReceivableStatusBadge } from "@/components/domain";
+import { AdditionalChargeDialog, Money, PayableStatusBadge, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
 import { financeApi, projectsApi } from "@/data/services";
@@ -13,7 +14,9 @@ type Pay = Awaited<ReturnType<typeof financeApi.payables>>[number];
 
 /** Aba "Financeiro" (somente com permissão de valores): indicadores, recebíveis e pagáveis do projeto (RF-M5-06). */
 export function ProjectFinance({ project }: { project: ProjectDetail }) {
-  const { access } = usePermissions();
+  const { access, canWriteAll } = usePermissions();
+  const [chargeOpen, setChargeOpen] = useState(false);
+  const canCharge = canWriteAll("receivables") && ["ativo", "concluido"].includes(project.status);
   const fin = useApiQuery(["project-financials", project.id], () => projectsApi.financials(project.id));
   const canRec = access("receivables") !== "-";
   const canPay = access("payables") !== "-";
@@ -22,7 +25,16 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
   const f = fin.data;
 
   const recColumns: Column<Rec>[] = [
-    { id: "desc", header: "Descrição", mobile: "title", sortValue: (r) => r.description, cell: (r) => <span className="text-fg">{r.description}</span> },
+    { id: "desc", header: "Descrição", mobile: "title", sortValue: (r) => r.description, cell: (r) => (
+        <span className="block min-w-0">
+          <span className="flex flex-wrap items-center gap-1.5 text-fg">
+            {r.description}
+            <ReceivableKindBadge kind={r.kind} />
+          </span>
+          {r.collectionNote && <span className="mt-0.5 block text-xs text-fg-subtle">Cobrança: {r.collectionNote}</span>}
+        </span>
+      ),
+    },
     { id: "status", header: "Status", mobile: "meta", sortValue: (r) => r.status, cell: (r) => <ReceivableStatusBadge status={r.status} /> },
     { id: "expected", header: "Previsão", mobile: "subtitle", sortValue: (r) => r.expectedAt, cell: (r) => <span className="text-fg-muted">{dateFull(r.expectedAt)}</span> },
     { id: "nf", header: "NF", mobile: "meta", hideBelow: "md", cell: (r) => <span className="text-fg-muted">{r.invoiceNumber ?? "—"}</span> },
@@ -59,7 +71,12 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
         <Section
           title="Contas a receber"
           icon="receivable"
-          actions={<Button asChild size="sm" variant="ghost" iconRight="arrowRight"><Link href={`/financeiro/receber?projeto=${project.code}`}>Abrir no financeiro</Link></Button>}
+          actions={
+            <>
+              {canCharge && <Button size="sm" icon="add" onClick={() => setChargeOpen(true)}>Cobrança adicional…</Button>}
+              <Button asChild size="sm" variant="ghost" iconRight="arrowRight"><Link href={`/financeiro/receber?projeto=${project.code}`}>Abrir no financeiro</Link></Button>
+            </>
+          }
           bodyClassName="p-0"
         >
           <DataTable rows={recs.data} columns={recColumns} getRowId={(r) => r.id} isLoading={recs.isLoading} error={recs.error} onRetry={() => recs.refetch()} empty={{ compact: true, icon: "receivable", title: "Nenhum recebível", description: "Os recebíveis nascem das parcelas da proposta aprovada." }} />
@@ -70,6 +87,7 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
           <DataTable rows={pays.data} columns={payColumns} getRowId={(p) => p.id} isLoading={pays.isLoading} error={pays.error} onRetry={() => pays.refetch()} empty={{ compact: true, icon: "payable", title: "Nenhum pagamento", description: "Ao concluir o projeto, o sistema gera a conta a pagar de cada freelancer com valor combinado." }} />
         </Section>
       )}
+      <AdditionalChargeDialog projectId={project.id} projectCode={project.code} open={chargeOpen} onOpenChange={setChargeOpen} />
     </div>
   );
 }

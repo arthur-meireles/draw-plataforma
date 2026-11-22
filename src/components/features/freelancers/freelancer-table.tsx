@@ -2,6 +2,7 @@
 /** Tabela de freelancers (RF-M2-03): avatar+nome, especialidades, contato, carga, acesso e status. */
 import { useRouter } from "next/navigation";
 import { plural } from "@/lib/format";
+import { Money } from "@/components/domain";
 import { Avatar, Badge, Button, DataTable, RowActions, type Column } from "@/components/ui";
 import { SpecialtyBadges } from "./specialty-badges";
 import type { FreelancerRow } from "./use-freelancers";
@@ -55,6 +56,9 @@ export function FreelancerTable({ rows, isLoading, error, onRetry, hasFilters, o
     },
     { id: "projects", header: "Projetos ativos", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.activeProjects, cell: (f) => <span className="tabular-nums text-fg-muted">{plural(f.activeProjects, "ativo", "ativos")}</span> },
     { id: "tasks", header: "Tarefas abertas", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.openTasks, cell: (f) => <span className="tabular-nums text-fg-muted">{plural(f.openTasks, "tarefa", "tarefas")}</span> },
+    { id: "total", header: "Total", align: "right", hideBelow: "xl", mobile: "hidden", sortValue: (f) => f.paymentsTotalCents ?? -1, cell: (f) => <Money cents={f.paymentsTotalCents} className="text-fg-muted" /> },
+    { id: "paid", header: "Pago", align: "right", hideBelow: "xl", mobile: "hidden", sortValue: (f) => f.paymentsPaidCents ?? -1, cell: (f) => <Money cents={f.paymentsPaidCents} className="text-success" /> },
+    { id: "pending", header: "Pendente", align: "right", hideBelow: "xl", mobile: "hidden", sortValue: (f) => (f.paymentsTotalCents == null || f.paymentsPaidCents == null ? -1 : f.paymentsTotalCents - f.paymentsPaidCents), cell: (f) => <Money cents={f.paymentsTotalCents == null || f.paymentsPaidCents == null ? null : f.paymentsTotalCents - f.paymentsPaidCents} className="font-medium" /> },
     {
       id: "access",
       header: "Acesso",

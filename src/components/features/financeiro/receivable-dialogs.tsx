@@ -1,9 +1,9 @@
 "use client";
 import { useState } from "react";
 import { Button, Dialog, DateField, FileDropzone, MoneyField, TextField } from "@/components/ui";
-import { useApiMutation } from "@/data/hooks";
-import { financeApi, financeExtraApi, INVOICE_MAX_BYTES } from "@/data/services";
-import { fileSize, fromDateInput, toDateInput } from "@/lib/format";
+import { useApiMutation, useApiQuery } from "@/data/hooks";
+import { clientsApi, financeApi, financeExtraApi, INVOICE_MAX_BYTES } from "@/data/services";
+import { addDaysToDateInput, dateFull, fileSize, fromDateInput, toDateInput } from "@/lib/format";
 import type { ReceivableRow } from "./types";
 
 const today = () => toDateInput(new Date().toISOString());
@@ -15,6 +15,9 @@ export function IssueInvoiceDialog({ row, open, onOpenChange }: { row: Receivabl
   const [tax, setTax] = useState<number>(row.taxCents);
   const [file, setFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const client = useApiQuery(["client-terms", row.clientId], () => clientsApi.get(row.clientId), { enabled: open, staleTime: 60_000, retry: false });
+  const termDays = client.data?.paymentTermDays ?? null;
+  const termsNote = client.data?.paymentTermsNote ?? null;
   const m = useApiMutation(
     () => financeExtraApi.issueInvoiceWithFile(row.id, row.projectId, { invoiceNumber: number, issuedAt: fromDateInput(date)!, taxCents: tax, file }),
     { success: "NF emitida. O lançamento agora está faturado.", onSuccess: () => onOpenChange(false), onError: (e) => e.fieldErrors && setErrors(e.fieldErrors) },
@@ -56,6 +59,16 @@ export function IssueInvoiceDialog({ row, open, onOpenChange }: { row: Receivabl
           <TextField label="Número da NF" required autoFocus value={number} onChange={(e) => setNumber(e.target.value)} error={errors.invoiceNumber} />
           <DateField label="Data de emissão" required value={date} onChange={(e) => setDate(e.target.value)} error={errors.date} />
         </div>
+        {(termDays != null || termsNote) && (
+          <p className="rounded-lg border border-line bg-layer px-3 py-2 text-xs text-fg-muted" aria-live="polite">
+            <strong className="font-medium text-fg">Política do cliente:</strong> {termsNote ?? `${termDays} dias após a NF`}.
+            {termDays != null && date && (
+              <>
+                {" "}Com a emissão em {dateFull(fromDateInput(date))}, o vencimento sugerido é <strong className="font-medium text-fg">{dateFull(fromDateInput(addDaysToDateInput(date, termDays)))}</strong>.
+              </>
+            )}
+          </p>
+        )}
         <MoneyField label="Impostos retidos" value={tax} onChange={setTax} hint="Opcional. Aparece na coluna Impostos." />
         <FileDropzone
           label="PDF da nota fiscal"

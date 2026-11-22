@@ -1,7 +1,7 @@
 /** Modelo do assistente "Novo projeto": estado, validação por etapa e montagem do payload (RF-M3-02, RF-M4-01, RN-02). */
 import { emptyInstallment, type InstallmentRow, type PersonRef, type TeamRow } from "@/components/domain";
 import { fromDateInput } from "@/lib/format";
-import type { PriorityKey } from "@/data/types";
+import type { PaymentCondition, PriorityKey, ProjectSize } from "@/data/types";
 
 export type ProjectOrigin = "cotacao" | "direto";
 export type WizardStepKey = "origem" | "dados" | "financeiro" | "revisao";
@@ -19,6 +19,9 @@ export interface WizardState {
   contractedCents: number;
   installments: InstallmentRow[];
   team: TeamRow[];
+  size: ProjectSize | null;
+  /** Só projeto direto. "parcelado" = parcelas montadas à mão. */
+  paymentCondition: PaymentCondition | null;
 }
 
 export const initialWizardState = (origin: ProjectOrigin, clientId: string | null, ownerId: string | null): WizardState => ({
@@ -33,7 +36,34 @@ export const initialWizardState = (origin: ProjectOrigin, clientId: string | nul
   contractedCents: 0,
   installments: [emptyInstallment()],
   team: [],
+  size: null,
+  paymentCondition: null,
 });
+
+const todayInput = (plusDays = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + plusDays);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Parcelas das condições prontas: "À vista" (1 parcela) e "50/50" (na aprovação / na entrega).
+ * Mantém chave e data de linhas já existentes para não perder o que a pessoa editou.
+ */
+export function installmentsForCondition(condition: PaymentCondition, totalCents: number, dueAt: string, current: InstallmentRow[]): InstallmentRow[] {
+  if (condition === "parcelado") return current;
+  const base =
+    condition === "a_vista"
+      ? [{ description: "Pagamento à vista", amountCents: totalCents, expectedAt: todayInput() }]
+      : (() => {
+          const half = Math.floor(totalCents / 2);
+          return [
+            { description: "50% na aprovação", amountCents: half, expectedAt: todayInput() },
+            { description: "50% na entrega", amountCents: totalCents - half, expectedAt: dueAt || todayInput(30) },
+          ];
+        })();
+  return base.map((row, i) => ({ ...emptyInstallment(i + 1), ...row, ...(current.length === base.length && current[i] ? { key: current[i].key, expectedAt: current[i].expectedAt || row.expectedAt } : {}) }));
+}
 
 export const stepsFor = (origin: ProjectOrigin): { key: WizardStepKey; label: string }[] =>
   origin === "direto"
@@ -94,10 +124,12 @@ export const quotePayload = (s: WizardState) => ({
   briefing: s.briefing || undefined,
   priorityKey: s.priority,
   dueAt: fromDateInput(s.dueAt),
+  size: s.size,
 });
 
 export const directPayload = (s: WizardState) => ({
   ...quotePayload(s),
+  paymentCondition: s.paymentCondition,
   contractedAmountCents: s.contractedCents,
   installments: s.installments.map((r) => ({ description: r.description.trim(), amountCents: r.amountCents, expectedAt: fromDateInput(r.expectedAt)! })),
   team: s.team
