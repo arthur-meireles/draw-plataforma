@@ -13,7 +13,7 @@ import type { ProjectDetail } from "./use-project";
 type Approval = Awaited<ReturnType<typeof approvalsApi.list>>[number];
 
 function RequestDialog({ project, onClose }: { project: ProjectDetail; onClose: () => void }) {
-  const [stage, setStage] = useState<ProjectStageKey>(project.projectStageKey && project.projectStageKey !== "concluido" ? project.projectStageKey : "validacao_final");
+  const [stage, setStage] = useState<ProjectStageKey>(project.projectStageKey && project.projectStageKey !== "concluido" ? project.projectStageKey : "validacao_cliente");
   const [from, setFrom] = useState(project.billingContact?.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const request = useApiMutation(() => approvalsApi.request(project.id, { stageKey: stage, requestedFrom: from }), {

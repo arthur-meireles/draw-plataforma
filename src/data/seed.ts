@@ -49,7 +49,7 @@ import type {
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -224,13 +224,11 @@ export function createSeed(): Database {
   }));
 
   const templateTitles: Partial<Record<ProjectStageKey, string[]>> = {
-    entrada: ["Reunião de kickoff", "Levantar materiais do cliente"],
-    roteiro: ["Escrever roteiro", "Revisão jurídica do roteiro"],
-    ajustes_roteiro: ["Aplicar ajustes do roteiro"],
-    validacao_cliente_roteiro: ["Enviar roteiro para validação"],
+    roteiro: ["Reunião de kickoff", "Levantar materiais do cliente", "Escrever roteiro", "Revisão jurídica do roteiro"],
+    ajustes_roteiro: ["Aplicar ajustes do roteiro", "Enviar roteiro para validação"],
     design: ["Definir direção de arte", "Diagramar peça", "Ilustrações e ícones"],
     ajustes_design: ["Aplicar ajustes de design"],
-    validacao_final: ["Revisão final e checklist", "Exportar entregáveis"],
+    validacao_cliente: ["Revisão final e checklist", "Enviar para validação do cliente", "Exportar entregáveis"],
   };
   const projectTypeTaskTemplates: ProjectTypeTaskTemplate[] = [];
   for (const pt of projectTypes) {
@@ -427,7 +425,7 @@ export function createSeed(): Database {
     ),
     { status: "perdido", quote: "perdida", origin: "cotacao" },
     { status: "perdido", quote: "perdida", origin: "cotacao" },
-    ...(["entrada", "entrada", "roteiro", "roteiro", "roteiro", "ajustes_roteiro", "validacao_cliente_roteiro", "validacao_cliente_roteiro", "design", "design", "design", "ajustes_design", "validacao_final", "validacao_final", "roteiro", "design"] as ProjectStageKey[]).map(
+    ...(["roteiro", "roteiro", "roteiro", "roteiro", "ajustes_roteiro", "ajustes_roteiro", "design", "design", "design", "design", "ajustes_design", "ajustes_design", "validacao_cliente", "validacao_cliente", "roteiro", "design"] as ProjectStageKey[]).map(
       (st, i) => ({ status: "ativo" as const, stage: st, origin: i % 4 === 3 ? ("direto" as const) : ("cotacao" as const) }),
     ),
     ...Array.from({ length: 9 }, (_, i) => ({ status: "concluido" as const, stage: "concluido" as ProjectStageKey, origin: i % 3 === 0 ? ("direto" as const) : ("cotacao" as const) })),
@@ -688,12 +686,12 @@ export function createSeed(): Database {
       if (plan.status === "arquivado") ev("project.archived", "project", p.id, p, "usr_paula", {}, p.archivedAt!);
 
       /* aprovações */
-      if (currentOrder >= 4) {
-        const decided = currentOrder > 4;
+      if (currentOrder >= 3) {
+        const decided = currentOrder > 2;
         approvals.push({
           ...base("apr", (approvedOffset ?? 0) + 8),
           projectId: p.id,
-          stageKey: "validacao_cliente_roteiro",
+          stageKey: "ajustes_roteiro",
           requestedFrom: clientContacts.find((c) => c.clientId === p.clientId)?.name ?? "Cliente",
           decision: decided ? (chance(0.3) ? "ajustes" : "aprovado") : "pendente",
           reason: decided && chance(0.3) ? "Ajustar tom do segundo capítulo" : null,
@@ -701,12 +699,12 @@ export function createSeed(): Database {
           decidedAt: decided ? d((approvedOffset ?? 0) + 12) : null,
         });
       }
-      if (currentOrder >= 7) {
-        const decided = currentOrder > 7;
+      if (currentOrder >= 5) {
+        const decided = currentOrder > 5;
         approvals.push({
           ...base("apr", (approvedOffset ?? 0) + 18),
           projectId: p.id,
-          stageKey: "validacao_final",
+          stageKey: "validacao_cliente",
           requestedFrom: clientContacts.find((c) => c.clientId === p.clientId)?.name ?? "Cliente",
           decision: decided ? "aprovado" : "pendente",
           reason: null,
@@ -719,9 +717,9 @@ export function createSeed(): Database {
       addFile(p, "Briefing do cliente.pdf", "briefing", "application/pdf", (approvedOffset ?? 0) + 1, true);
       addFile(p, `Manual de marca — ${client.tradeName}.pdf`, "marca_cliente", "application/pdf", (approvedOffset ?? 0) + 1, true);
       if (chance(0.5)) addFile(p, "Tom de voz.docx", "marca_cliente", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", (approvedOffset ?? 0) + 2, true);
-      if (currentOrder >= 3) addFile(p, `Roteiro ${p.code}.docx`, "entrega", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", (approvedOffset ?? 0) + 6, false, currentOrder >= 4 ? 2 : 1);
-      if (currentOrder >= 6) addFile(p, `${p.code} — peça final.pdf`, "entrega", "application/pdf", (approvedOffset ?? 0) + 15, false, isDone ? 3 : 1);
-      if (currentOrder >= 5) addFile(p, "Referências visuais.png", "outro", "image/png", (approvedOffset ?? 0) + 9, true);
+      if (currentOrder >= 2) addFile(p, `Roteiro ${p.code}.docx`, "entrega", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", (approvedOffset ?? 0) + 6, false, currentOrder >= 3 ? 2 : 1);
+      if (currentOrder >= 4) addFile(p, `${p.code} — peça final.pdf`, "entrega", "application/pdf", (approvedOffset ?? 0) + 15, false, isDone ? 3 : 1);
+      if (currentOrder >= 3) addFile(p, "Referências visuais.png", "outro", "image/png", (approvedOffset ?? 0) + 9, true);
 
       /* comentários */
       const commentBodies = [

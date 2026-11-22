@@ -161,14 +161,13 @@ export type QuoteStageKey =
   | "aprovada"
   | "perdida";
 
+/** Etapas de execução — alinhadas ao quadro "1. Casos" usado pela Draw (nov/2026). */
 export type ProjectStageKey =
-  | "entrada"
   | "roteiro"
   | "ajustes_roteiro"
-  | "validacao_cliente_roteiro"
   | "design"
   | "ajustes_design"
-  | "validacao_final"
+  | "validacao_cliente"
   | "concluido";
 
 export type TaskStatusKey = "a_fazer" | "em_andamento" | "em_revisao" | "concluida";

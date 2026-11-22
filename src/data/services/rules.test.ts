@@ -45,7 +45,7 @@ describe("RN-01 — aprovação de proposta", () => {
     const db = loadDb();
     const proj = db.projects.find((x) => x.id === p.id)!;
     expect(proj.status).toBe("ativo");
-    expect(proj.projectStageKey).toBe("entrada");
+    expect(proj.projectStageKey).toBe("roteiro");
     expect(proj.contractedAmountCents).toBe(1_000_000);
     expect(proj.approvedAt).not.toBeNull();
     expect(db.receivables.filter((r) => r.projectId === p.id)).toHaveLength(2);

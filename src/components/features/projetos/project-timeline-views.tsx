@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { Calendar, Gantt, StageIcon, stageProgress, type GanttGroup, type TimelineItem } from "@/components/domain";
-import { PROJECT_STAGES } from "@/data/reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "@/data/reference";
 import type { ProjectListItem } from "@/data/services";
 import { daysUntil } from "@/lib/format";
 
@@ -38,7 +38,7 @@ export function ProjectGanttView({ projects }: { projects: ProjectListItem[] }) 
         const start = p.startedAt ?? p.enteredAt;
         const end = p.dueAt ?? p.estimatedEndAt;
         if (!end) return [];
-        return [{ id: p.id, title: `${p.code} ${p.title}`, start, end: ymd(end) < ymd(start) ? start : end, href: `/projetos/${p.code}`, tone: tone(p), meta: p.clientName, group: p.projectStageKey ?? "entrada" }];
+        return [{ id: p.id, title: `${p.code} ${p.title}`, start, end: ymd(end) < ymd(start) ? start : end, href: `/projetos/${p.code}`, tone: tone(p), meta: p.clientName, group: p.projectStageKey ?? FIRST_PROJECT_STAGE }];
       }),
     [projects],
   );

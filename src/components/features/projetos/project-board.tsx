@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { Kanban, ProjectCard, StageIcon, stageProgress, type KanbanColumn } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
-import { PROJECT_STAGES } from "@/data/reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "@/data/reference";
 import { projectsApi, type ProjectListItem } from "@/data/services";
 import type { ProjectStageKey } from "@/data/types";
 
@@ -40,7 +40,7 @@ export function ProjectBoard({ projects, isLoading }: { projects: ProjectListIte
       items={projects}
       isLoading={isLoading}
       getId={(p) => p.id}
-      getColumn={(p) => p.projectStageKey ?? "entrada"}
+      getColumn={(p) => p.projectStageKey ?? FIRST_PROJECT_STAGE}
       getPosition={(p) => p.position}
       renderCard={(p, { dragging }) => <ProjectCard project={p} dragging={dragging} />}
       onMove={onMove}

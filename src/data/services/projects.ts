@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import { PROJECT_STAGES } from "../reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "../reference";
 import type {
   Database,
   ID,
@@ -228,7 +228,7 @@ export const projectsApi = {
         origin: "direto",
         status: "ativo",
         quoteStageKey: null,
-        projectStageKey: "entrada",
+        projectStageKey: FIRST_PROJECT_STAGE,
         priorityKey: input.priorityKey ?? "media",
         position: -Date.now() / 1000,
         ownerId: input.ownerId,

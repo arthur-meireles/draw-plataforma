@@ -1,5 +1,5 @@
 /** Indicadores (seção 12) — determinísticos, derivados dos relacionamentos e do event log. */
-import { PROJECT_STAGES } from "../reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "../reference";
 import type { ID } from "../types";
 import { ApiError, freelancerIdOf, read, visibleProjects } from "./_core";
 import { computeFinancials } from "./projects";
@@ -78,7 +78,7 @@ export const metricsApi = {
       for (const p of all) {
         const evs = db.events.filter((e) => e.projectId === p.id && e.type === "project.stage_changed").sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
         let prevAt = p.startedAt ?? p.approvedAt;
-        let prevKey: string | null = "entrada";
+        let prevKey: string | null = FIRST_PROJECT_STAGE;
         for (const e of evs) {
           if (prevAt && prevKey) {
             const arr = stageDurations.get(prevKey) ?? [];

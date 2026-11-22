@@ -1,3 +1,4 @@
+import { FIRST_PROJECT_STAGE } from "../reference";
 import { baseFields, nowIso } from "../db";
 import type { ID, Proposal } from "../types";
 import { ApiError, assertProjectVisible, emit, emitValueChange, notify, read, touch, write } from "./_core";
@@ -104,7 +105,7 @@ export const proposalsApi = {
       db.proposals.filter((x) => x.projectId === p.id && x.id !== prop.id && x.status !== "recusada").forEach((x) => (x.status = "recusada"));
       p.status = "ativo";
       p.quoteStageKey = null;
-      p.projectStageKey = "entrada";
+      p.projectStageKey = FIRST_PROJECT_STAGE;
       p.approvedAt = now;
       p.startedAt = now;
       p.contractedAmountCents = prop.amountCents;

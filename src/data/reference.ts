@@ -21,26 +21,29 @@ import type {
   ResourceCategory,
 } from "./types";
 
+/** Funil comercial. "Possíveis casos" e "A fazer proposta" são as colunas iniciais do quadro atual da Draw. */
 export const QUOTE_STAGES: ReferenceItem<QuoteStageKey>[] = [
-  { key: "entrada", label: "Entrada", order: 1, category: "open" },
+  { key: "entrada", label: "Possíveis casos", order: 1, category: "open" },
   { key: "diagnostico", label: "Diagnóstico", order: 2, category: "open" },
-  { key: "elaboracao", label: "Elaboração", order: 3, category: "open" },
+  { key: "elaboracao", label: "A fazer proposta", order: 3, category: "open" },
   { key: "enviada", label: "Enviada", order: 4, category: "waiting" },
   { key: "negociacao", label: "Negociação", order: 5, category: "waiting" },
   { key: "aprovada", label: "Aprovada", order: 6, category: "done" },
   { key: "perdida", label: "Perdida", order: 7, category: "lost" },
 ];
 
+/** Etapas de execução — espelham o quadro "1. Casos" da Draw (Roteiro → … → Com cliente para validação → Concluídos). */
 export const PROJECT_STAGES: ReferenceItem<ProjectStageKey>[] = [
-  { key: "entrada", label: "Entrada", order: 1, category: "open" },
-  { key: "roteiro", label: "Roteiro", order: 2, category: "open" },
-  { key: "ajustes_roteiro", label: "Ajustes de roteiro", order: 3, category: "open" },
-  { key: "validacao_cliente_roteiro", label: "Validação do cliente", order: 4, category: "waiting" },
-  { key: "design", label: "Design", order: 5, category: "open" },
-  { key: "ajustes_design", label: "Ajustes de design", order: 6, category: "open" },
-  { key: "validacao_final", label: "Validação final", order: 7, category: "waiting" },
-  { key: "concluido", label: "Concluído", order: 8, category: "done" },
+  { key: "roteiro", label: "Roteiro", order: 1, category: "open" },
+  { key: "ajustes_roteiro", label: "Ajustes de roteiro", order: 2, category: "open" },
+  { key: "design", label: "Design", order: 3, category: "open" },
+  { key: "ajustes_design", label: "Ajustes de design", order: 4, category: "open" },
+  { key: "validacao_cliente", label: "Com cliente para validação", order: 5, category: "waiting" },
+  { key: "concluido", label: "Concluído", order: 6, category: "done" },
 ];
+
+/** Primeira etapa de execução — onde o projeto entra ao ser aprovado ou criado direto. */
+export const FIRST_PROJECT_STAGE: ProjectStageKey = "roteiro";
 
 export const TASK_STATUSES: ReferenceItem<TaskStatusKey>[] = [
   { key: "a_fazer", label: "A fazer", order: 1, category: "open" },
