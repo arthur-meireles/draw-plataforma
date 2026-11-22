@@ -1,8 +1,8 @@
 "use client";
 /** Minhas tarefas (RF-M4-08): atrasadas, hoje, esta semana, depois — ou por projeto / status. */
 import { useMemo } from "react";
-import { Badge, Checkbox, PageBody, PageHeader, SearchInput, SegmentedControl, Toolbar, ClearFiltersButton } from "@/components/ui";
-import { TaskList, TaskPeek } from "@/components/domain";
+import { Badge, Checkbox, PageBody, PageHeader, SearchInput, SegmentedControl, Toolbar, ClearFiltersButton, ViewSwitcher } from "@/components/ui";
+import { TASK_VIEW_OPTIONS, TaskPeek, TaskViews, useTaskView } from "@/components/domain";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi } from "@/data/services";
 import { plural } from "@/lib/format";
@@ -13,6 +13,7 @@ const GROUP_TO_LIST = { prazo: "due", projeto: "project", status: "status" } as 
 
 export function MyTasksView() {
   const [f, set] = useUrlState({ agrupar: "prazo", concluidas: undefined as string | undefined, q: "", tarefa: undefined as string | undefined });
+  const [view, setView] = useTaskView("lista");
   const group = (["prazo", "projeto", "status"].includes(f.agrupar) ? f.agrupar : "prazo") as Group;
   const showDone = f.concluidas === "1";
   const q = useApiQuery(["tasks", "mine", f.q], () => tasksApi.list({ assignee: "me", q: f.q || undefined }));
@@ -25,11 +26,18 @@ export function MyTasksView() {
 
   return (
     <>
-      <PageHeader crumbs={[{ label: "Minhas tarefas", icon: "myTasks" }]} count={q.data ? open : undefined} actions={overdue > 0 ? <Badge tone="danger" dot>{plural(overdue, "atrasada", "atrasadas")}</Badge> : undefined} />
+      <PageHeader crumbs={[{ label: "Minhas tarefas", icon: "myTasks" }]} count={q.data ? open : undefined} actions={
+          <>
+            {overdue > 0 && <Badge tone="danger" dot>{plural(overdue, "atrasada", "atrasadas")}</Badge>}
+            <ViewSwitcher value={view} onChange={setView} views={TASK_VIEW_OPTIONS} />
+          </>
+        }
+      />
       <Toolbar
         end={<Checkbox checked={showDone} onCheckedChange={(v) => set({ concluidas: v ? "1" : undefined })} label="Mostrar concluídas" />}
       >
         <SearchInput value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar nas minhas tarefas…" className="w-64 max-md:w-48" />
+        {view === "lista" && (
         <SegmentedControl<Group>
           aria-label="Agrupar tarefas"
           value={group}
@@ -40,18 +48,23 @@ export function MyTasksView() {
             { value: "status", label: "Por status" },
           ]}
         />
+        )}
         <ClearFiltersButton show={!!f.q || showDone || group !== "prazo"} onClick={() => set({ q: "", concluidas: undefined, agrupar: "prazo" })} />
       </Toolbar>
       <PageBody padded={false}>
-        <TaskList
+        <TaskViews
           tasks={visible}
           isLoading={q.isLoading}
           error={q.error}
           onRetry={() => q.refetch()}
-          groupBy={GROUP_TO_LIST[group]}
+          view={view}
+          onViewChange={setView}
           showProject
           onOpen={(t) => set({ tarefa: t.id })}
-          empty={f.q ? { icon: "search", title: "Nenhuma tarefa encontrada", description: "Tente outro termo de busca." } : { icon: "success", title: showDone ? "Você ainda não tem tarefas" : "Tudo em dia", description: showDone ? "Quando alguém atribuir uma tarefa a você, ela aparece aqui." : "Nenhuma tarefa aberta atribuída a você. Marque “Mostrar concluídas” para rever o que já entregou." }}
+          listProps={{
+            groupBy: GROUP_TO_LIST[group],
+            empty: f.q ? { icon: "search", title: "Nenhuma tarefa encontrada", description: "Tente outro termo de busca." } : { icon: "success", title: showDone ? "Você ainda não tem tarefas" : "Tudo em dia", description: showDone ? "Quando alguém atribuir uma tarefa a você, ela aparece aqui." : "Nenhuma tarefa aberta atribuída a você. Marque “Mostrar concluídas” para rever o que já entregou." },
+          }}
         />
       </PageBody>
       <TaskPeek taskId={f.tarefa ?? null} onClose={() => set({ tarefa: undefined })} />

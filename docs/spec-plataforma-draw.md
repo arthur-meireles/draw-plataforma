@@ -18,6 +18,8 @@
 > cobrança adicional, alíquota da organização, área das tarefas internas, ID legado); módulo de Arquivos vira **Drive**;
 > mapeamento coluna a coluna da planilha → banco (seção 20); estado da implementação (seção 21).
 
+>
+> **Mudança da 0.5:** visualizações de tarefas em todos os lugares que listam tarefas — lista, kanban, calendário e Gantt (RF-X-06, RF-M4-17, RF-M6-06).
 ---
 
 ## 0. Como usar este documento
@@ -325,6 +327,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-11 | Materiais de apoio liberados ao freelancer (manual de marca do cliente, tom de voz…). | R1 |
 | RF-M4-12 | Concluir projeto dispara RN-03; arquivar mantém tudo (RN-07). | R1 |
 | RF-M4-13 | Alertas de prazo próximo (padrão 2 dias) e atraso. | R1 |
+| RF-M4-17 | Aba **Tarefas** do prontuário e **Minhas tarefas** nas visões lista, kanban por status, calendário e Gantt (RF-X-06). | R1 |
 | RF-M4-14 | Marcos e aprendizados; métricas de entrega (`project_deliverable_metrics`). | R2 |
 | RF-M4-15 | Pausar/retomar projeto (RN-13) com motivo; selo "Parado" em cartões, linhas e prontuário; filtro "Situação". Tamanho (P/M/G) e condição de pagamento no prontuário e no assistente — "À vista" gera 1 parcela, "50/50" gera 2 (na aprovação / na entrega). | R1 |
 | RF-M4-16 | Cobrança adicional pelo prontuário (RN-14) e comentário de cobrança por recebível; ao emitir NF, sugerir vencimento pelo prazo do cliente (`payment_term_days`). | R1 |
@@ -351,6 +354,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M6-03 | Cofre de credenciais cifrado, com log de revelação. | R2 |
 | RF-M6-04 | Biblioteca de recursos (ferramentas, templates, playbooks). | R2 |
 | RF-M6-05 | **Quadro por área** (visão padrão de `/adm/tarefas`): colunas 2. Administrativo · 3. Comercial e Marketing · 4. Projetos · 5. Financeiro · 6. Outros; arrastar muda `tasks.area`; adição rápida por coluna. | R1 |
+| RF-M6-06 | `/adm/tarefas` com seletor de visão (lista · kanban · calendário · Gantt) aplicado à aba ativa — Por área (kanban = quadro de áreas), Sprint atual e Backlog (kanban por status); a aba Sprints não tem visão de tarefas (RF-X-06). | R1 |
 
 ### M7 — Arquivos
 
@@ -419,6 +423,7 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 | RF-X-03 | Estados vazio, carregando e erro em todas as telas. | R1 |
 | RF-X-04 | **PWA instalável** (bônus incluído na V1): manifest, ícones e service worker desde o primeiro deploy; instalável no Android, iPhone/iPad, Windows e macOS sem loja. Detalhes em 10.6. | R1 |
 | RF-X-05 | **Responsivo** em computador, tablet e celular, com padrões de navegação próprios por faixa de tela (10.6). | R1 |
+| RF-X-06 | **Visualizações de tarefas**: todo lugar que lista tarefas oferece as mesmas visões dos projetos — **lista**, **kanban** (por status; em Administrativo › Por área as colunas são as áreas), **calendário** (pelo prazo) e **Gantt** (início → prazo). Visão na URL (`?visao=`); tarefas sem data mostram o aviso "N tarefas sem data" com atalho para a lista; no celular a lista é a visão padrão, o kanban mostra uma coluna por vez, o calendário vira agenda e o Gantt rola na horizontal. Abrir a tarefa segue pelo peek (`?tarefa=`). Componente único `TaskViews`. Vale para Minhas tarefas, aba Tarefas do prontuário (M4), Administrativo (M6) e início do freelancer. | R1 |
 
 ---
 

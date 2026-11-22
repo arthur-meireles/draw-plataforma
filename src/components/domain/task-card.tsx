@@ -1,15 +1,15 @@
 "use client";
-import { AssigneePill, DueChip, Kanban, PriorityPill, TaskStatusIcon, TaskStatusPill, useTaskUpdate, type PersonRef } from "@/components/domain";
+/** Cartão compacto de tarefa para quadros (kanban): título, status opcional, prioridade, prazo, subtarefas, comentários e responsável. */
 import { Icon, ProgressRing } from "@/components/ui";
-import { TASK_STATUSES } from "@/data/reference";
 import type { TaskView } from "@/data/services";
-import type { TaskStatusKey } from "@/data/types";
 import { cn } from "@/lib/cn";
+import { AssigneePill, type PersonRef } from "./pickers";
+import { DueChip, PriorityPill, TaskStatusPill } from "./badges";
 
 const personOf = (t: TaskView): PersonRef | null => (t.assigneeUserId ? { kind: "user", id: t.assigneeUserId } : t.assigneeFreelancerId ? { kind: "freelancer", id: t.assigneeFreelancerId } : null);
 
-/** Cartão de tarefa interna. `showStatus` mostra o status (útil no quadro por área, onde as colunas não são status). */
-export function AdmTaskCard({ task: t, onOpen, showStatus }: { task: TaskView; onOpen: (t: TaskView) => void; showStatus?: boolean }) {
+/** `showStatus` mostra o status (quando as colunas não são status); `showProject` mostra o código do projeto. */
+export function TaskCard({ task: t, onOpen, showStatus, showProject }: { task: TaskView; onOpen: (t: TaskView) => void; showStatus?: boolean; showProject?: boolean }) {
   const done = t.statusKey === "concluida";
   return (
     <div
@@ -19,6 +19,7 @@ export function AdmTaskCard({ task: t, onOpen, showStatus }: { task: TaskView; o
       onKeyDown={(e) => e.key === "Enter" && onOpen(t)}
       className="cursor-pointer space-y-2.5 rounded-lg border border-line bg-surface p-3 shadow-raised transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2 focus-visible:border-accent focus-visible:outline-none"
     >
+      {showProject && t.projectCode && <p className="truncate font-display text-xs font-medium text-fg-subtle">{t.projectCode}{t.projectTitle ? ` · ${t.projectTitle}` : ""}</p>}
       <p className={cn("text-sm font-medium leading-snug text-fg", done && "text-fg-subtle line-through")}>{t.title}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {showStatus && <TaskStatusPill value={t.statusKey} size="sm" />}
@@ -40,25 +41,5 @@ export function AdmTaskCard({ task: t, onOpen, showStatus }: { task: TaskView; o
         <AssigneePill value={personOf(t)} name={t.assigneeName} color={t.assigneeColor} size="sm" />
       </div>
     </div>
-  );
-}
-
-/** Kanban da sprint por status da tarefa (RF-M6-01). Arrastar atualiza status e posição. */
-export function SprintBoard({ tasks, isLoading, canEdit, onOpen, onAdd }: { tasks: TaskView[] | undefined; isLoading?: boolean; canEdit: boolean; onOpen: (t: TaskView) => void; onAdd?: (status: TaskStatusKey) => void }) {
-  const update = useTaskUpdate();
-  return (
-    <Kanban<TaskView, TaskStatusKey>
-      columns={TASK_STATUSES.map((s) => ({ key: s.key, label: s.label, icon: <TaskStatusIcon status={s.key} /> }))}
-      items={tasks}
-      isLoading={isLoading}
-      getId={(t) => t.id}
-      getColumn={(t) => t.statusKey}
-      getPosition={(t) => t.position}
-      canDrag={() => canEdit}
-      renderCard={(t) => <AdmTaskCard task={t} onOpen={onOpen} />}
-      onMove={(t, to) => update.mutate({ id: t.id, patch: { statusKey: to.column, position: to.position } })}
-      onAdd={canEdit ? onAdd : undefined}
-      emptyColumnText="Nenhuma tarefa"
-    />
   );
 }

@@ -15,6 +15,8 @@ export interface TimelineItem {
   start: string;
   end: string;
   href?: string;
+  /** Alternativa a `href`: ação ao clicar (ex.: abrir o peek de uma tarefa). */
+  onSelect?: () => void;
   tone?: Tone;
   /** Texto auxiliar (cliente, responsável…). */
   meta?: string;
@@ -56,6 +58,12 @@ function ItemChip({ item, compact }: { item: TimelineItem; compact?: boolean }) 
       {!compact && item.meta && <span className="truncate opacity-70">· {item.meta}</span>}
     </>
   );
+  if (!item.href && item.onSelect)
+    return (
+      <button type="button" onClick={item.onSelect} className={cn(cls, "w-full text-left hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50")} title={item.title}>
+        {body}
+      </button>
+    );
   return item.href ? (
     <Link href={item.href} className={cn(cls, "hover:brightness-95")} title={item.title}>
       {body}
