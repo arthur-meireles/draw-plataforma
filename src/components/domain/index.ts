@@ -7,3 +7,7 @@ export * from "./project-card";
 export * from "./timeline";
 export * from "./tasks";
 export * from "./charts";
+export * from "./calendar";
+export * from "./gantt";
+export * from "./installments-editor";
+export * from "./team-editor";
