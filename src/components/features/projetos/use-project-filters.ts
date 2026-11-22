@@ -8,10 +8,15 @@ import { daysUntil } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
 import type { ViewMode } from "@/components/ui";
 
-export const PROJECT_FILTER_DEFAULTS = { q: "", cliente: "", tipo: "", pessoa: "", prioridade: "", prazo: "", visao: "", mes: "" };
+export const PROJECT_FILTER_DEFAULTS = { q: "", cliente: "", tipo: "", pessoa: "", prioridade: "", prazo: "", situacao: "", visao: "", mes: "" };
 export type ProjectFilterState = typeof PROJECT_FILTER_DEFAULTS;
 
 export type DueFilter = "atrasado" | "proximos" | "semana" | "mes";
+export const SITUATION_OPTIONS = [
+  { value: "parados", label: "Parados" },
+  { value: "andamento", label: "Em andamento" },
+];
+
 export const DUE_OPTIONS: { value: DueFilter; label: string }[] = [
   { value: "atrasado", label: "Atrasados" },
   { value: "proximos", label: "Vencem em até 2 dias" },
@@ -44,8 +49,8 @@ export function useProjectFilters() {
   const [state, set] = useUrlState(PROJECT_FILTER_DEFAULTS);
   const defaultView = useDefaultView();
   const view = (["lista", "kanban", "calendario", "gantt"].includes(state.visao) ? state.visao : defaultView) as ViewMode;
-  const hasFilters = !!(state.q || state.cliente || state.tipo || state.pessoa || state.prioridade || state.prazo);
-  const clear = () => set({ q: "", cliente: "", tipo: "", pessoa: "", prioridade: "", prazo: "" });
+  const hasFilters = !!(state.q || state.cliente || state.tipo || state.pessoa || state.prioridade || state.prazo || state.situacao);
+  const clear = () => set({ q: "", cliente: "", tipo: "", pessoa: "", prioridade: "", prazo: "", situacao: "" });
   return { state, set, view, setView: (v: ViewMode) => set({ visao: v }), hasFilters, clear };
 }
 
@@ -62,6 +67,11 @@ export function useActiveProjects(state: ProjectFilterState) {
     memberFreelancerId: kind === "freelancer" ? id! : undefined,
   };
   const query = useApiQuery(["projects", "list", api], () => projectsApi.list(api));
-  const rows = useMemo(() => (state.prazo ? (query.data ?? []).filter((p) => matchesDue(p, state.prazo)) : query.data), [query.data, state.prazo]);
+  const rows = useMemo(() => {
+    let list = query.data;
+    if (state.situacao) list = list?.filter((p) => (state.situacao === "parados" ? !!p.pausedAt : !p.pausedAt));
+    if (state.prazo) list = list?.filter((p) => matchesDue(p, state.prazo));
+    return list;
+  }, [query.data, state.prazo, state.situacao]);
   return { query, base: query.data, rows };
 }

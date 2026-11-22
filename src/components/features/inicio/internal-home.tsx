@@ -6,6 +6,7 @@ import { InstallPromptCard } from "@/components/pwa/pwa-ui";
 import { useApiQuery } from "@/data/hooks";
 import { metricsApi } from "@/data/services";
 import { useUrlState } from "@/lib/use-url-state";
+import { CompanyOverview } from "./company-overview";
 import { CompactProjectList } from "./compact-project-list";
 import { HomeGreeting } from "./home-greeting";
 import { HomeStats } from "./home-stats";
@@ -20,6 +21,7 @@ export function InternalHome() {
     <div className="space-y-4 md:space-y-6">
       <HomeGreeting />
       <InstallPromptCard />
+      <CompanyOverview />
       <HomeStats />
       <div className="grid gap-4 xl:grid-cols-3 md:gap-6">
         <div className="min-w-0 space-y-4 md:space-y-6 xl:col-span-2">

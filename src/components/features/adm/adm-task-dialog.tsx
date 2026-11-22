@@ -4,13 +4,15 @@ import { PersonField, priorityOptions, taskStatusOptions, type PersonRef } from 
 import { Button, DateField, Dialog, SelectField, TextareaField, TextField } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { tasksApi } from "@/data/services";
-import type { PriorityKey, TaskStatusKey } from "@/data/types";
+import { ADM_AREAS } from "@/data/reference";
+import type { AdmArea, PriorityKey, TaskStatusKey } from "@/data/types";
 import { focusFirstInvalid } from "@/lib/focus";
 import { fromDateInput } from "@/lib/format";
 
 export interface AdmTaskDefaults {
   statusKey?: TaskStatusKey;
   sprintId?: string | null;
+  area?: AdmArea | null;
 }
 
 /** Nova tarefa interna (module = adm). */
@@ -21,6 +23,7 @@ export function AdmTaskDialog({ open, onOpenChange, defaults, sprintOptions }: {
   const [priority, setPriority] = useState<PriorityKey>("media");
   const [status, setStatus] = useState<TaskStatusKey>("a_fazer");
   const [sprintId, setSprintId] = useState<string | null>(null);
+  const [area, setArea] = useState<AdmArea | null>(null);
   const [due, setDue] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -33,6 +36,7 @@ export function AdmTaskDialog({ open, onOpenChange, defaults, sprintOptions }: {
     setStatus(defaults?.statusKey ?? "a_fazer");
     setSprintId(defaults?.sprintId ?? null);
     setDue("");
+    setArea(defaults?.area ?? null);
     setErrors({});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,6 +62,7 @@ export function AdmTaskDialog({ open, onOpenChange, defaults, sprintOptions }: {
       priorityKey: priority,
       statusKey: status,
       sprintId,
+      area,
       dueAt: due ? fromDateInput(due) : null,
     });
   };
@@ -87,6 +92,7 @@ export function AdmTaskDialog({ open, onOpenChange, defaults, sprintOptions }: {
           <DateField label="Prazo" value={due} onChange={(e) => setDue(e.target.value)} />
           <SelectField label="Prioridade" options={priorityOptions} value={priority} onChange={(v) => v && setPriority(v)} />
           <SelectField label="Status" options={taskStatusOptions} value={status} onChange={(v) => v && setStatus(v)} />
+          <SelectField label="Área" options={ADM_AREAS.map((a) => ({ value: a.key, label: `${a.number}. ${a.label}` }))} value={area} onChange={setArea} clearable placeholder="Sem área (conta em Outros)" containerClassName="sm:col-span-2" />
           <SelectField label="Sprint" options={sprintOptions} value={sprintId} onChange={setSprintId} clearable placeholder="Backlog (sem sprint)" containerClassName="sm:col-span-2" />
         </div>
         <button type="submit" hidden />

@@ -19,6 +19,8 @@ const empty: ClientInput = {
   segment: "",
   status: "ativo",
   notes: "",
+  paymentTermsNote: "",
+  paymentTermDays: null,
   address: { street: "", number: "", complement: null, district: "", city: "", state: "SP", zip: "" },
 };
 
@@ -29,7 +31,7 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
 
   useEffect(() => {
     if (open) {
-      setForm(client ? { groupId: client.groupId, legalName: client.legalName, tradeName: client.tradeName, cnpj: client.cnpj, segment: client.segment, status: client.status, notes: client.notes ?? "", address: client.address } : empty);
+      setForm(client ? { groupId: client.groupId, legalName: client.legalName, tradeName: client.tradeName, cnpj: client.cnpj, segment: client.segment, status: client.status, notes: client.notes ?? "", paymentTermsNote: client.paymentTermsNote ?? "", paymentTermDays: client.paymentTermDays, address: client.address } : empty);
       setErrors({});
     }
   }, [open, client]);
@@ -56,12 +58,13 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
     if (!form.legalName.trim()) errs.legalName = "Informe a razão social";
     if (!isValidCnpj(form.cnpj)) errs.cnpj = onlyDigits(form.cnpj).length !== 14 ? "O CNPJ deve ter 14 dígitos" : "CNPJ inválido: confira os dígitos";
     if (!form.segment) errs.segment = "Escolha o segmento";
+    if (form.paymentTermDays != null && (!Number.isInteger(form.paymentTermDays) || form.paymentTermDays < 0 || form.paymentTermDays > 365)) errs.paymentTermDays = "Use um número inteiro de 0 a 365 dias";
     setErrors(errs);
     if (Object.keys(errs).length) {
       document.getElementById(`client-${Object.keys(errs)[0]}`)?.focus();
       return;
     }
-    save.mutate({ ...form, legalName: form.legalName.trim(), tradeName: form.tradeName.trim() });
+    save.mutate({ ...form, legalName: form.legalName.trim(), tradeName: form.tradeName.trim(), paymentTermsNote: form.paymentTermsNote?.trim() || null });
   };
 
   const groupOptions: Option[] = (groups.data ?? []).map((g) => ({ value: g.id, label: g.name, description: `${g.clients} empresas` }));
@@ -110,6 +113,8 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
           <SelectField label="UF" options={UFS.map((u) => ({ value: u, label: u }))} value={form.address.state} onChange={(v) => setAddr("state", v ?? "")} />
           <TextField label="CEP" inputMode="numeric" value={form.address.zip} onChange={(e) => setAddr("zip", e.target.value.replace(/\D/g, "").slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"))} autoComplete="postal-code" />
         </div>
+        <TextField label="Política de pagamento" containerClassName="sm:col-span-2" value={form.paymentTermsNote ?? ""} onChange={(e) => set("paymentTermsNote", e.target.value)} placeholder="Ex.: pagamento em 20 dias após a emissão da NF" hint="Como este cliente costuma pagar. Aparece na ficha do cliente e ao emitir NF." />
+        <TextField id="client-paymentTermDays" label="Prazo (dias após a NF)" type="number" inputMode="numeric" min={0} max={365} value={form.paymentTermDays ?? ""} onChange={(e) => set("paymentTermDays", e.target.value === "" ? null : Number(e.target.value))} error={errors.paymentTermDays} hint="Usado para sugerir o vencimento ao emitir a NF." />
         <TextareaField label="Observações" containerClassName="sm:col-span-2" rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
       </form>
     </Dialog>
