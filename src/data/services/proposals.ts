@@ -1,7 +1,7 @@
 import { FIRST_PROJECT_STAGE } from "../reference";
 import { baseFields, nowIso } from "../db";
 import type { ID, Proposal } from "../types";
-import { ApiError, assertProjectVisible, emit, emitValueChange, notify, read, touch, write } from "./_core";
+import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, notify, read, touch, write } from "./_core";
 import { generateTasksFromTemplate } from "./projects";
 import { canSeeMoney } from "@/lib/permissions";
 
@@ -120,7 +120,9 @@ export const proposalsApi = {
           proposalInstallmentId: i.id,
           description: insts.length > 1 ? `Parcela ${i.number}/${insts.length} — ${i.dueRule ?? "conforme proposta"}` : `Parcela única — ${i.dueRule ?? "conforme proposta"}`,
           amountCents: i.amountCents,
-          taxCents: Math.round(i.amountCents * 0.0615),
+          taxCents: taxOf(db, i.amountCents),
+          kind: "parcela",
+          collectionNote: null,
           expectedAt: expected,
           invoiceNumber: null,
           invoiceFileId: null,

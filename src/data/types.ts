@@ -25,7 +25,8 @@ export type UserStatus = "ativo" | "convidado" | "inativo";
 export interface Organization extends Omit<BaseEntity, "organizationId"> {
   name: string;
   slug: string;
-  settings: { freelancerPaymentDay: number; dueSoonDays: number };
+  /** taxRatePct: alíquota padrão sobre faturamento (planilha atual: 6%). */
+  settings: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct: number };
 }
 
 export interface User extends BaseEntity {
@@ -93,6 +94,10 @@ export interface Client extends BaseEntity {
   segment: string;
   status: ClientStatus;
   notes: string | null;
+  /** Política de pagamento do cliente, ex.: "20 dias após emissão da NF" (planilha: Obs Política Pagto Cliente). */
+  paymentTermsNote: string | null;
+  /** Prazo em dias após a NF — usado para sugerir o vencimento ao emitir a nota. */
+  paymentTermDays: number | null;
 }
 
 export interface ClientContact extends BaseEntity {
@@ -176,6 +181,9 @@ export type PriorityKey = "baixa" | "media" | "alta" | "urgente";
 /* ───────────── 6.4 Projetos e trabalho ───────────── */
 
 export type ProjectOrigin = "cotacao" | "direto";
+export type ProjectSize = "pequeno" | "medio" | "grande";
+export type PaymentCondition = "a_vista" | "50_50" | "parcelado";
+
 export type ProjectStatus = "cotacao" | "ativo" | "concluido" | "arquivado" | "perdido" | "cancelado";
 
 export interface Project extends BaseEntity {
@@ -204,6 +212,15 @@ export interface Project extends BaseEntity {
   contractedAmountCents: number | null;
   lostReason: string | null;
   isEnvironment: boolean;
+  /** Porte do projeto (planilha: Tamanho). */
+  size: ProjectSize | null;
+  /** Projeto parado (planilha: "Caso Parado") — não muda a etapa; sai dos alertas de prazo. */
+  pausedAt: ISODate | null;
+  pausedReason: string | null;
+  /** Identificador legado da planilha master (ex.: P001) — chave de importação idempotente. */
+  legacyCode: string | null;
+  /** Condição de pagamento combinada (planilha: 50/50, À vista). */
+  paymentCondition: PaymentCondition | null;
 }
 
 export type ProposalStatus = "rascunho" | "enviada" | "aprovada" | "recusada";
@@ -246,7 +263,12 @@ export interface Task extends BaseEntity {
   position: number;
   sprintId: ID | null;
   completedAt: ISODate | null;
+  /** Área das tarefas internas (module = adm) — quadro "Visão geral da empresa". */
+  area: AdmArea | null;
 }
+
+/** Áreas internas (quadro atual: 2. Administrativo · 3. Comercial e Marketing · 4. Projetos · 5. Financeiro · 6. Outros). */
+export type AdmArea = "administrativo" | "comercial_marketing" | "projetos_internos" | "financeiro" | "outros";
 
 export type SprintStatus = "planejada" | "ativa" | "concluida";
 
@@ -316,6 +338,18 @@ export interface FileEntity extends BaseEntity {
   name: string;
   currentVersionId: ID;
   releasedToFreelancers: boolean;
+  /** Pasta no Drive. Arquivos de projeto sem pasta aparecem em 01. Projetos/<Cliente>/<Código>. */
+  folderId: ID | null;
+}
+
+/** Pasta do Drive (estrutura de pastas da Draw). `systemKey` marca as pastas-raiz fixas. */
+export interface Folder extends BaseEntity {
+  parentId: ID | null;
+  name: string;
+  systemKey: string | null;
+  /** Perfis com acesso (vazio = todos os internos). Ex.: "08. Cérebro Paula" só admin. */
+  allowedRoles: Role[];
+  order: number;
 }
 
 export interface FileVersion extends BaseEntity {
@@ -362,6 +396,10 @@ export interface Receivable extends BaseEntity {
   issuedAt: ISODate | null;
   receivedAt: ISODate | null;
   status: ReceivableStatus;
+  /** parcela = da proposta/contrato; adicional = cobrança adicional (planilha: Valor/Status Cobrança Adicional). */
+  kind: "parcela" | "adicional";
+  /** Histórico curto de cobrança (planilha: Status/Comentários Cobrança). */
+  collectionNote: string | null;
 }
 
 export type PayableKind = "freelancer" | "despesa_projeto" | "despesa_adm";
@@ -571,6 +609,7 @@ export interface Database {
   comments: Comment[];
   approvals: Approval[];
   files: FileEntity[];
+  folders: Folder[];
   fileVersions: FileVersion[];
   shareLinks: ShareLink[];
   receivables: Receivable[];

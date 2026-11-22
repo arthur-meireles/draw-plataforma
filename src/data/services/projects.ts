@@ -4,8 +4,10 @@ import type {
   Database,
   ID,
   MemberRole,
+  PaymentCondition,
   PriorityKey,
   Project,
+  ProjectSize,
   ProjectFinancials,
   ProjectMember,
   ProjectStageKey,
@@ -22,6 +24,7 @@ import {
   queueSystemEmail,
   read,
   redactProject,
+  taxOf,
   touch,
   visibleProjects,
   write,
@@ -98,7 +101,7 @@ export function toListItem(db: Database, p: Project, me: User): ProjectListItem 
     subtasksDone: tasks.filter((t) => t.statusKey === "concluida").length,
     subtasksTotal: tasks.length,
     tasksOpen: tasks.filter((t) => t.statusKey !== "concluida").length,
-    isOverdue: !done && !!p.dueAt && new Date(p.dueAt).getTime() < Date.now(),
+    isOverdue: !done && !p.pausedAt && !!p.dueAt && new Date(p.dueAt).getTime() < Date.now(),
     pendingApproval: db.approvals.some((a) => a.projectId === p.id && a.decision === "pendente" && !a.deletedAt),
     billingStatus: canSeeMoney(me) ? billingStatus : "sem_faturamento",
   };
@@ -151,7 +154,7 @@ export const projectsApi = {
     }),
 
   /** RF-M3-02 — cria projeto em cotação. */
-  createQuote: (input: { clientId: ID; projectTypeId: ID; title: string; ownerId: ID; briefing?: string; priorityKey?: PriorityKey; dueAt?: string | null }) =>
+  createQuote: (input: { clientId: ID; projectTypeId: ID; title: string; ownerId: ID; briefing?: string; priorityKey?: PriorityKey; dueAt?: string | null; size?: ProjectSize | null }) =>
     write((db, me) => {
       if (!canWriteAll(me, "commercial")) throw new ApiError(403, "Seu perfil não pode criar cotações.");
       const type = db.projectTypes.find((t) => t.id === input.projectTypeId);
@@ -185,6 +188,11 @@ export const projectsApi = {
         contractedAmountCents: null,
         lostReason: null,
         isEnvironment: false,
+        size: input.size ?? null,
+        pausedAt: null,
+        pausedReason: null,
+        legacyCode: null,
+        paymentCondition: null,
       };
       db.projects.push(p);
       db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: input.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
@@ -205,6 +213,8 @@ export const projectsApi = {
     installments: { description: string; amountCents: number; expectedAt: string }[];
     team: { userId?: ID | null; freelancerId?: ID | null; memberRole: MemberRole; agreedAmountCents?: number | null }[];
     dueAt: string | null;
+    size?: ProjectSize | null;
+    paymentCondition?: PaymentCondition | null;
   }) =>
     write((db, me) => {
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode criar projetos.");
@@ -244,6 +254,11 @@ export const projectsApi = {
         contractedAmountCents: input.contractedAmountCents,
         lostReason: null,
         isEnvironment: false,
+        size: input.size ?? null,
+        pausedAt: null,
+        pausedReason: null,
+        legacyCode: null,
+        paymentCondition: input.paymentCondition ?? null,
       };
       db.projects.push(p);
       const team = [{ userId: input.ownerId, memberRole: "responsavel" as MemberRole }, ...input.team.filter((t) => t.userId !== input.ownerId || t.freelancerId)];
@@ -266,7 +281,9 @@ export const projectsApi = {
           proposalInstallmentId: null,
           description: inst.description,
           amountCents: inst.amountCents,
-          taxCents: Math.round(inst.amountCents * 0.0615),
+          taxCents: taxOf(db, inst.amountCents),
+          kind: "parcela",
+          collectionNote: null,
           expectedAt: inst.expectedAt,
           invoiceNumber: null,
           invoiceFileId: null,
@@ -280,7 +297,7 @@ export const projectsApi = {
       return p;
     }),
 
-  update: (id: ID, patch: Partial<Pick<Project, "title" | "briefing" | "priorityKey" | "ownerId" | "dueAt" | "estimatedEndAt" | "billingContactId" | "clientId" | "contractedAmountCents">>) =>
+  update: (id: ID, patch: Partial<Pick<Project, "title" | "briefing" | "priorityKey" | "ownerId" | "dueAt" | "estimatedEndAt" | "billingContactId" | "clientId" | "contractedAmountCents" | "size" | "paymentCondition">>) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
       if (!canWriteAll(me, "projects") && !(me.role === "operacao")) throw new ApiError(403, "Sem permissão para editar o projeto.");
@@ -332,6 +349,30 @@ export const projectsApi = {
       }
       p.position = input.position;
       touch(p);
+      return p;
+    }),
+
+  /** Pausar (planilha: "Caso Parado") — exige motivo; não muda a etapa. */
+  pause: (id: ID, reason: string) =>
+    write((db, me) => {
+      const p = assertProjectVisible(db, me, id);
+      if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser pausados.");
+      if (!reason.trim()) throw new ApiError(422, "Informe por que o projeto está parado.", { reason: "Informe o motivo" });
+      p.pausedAt = nowIso();
+      p.pausedReason = reason.trim();
+      touch(p);
+      emit(db, me, { type: "project.paused", entityType: "project", entityId: p.id, project: p, data: { reason: p.pausedReason } });
+      return p;
+    }),
+
+  resume: (id: ID) =>
+    write((db, me) => {
+      const p = assertProjectVisible(db, me, id);
+      if (!p.pausedAt) throw new ApiError(409, "O projeto não está pausado.");
+      p.pausedAt = null;
+      p.pausedReason = null;
+      touch(p);
+      emit(db, me, { type: "project.resumed", entityType: "project", entityId: p.id, project: p });
       return p;
     }),
 
@@ -577,6 +618,7 @@ export function generateTasksFromTemplate(db: Database, me: User, p: Project) {
       position: i * 1000,
       sprintId: null,
       completedAt: null,
+      area: null,
     };
     db.tasks.push(task);
   });

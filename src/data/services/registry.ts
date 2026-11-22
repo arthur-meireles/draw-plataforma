@@ -15,6 +15,8 @@ export interface ClientInput {
   segment: string;
   status: Client["status"];
   notes?: string | null;
+  paymentTermsNote?: string | null;
+  paymentTermDays?: number | null;
 }
 
 export interface FreelancerInput {
@@ -100,7 +102,7 @@ export const clientsApi = {
       if (!canWriteAll(me, "clients")) throw new ApiError(403, "Sem permissão para cadastrar clientes.");
       validateClient(input);
       if (db.clients.some((c) => !c.deletedAt && onlyDigits(c.cnpj) === onlyDigits(input.cnpj))) throw new ApiError(409, "Já existe um cliente com este CNPJ.", { cnpj: "CNPJ já cadastrado" });
-      const c: Client = { ...baseFields(me.id), groupId: input.groupId ?? null, legalName: input.legalName.trim(), tradeName: input.tradeName.trim() || input.legalName.trim(), cnpj: input.cnpj, address: input.address, segment: input.segment, status: input.status, notes: input.notes ?? null };
+      const c: Client = { ...baseFields(me.id), groupId: input.groupId ?? null, legalName: input.legalName.trim(), tradeName: input.tradeName.trim() || input.legalName.trim(), cnpj: input.cnpj, address: input.address, segment: input.segment, status: input.status, notes: input.notes ?? null, paymentTermsNote: input.paymentTermsNote ?? null, paymentTermDays: input.paymentTermDays ?? null };
       db.clients.push(c);
       emit(db, me, { type: "client.created", entityType: "client", entityId: c.id, data: { name: c.tradeName } });
       return c;
@@ -196,6 +198,9 @@ export const freelancersApi = {
           return {
             ...maskFreelancer(x, canBank || x.id === myFl),
             projectsTotal: members.length,
+            // Resumo de pagamentos (planilha: Resumo Freelancers) — só com acesso a valores
+            paymentsTotalCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
+            paymentsPaidCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt && p.status === "pago").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
             activeProjects,
             openTasks: db.tasks.filter((t) => t.assigneeFreelancerId === x.id && t.statusKey !== "concluida" && !t.deletedAt).length,
             hasLogin: !!x.userId,

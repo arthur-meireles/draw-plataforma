@@ -145,6 +145,18 @@ export const RESOURCE_CATEGORY_LABEL: Record<ResourceCategory, string> = {
   referencia: "Referência",
 };
 
+/** Áreas internas do quadro "Visão geral da empresa". */
+export const ADM_AREAS: { key: import("./types").AdmArea; label: string; number: number }[] = [
+  { key: "administrativo", label: "Administrativo", number: 2 },
+  { key: "comercial_marketing", label: "Comercial e Marketing", number: 3 },
+  { key: "projetos_internos", label: "Projetos", number: 4 },
+  { key: "financeiro", label: "Financeiro", number: 5 },
+  { key: "outros", label: "Outros", number: 6 },
+];
+
+export const PROJECT_SIZE_LABEL: Record<import("./types").ProjectSize, string> = { pequeno: "Pequeno", medio: "Médio", grande: "Grande" };
+export const PAYMENT_CONDITION_LABEL: Record<import("./types").PaymentCondition, string> = { a_vista: "À vista", "50_50": "50/50", parcelado: "Parcelado" };
+
 export const quoteStage = (key: QuoteStageKey | null | undefined) =>
   QUOTE_STAGES.find((s) => s.key === key);
 export const projectStage = (key: ProjectStageKey | null | undefined) =>

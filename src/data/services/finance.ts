@@ -1,7 +1,7 @@
 /** Financeiro (M5) — sempre por projeto. */
 import { baseFields, loadDb, nowIso, transaction } from "../db";
 import type { ID, Payable, PayableStatus, Receivable, ReceivableStatus } from "../types";
-import { ApiError, emit, emitValueChange, freelancerIdOf, latency, notify, read, touch, write } from "./_core";
+import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, read, touch, write } from "./_core";
 import { computeFinancials } from "./projects";
 import { access, canWriteAll } from "@/lib/permissions";
 
@@ -91,6 +91,34 @@ export const financeApi = {
       if (patch.amountCents !== undefined) emitValueChange(db, me, "receivable", r.id, p, "amountCents", r.amountCents, patch.amountCents);
       Object.assign(r, patch);
       touch(r);
+      return r;
+    }),
+
+  /** Cobrança adicional (planilha: Valor/Status/Data Cobrança Adicional). */
+  addAdditionalCharge: (projectId: ID, input: { description: string; amountCents: number; expectedAt: string }) =>
+    write((db, me) => {
+      if (!canWriteAll(me, "receivables")) throw new ApiError(403, "Sem permissão.");
+      const p = db.projects.find((x) => x.id === projectId || x.code === projectId);
+      if (!p) throw new ApiError(404, "Projeto não encontrado.");
+      const errors: Record<string, string> = {};
+      if (!input.description.trim()) errors.description = "Descreva o que está sendo cobrado";
+      if (input.amountCents <= 0) errors.amountCents = "Informe o valor";
+      if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+      const r: Receivable = { ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: input.description.trim(), amountCents: input.amountCents, taxCents: taxOf(db, input.amountCents), expectedAt: input.expectedAt, invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "adicional", collectionNote: null };
+      db.receivables.push(r);
+      emit(db, me, { type: "receivable.additional_created", entityType: "receivable", entityId: r.id, project: p, data: { amountCents: r.amountCents, description: r.description } });
+      return r;
+    }),
+
+  /** Comentário de cobrança (planilha: Status/Comentários Cobrança). */
+  setCollectionNote: (id: ID, note: string) =>
+    write((db, me) => {
+      if (!canWriteAll(me, "receivables")) throw new ApiError(403, "Sem permissão.");
+      const r = db.receivables.find((x) => x.id === id);
+      if (!r) throw new ApiError(404, "Lançamento não encontrado.");
+      r.collectionNote = note.trim() || null;
+      touch(r);
+      emit(db, me, { type: "receivable.collection_note", entityType: "receivable", entityId: r.id, project: db.projects.find((x) => x.id === r.projectId), data: { note: r.collectionNote } });
       return r;
     }),
 
@@ -327,7 +355,7 @@ export const publicInvoiceApi = {
       const fileId = `file_${Date.now().toString(36)}`;
       const versionId = `fv_${Date.now().toString(36)}`;
       db.fileVersions.push({ ...baseFields(null), id: versionId, fileId, version: 1, storageKey: `org_draw/${p.id}/${fileId}/v1`, size: input.fileSize, mime: "application/pdf", sha256: Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join(""), uploadedBy: "public", note: "Enviado pelo formulário público", dataUrl: input.dataUrl });
-      db.files.push({ ...baseFields(null), id: fileId, projectId: p.id, clientId: p.clientId, module: "projeto", taskId: null, category: "nf", name: input.fileName, currentVersionId: versionId, releasedToFreelancers: false });
+      db.files.push({ ...baseFields(null), id: fileId, projectId: p.id, clientId: p.clientId, module: "projeto", taskId: null, category: "nf", name: input.fileName, currentVersionId: versionId, releasedToFreelancers: false, folderId: null });
       pay.invoicedAmountCents = input.amountCents;
       pay.invoiceNumber = input.invoiceNumber.trim();
       pay.invoiceFileId = fileId;

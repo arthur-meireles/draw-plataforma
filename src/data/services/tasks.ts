@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import type { Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
+import type { AdmArea, Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
 import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, touch, visibleProjects, write } from "./_core";
 import { canRead, canWriteAll } from "@/lib/permissions";
 
@@ -119,6 +119,7 @@ export const tasksApi = {
     dueAt?: string | null;
     estimateMinutes?: number | null;
     sprintId?: ID | null;
+    area?: AdmArea | null;
   }) =>
     write((db, me) => {
       if (!input.title.trim()) throw new ApiError(422, "Dê um título para a tarefa.", { title: "Dê um título para a tarefa" });
@@ -146,6 +147,7 @@ export const tasksApi = {
         position: Math.max(0, ...siblings.map((s) => s.position)) + 1000,
         sprintId: input.sprintId ?? null,
         completedAt: null,
+        area: input.area ?? parent?.area ?? null,
       };
       db.tasks.push(t);
       emit(db, me, { type: "task.created", entityType: "task", entityId: t.id, project: p, data: { title: t.title } });
@@ -154,7 +156,7 @@ export const tasksApi = {
       return t;
     }),
 
-  update: (id: ID, patch: Partial<Pick<Task, "title" | "description" | "assigneeUserId" | "assigneeFreelancerId" | "statusKey" | "priorityKey" | "startAt" | "dueAt" | "estimateMinutes" | "sprintId" | "stageKey" | "position">>) =>
+  update: (id: ID, patch: Partial<Pick<Task, "title" | "description" | "assigneeUserId" | "assigneeFreelancerId" | "statusKey" | "priorityKey" | "startAt" | "dueAt" | "estimateMinutes" | "sprintId" | "stageKey" | "position" | "area">>) =>
     write((db, me) => {
       const t = assertTask(db, me, id);
       if (!canEditTask(db, me, t)) throw new ApiError(403, "Você não pode editar esta tarefa.");

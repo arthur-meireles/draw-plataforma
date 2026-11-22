@@ -161,3 +161,23 @@ describe("Outras regras", () => {
     expect(loadDb().clients.every((c) => isValidCnpj(c.cnpj))).toBe(true);
   });
 });
+
+describe("Planilha master — novos campos", () => {
+  it("pausar exige motivo e tira o projeto dos alertas de atraso", async () => {
+    const active = loadDb().projects.find((p) => p.status === "ativo" && !p.pausedAt)!;
+    await expect(projectsApi.pause(active.id, "")).rejects.toMatchObject({ status: 422 });
+    await projectsApi.pause(active.id, "Aguardando cliente");
+    const item = (await projectsApi.list()).find((p) => p.id === active.id)!;
+    expect(item.pausedAt).not.toBeNull();
+    expect(item.isOverdue).toBe(false);
+    await projectsApi.resume(active.id);
+    expect(loadDb().projects.find((p) => p.id === active.id)!.pausedAt).toBeNull();
+  });
+
+  it("cobrança adicional vira recebível 'adicional' com imposto da organização (6%)", async () => {
+    const active = loadDb().projects.find((p) => p.status === "ativo")!;
+    const r = await financeApi.addAdditionalCharge(active.id, { description: "Página extra", amountCents: 100_000, expectedAt: new Date().toISOString() });
+    expect(r.kind).toBe("adicional");
+    expect(r.taxCents).toBe(6_000);
+  });
+});

@@ -168,6 +168,9 @@ export function emitValueChange(db: Database, me: User, entityType: string, enti
   emit(db, me, { type: `${entityType}.value_changed`, entityType, entityId, project, data: { field, before, after } });
 }
 
+/** Imposto sobre faturamento pela alíquota da organização (padrão 6%, como na planilha master). */
+export const taxOf = (db: Database, cents: number) => Math.round((cents * (db.organizations[0]?.settings.taxRatePct ?? 6)) / 100);
+
 export const touch = <T extends { updatedAt: string }>(row: T) => {
   row.updatedAt = nowIso();
   return row;

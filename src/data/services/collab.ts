@@ -24,6 +24,7 @@ async function toDataUrl(file: File): Promise<string | null> {
 
 export interface FileFilters {
   projectId?: ID;
+  folderId?: ID;
   clientId?: ID;
   module?: FileEntity["module"];
   category?: FileCategory;
@@ -42,6 +43,7 @@ export const filesApi = {
         .filter((x) => me.role !== "freelancer" || x.releasedToFreelancers || db.fileVersions.some((v) => v.fileId === x.id && v.uploadedBy === me.id))
         .filter((x) => money || !["proposta", "nf"].includes(x.category))
         .filter((x) => !f.projectId || x.projectId === f.projectId)
+        .filter((x) => !f.folderId || x.folderId === f.folderId)
         .filter((x) => !f.clientId || x.clientId === f.clientId)
         .filter((x) => !f.module || x.module === f.module)
         .filter((x) => !f.category || x.category === f.category)
@@ -64,7 +66,7 @@ export const filesApi = {
     }),
 
   /** Upload em duas etapas no contrato real; aqui, uma chamada. RF-M7-01/02. */
-  upload: async (input: { projectId?: ID | null; clientId?: ID | null; module?: FileEntity["module"]; taskId?: ID | null; category: FileCategory; file: File; fileId?: ID; note?: string; releasedToFreelancers?: boolean }) => {
+  upload: async (input: { projectId?: ID | null; clientId?: ID | null; module?: FileEntity["module"]; taskId?: ID | null; category: FileCategory; file: File; fileId?: ID; note?: string; releasedToFreelancers?: boolean; folderId?: ID | null }) => {
     if (input.file.size > MAX_FILE_BYTES) throw new ApiError(422, `"${input.file.name}" passa do limite de 200 MB.`);
     const [hash, dataUrl] = await Promise.all([sha256Of(await input.file.arrayBuffer()), toDataUrl(input.file)]);
     return write((db, me) => {
@@ -79,7 +81,7 @@ export const filesApi = {
         file.currentVersionId = v.id;
         touch(file);
       } else {
-        file = { ...baseFields(me.id), id: fileId, projectId: p?.id ?? null, clientId: p?.clientId ?? input.clientId ?? null, module: input.module ?? (p ? "projeto" : "adm"), taskId: input.taskId ?? null, category: input.category, name: input.file.name, currentVersionId: v.id, releasedToFreelancers: input.releasedToFreelancers ?? me.role === "freelancer" };
+        file = { ...baseFields(me.id), id: fileId, projectId: p?.id ?? null, clientId: p?.clientId ?? input.clientId ?? null, module: input.module ?? (p ? "projeto" : "adm"), taskId: input.taskId ?? null, category: input.category, name: input.file.name, currentVersionId: v.id, releasedToFreelancers: input.releasedToFreelancers ?? me.role === "freelancer", folderId: input.folderId ?? null };
         db.files.push(file);
       }
       emit(db, me, { type: version > 1 ? "file.version_added" : "file.uploaded", entityType: "file", entityId: fileId, project: p, data: { name: input.file.name, version, sha256: hash } });

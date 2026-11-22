@@ -203,9 +203,11 @@ export const usersApi = {
 
   organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
 
-  updateOrganization: (settings: { freelancerPaymentDay: number; dueSoonDays: number }) =>
+  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number }) =>
     write((db, me) => {
       if (!canWriteAll(me, "settings")) throw new ApiError(403, "Sem permissão.");
+      const settings = { ...db.organizations[0].settings, ...patch };
+      if (settings.taxRatePct < 0 || settings.taxRatePct > 30) throw new ApiError(422, "Use uma alíquota entre 0% e 30%.", { taxRatePct: "Use uma alíquota entre 0% e 30%" });
       if (settings.freelancerPaymentDay < 1 || settings.freelancerPaymentDay > 28) throw new ApiError(422, "Escolha um dia entre 1 e 28.", { freelancerPaymentDay: "Escolha um dia entre 1 e 28" });
       if (!Number.isInteger(settings.dueSoonDays) || settings.dueSoonDays < 1 || settings.dueSoonDays > 30) throw new ApiError(422, "Use de 1 a 30 dias de alerta.", { dueSoonDays: "Use de 1 a 30 dias" });
       db.organizations[0].settings = settings;
@@ -459,12 +461,12 @@ export const importsApi = {
         if (kind === "clientes") {
           const existing = db.clients.find((c) => onlyDigits(c.cnpj) === onlyDigits(r.cnpj));
           if (existing) Object.assign(existing, { legalName: r.razao_social, tradeName: r.nome_fantasia || existing.tradeName, segment: r.segmento || existing.segment });
-          else db.clients.push({ ...baseFields(me.id), groupId: null, legalName: r.razao_social, tradeName: r.nome_fantasia || r.razao_social, cnpj: r.cnpj, address: { street: "", number: "", complement: null, district: "", city: r.cidade ?? "", state: r.uf ?? "", zip: "" }, segment: r.segmento || "Outros", status: "ativo", notes: "Importado por planilha" });
+          else db.clients.push({ ...baseFields(me.id), groupId: null, legalName: r.razao_social, tradeName: r.nome_fantasia || r.razao_social, cnpj: r.cnpj, address: { street: "", number: "", complement: null, district: "", city: r.cidade ?? "", state: r.uf ?? "", zip: "" }, segment: r.segmento || "Outros", status: "ativo", notes: "Importado por planilha", paymentTermsNote: null, paymentTermDays: null });
         } else if (kind === "freelancers") {
           if (!db.freelancers.some((f) => f.email === r.email.toLowerCase())) db.freelancers.push({ ...baseFields(me.id), userId: null, name: r.nome, email: r.email.toLowerCase(), phone: r.telefone ?? null, legalName: null, document: null, pixKey: r.pix ?? null, bankName: null, bankAgency: null, bankAccount: null, specialties: [(r.especialidade as "design") || "outro"], status: "ativo", notes: "Importado por planilha", avatarColor: "#0891b2" });
         } else if (kind === "recebiveis") {
           const p = db.projects.find((x) => x.code === r.codigo_projeto.trim().toUpperCase())!;
-          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents: Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100), taxCents: 0, expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto" });
+          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents: Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100), taxCents: 0, expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "parcela", collectionNote: null });
         }
         imported++;
       });

@@ -45,6 +45,22 @@ export const metricsApi = {
       };
     }),
 
+  /** "Visão geral da empresa" (quadro atual da Draw): casos · projetos internos · pendências por área. */
+  companyOverview: () =>
+    read((db, me) => {
+      const projects = visibleProjects(db, me);
+      const adm = db.tasks.filter((t) => !t.deletedAt && t.module === "adm" && !t.parentTaskId);
+      const open = adm.filter((t) => t.statusKey !== "concluida");
+      const areas = (["administrativo", "comercial_marketing", "projetos_internos", "financeiro", "outros"] as const).map((key) => ({ key, open: open.filter((t) => (t.area ?? "outros") === key).length }));
+      return {
+        cases: projects.filter((p) => p.status === "ativo" || p.status === "cotacao").length,
+        paused: projects.filter((p) => p.status === "ativo" && p.pausedAt).length,
+        internalProjects: open.filter((t) => t.area === "projetos_internos").length,
+        pending: open.length,
+        areas,
+      };
+    }),
+
   /** RF-M8-03 — indicadores com período. */
   indicators: (f: MetricsFilter = {}) =>
     read((db, me) => {

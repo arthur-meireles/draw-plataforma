@@ -11,6 +11,7 @@ export { financeApi, publicInvoiceApi, type ReceivableFilters, type PayableFilte
 export { filesApi, commentsApi, approvalsApi, eventsApi, notificationsApi, type FileFilters } from "./collab";
 export { authApi, usersApi, admApi, mailApi, importsApi, searchApi, peopleApi } from "./admin";
 export { metricsApi, type MetricsFilter } from "./metrics";
+export { driveApi, PROJECTS_ROOT, type DriveFolder, type DriveLocation } from "./drive";
 export { financeExtraApi, publicInvoiceExtraApi, INVOICE_MAX_BYTES } from "./finance-extra";
 export { commercialApi, freelancersExtraApi, type QuoteFilters, type QuoteItem } from "./cadastros-extra";
 export { milestonesApi, deliverableMetricsApi, proposalsExtraApi, projectsExtraApi, projectMailApi, type DeliverableMetrics, type MailTemplateKey } from "./prontuario-extra";

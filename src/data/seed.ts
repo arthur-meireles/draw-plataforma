@@ -27,6 +27,9 @@ import type {
   PriorityKey,
   Project,
   ProjectDeliverableMetric,
+  ProjectSize,
+  AdmArea,
+  Folder,
   ProjectMember,
   ProjectStageKey,
   ProjectType,
@@ -49,7 +52,7 @@ import type {
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 6;
+export const SEED_VERSION = 7;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -99,6 +102,23 @@ function cnpj(): string {
 }
 
 const sha = () => Array.from({ length: 64 }, () => "0123456789abcdef"[int(0, 15)]).join("");
+
+/** Estrutura de pastas da Draw (Drive). Raízes fixas = `systemKey`. */
+const FOLDER_ADM_DOCS = "fld_adm_docs";
+const ROOT_FOLDERS: [string, string, string[]][] = [
+  ["projetos", "01. Projetos", []],
+  ["vendas", "02. Vendas", ["Propostas modelo", "Apresentações comerciais"]],
+  ["financeiro", "03. Financeiro", ["Notas fiscais", "Extratos"]],
+  ["adm", "04. Adm & Operacional", ["Documentos institucionais", "Contratos"]],
+  ["marketing", "05. Marketing", ["Posts", "Cases"]],
+  ["design", "06. Design", ["Templates", "Biblioteca de ícones"]],
+  ["cerebro_draw", "07. Cérebro Draw", ["Playbooks", "Aprendizados"]],
+  ["cerebro_paula", "08. Cérebro Paula", []],
+  ["estrategia", "10. Estratégia", []],
+  ["juridico_rh", "11. Jurídico & RH", []],
+  ["eventos", "Eventos 2026", []],
+  ["planilha_marina", "Planilha Projetos Marina e equipe", []],
+];
 
 export function createSeed(): Database {
   s = 20261121;
@@ -304,6 +324,8 @@ export function createSeed(): Database {
       segment,
       status: i >= 18 ? "prospect" : "ativo",
       notes: i === 0 ? "Cliente desde 2021. Prefere reuniões presenciais." : null,
+      paymentTermsNote: pick(["20 dias após emissão da nota fiscal.", "30 dias após emissão da NF, pagamento às quintas.", "15 dias após aprovação da entrega.", null]),
+      paymentTermDays: pick([20, 30, 15, null]),
     };
   });
 
@@ -409,6 +431,7 @@ export function createSeed(): Database {
       name,
       currentVersionId: current,
       releasedToFreelancers: released,
+      folderId: p ? null : FOLDER_ADM_DOCS,
     });
     return fileId;
   };
@@ -484,6 +507,11 @@ export function createSeed(): Database {
       contractedAmountCents: isQuote ? null : contracted,
       lostReason: plan.status === "perdido" ? pick(["Preço acima do orçamento do cliente", "Cliente optou por fazer internamente"]) : null,
       isEnvironment: false,
+      size: pick<ProjectSize>(["pequeno", "pequeno", "medio", "medio", "grande"]),
+      pausedAt: plan.status === "ativo" && idx % 9 === 4 ? d(-int(2, 9)) : null,
+      pausedReason: plan.status === "ativo" && idx % 9 === 4 ? "Aguardando material do cliente" : null,
+      legacyCode: isDone ? `P${String(idx + 1).padStart(3, "0")}` : null,
+      paymentCondition: isQuote ? null : contracted > 3_000_000 ? "50_50" : "a_vista",
     };
     projects.push(p);
     ev("project.created", "project", p.id, p, ownerId, { origin: p.origin, status: isQuote ? "cotacao" : "ativo" }, p.enteredAt);
@@ -553,7 +581,9 @@ export function createSeed(): Database {
           proposalInstallmentId: part.id,
           description: parts.length > 1 ? `Parcela ${n + 1}/${parts.length} — ${part.rule}` : "Parcela única — na entrega",
           amountCents: Math.round(part.amount),
-          taxCents: Math.round(part.amount * 0.0615),
+          taxCents: Math.round(part.amount * 0.06),
+          kind: "parcela",
+          collectionNote: status === "vencido" ? "Cobrado por e-mail; cliente pediu nova data" : status === "recebido" ? "Recebido" : null,
           expectedAt: d(expectedOffset),
           invoiceNumber: issued ? `${int(1000, 9999)}` : null,
           invoiceFileId: issued ? addFile(p, `NF ${p.code} parcela ${n + 1}.pdf`, "nf", "application/pdf", expectedOffset - 2) : null,
@@ -617,6 +647,7 @@ export function createSeed(): Database {
           position: i * 1000,
           sprintId: null,
           completedAt: done ? d(enteredOffset + i * 3) : null,
+          area: null,
         });
       });
     } else {
@@ -652,6 +683,7 @@ export function createSeed(): Database {
           position: i * 1000,
           sprintId: null,
           completedAt: status === "concluida" ? d(Math.min(due, -1)) : null,
+          area: null,
         };
         tasks.push(task);
         if (t.title === "Diagramar peça" || t.title === "Escrever roteiro") {
@@ -873,7 +905,31 @@ export function createSeed(): Database {
     "Atualizar portfólio no Behance",
     "Revisar política de privacidade do site",
     "Mapear quadros do Monday para migração",
+    "Pegar senha de 5 assinaturas do Claude (R$ 660)",
+    "Draw The Case Room — portal do cliente",
+    "Reunião de alinhamento Draw financeiro",
+    "Proposta Nery — follow-up",
+    "Calendário editorial de dezembro",
   ];
+  const ADM_AREA_OF: Record<string, AdmArea> = {
+    "Renovar certificado digital A1": "administrativo",
+    "Atualizar playbook de onboarding de freelancers": "administrativo",
+    "Revisar contrato padrão de prestação de serviços": "administrativo",
+    "Organizar pasta de cases para o site": "comercial_marketing",
+    "Cotação de seguro de responsabilidade civil": "financeiro",
+    "Publicar post sobre Legal Design no LinkedIn": "comercial_marketing",
+    "Planejar treinamento interno de acessibilidade": "projetos_internos",
+    "Conciliar extrato bancário de outubro": "financeiro",
+    "Migrar templates de proposta": "comercial_marketing",
+    "Atualizar portfólio no Behance": "comercial_marketing",
+    "Revisar política de privacidade do site": "administrativo",
+    "Mapear quadros do Monday para migração": "projetos_internos",
+    "Pegar senha de 5 assinaturas do Claude (R$ 660)": "administrativo",
+    "Draw The Case Room — portal do cliente": "projetos_internos",
+    "Reunião de alinhamento Draw financeiro": "financeiro",
+    "Proposta Nery — follow-up": "outros",
+    "Calendário editorial de dezembro": "comercial_marketing",
+  };
   admTitles.forEach((title, i) => {
     const sprint = i < 3 ? sprints[1] : i < 8 ? sprints[2] : i < 10 ? sprints[3] : null;
     const status: TaskStatusKey = sprint === sprints[1] ? "concluida" : sprint === sprints[2] ? pick(["a_fazer", "em_andamento", "em_revisao", "a_fazer"]) : "a_fazer";
@@ -895,6 +951,7 @@ export function createSeed(): Database {
       position: i * 1000,
       sprintId: sprint?.id ?? null,
       completedAt: status === "concluida" ? d(-3) : null,
+      area: ADM_AREA_OF[title] ?? "administrativo",
     });
   });
 
@@ -1019,6 +1076,13 @@ export function createSeed(): Database {
     });
   });
 
+  const folders: Folder[] = [];
+  ROOT_FOLDERS.forEach(([key, name, children], i) => {
+    const root: Folder = { ...base("fld", -400), id: `fld_${key}`, parentId: null, name, systemKey: key, allowedRoles: key === "cerebro_paula" ? ["admin"] : key === "financeiro" ? ["admin", "gestao", "financeiro"] : [], order: i };
+    folders.push(root);
+    children.forEach((c, j) => folders.push({ ...base("fld", -390), id: key === "adm" && j === 0 ? FOLDER_ADM_DOCS : `fld_${key}_${j}`, parentId: root.id, name: c, systemKey: null, allowedRoles: [], order: j }));
+  });
+
   return {
     version: SEED_VERSION,
     organizations: [
@@ -1026,7 +1090,7 @@ export function createSeed(): Database {
         id: ORG,
         name: "Draw Legal Design",
         slug: "draw",
-        settings: { freelancerPaymentDay: 20, dueSoonDays: 2 },
+        settings: { freelancerPaymentDay: 20, dueSoonDays: 2, taxRatePct: 6 },
         createdAt: d(-400),
         updatedAt: d(-10),
         createdBy: null,
@@ -1058,6 +1122,7 @@ export function createSeed(): Database {
     comments,
     approvals,
     files,
+    folders,
     fileVersions,
     shareLinks,
     receivables,
