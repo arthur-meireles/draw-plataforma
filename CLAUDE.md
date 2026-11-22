@@ -159,6 +159,15 @@ no kanban.
 
 ---
 
+### Lei 11 — A spec é a wiki viva do projeto
+
+- `docs/spec-plataforma-draw.md` é a referência que vai para o time de back-end/banco. Toda mudança de modelo
+  (`src/data/types.ts`), regra (`src/data/services`), etapa/referência (`src/data/reference.ts`), rota ou decisão
+  entra na spec **no mesmo commit** — seção certa + nota na "Mudança da 0.x" do topo.
+- Nova regra de negócio ganha ID `RN-xx` na seção 8 e teste em `src/data/services/*.test.ts`.
+- Mapeamentos da operação real (planilha master, quadros, pastas) ficam na seção 20; estado da implementação e
+  correspondência função → endpoint na seção 21.
+
 ## Padrões canônicos
 
 **Listagem** (ex.: `/clientes`)

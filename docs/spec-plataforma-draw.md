@@ -1,11 +1,22 @@
 # Spec — Plataforma de Gestão Integrada (Draw)
 
 > Documento de especificação para desenvolvimento orientado a spec (*spec-driven development*).
-> Uso interno da equipe de produto e engenharia. Versão 0.3 · 21/11/2026.
+> Uso interno da equipe de produto e engenharia. Versão 0.4 · 22/11/2026.
+>
+> **Wiki viva do projeto.** Este arquivo mora no repositório (`docs/spec-plataforma-draw.md`) e é a referência fiel para quem
+> constrói o back-end e o banco. Toda mudança de modelo, regra, etapa ou tela entra aqui **no mesmo commit** do código
+> (Lei 11 do `CLAUDE.md`). Quando houver divergência, `src/data/types.ts` (modelo) e `src/data/services/*` (regras) são
+> a implementação de referência e este documento deve ser corrigido.
 >
 > **Mudança da 0.2:** o sistema é feito de **módulos fixos** com o **projeto no centro**. Não existem quadros, colunas, campos ou automações criados pelo usuário (o modelo "Monday"). Processos, etapas e regras são definidos e testados no código.
 >
 > **Mudança da 0.3:** novo módulo **M11 — E-mail** (bônus): SMTP próprio da Draw configurável pelo admin e envio de e-mails de dentro do sistema com a conta de quem está logado, registrados no projeto. Login com Google entra como opcional **[A DECIDIR]**. Agenda Google sincronizada fica no futuro, com o requisito de verificação do Google documentado. A V2 passa a se chamar **Draw Case Room**.
+
+> **Mudança da 0.4:** front-end implementado (Next.js, dados locais com seed) e **validado contra a operação real da
+> Draw**: planilha master de controle de projetos, quadro "1. Casos", quadro de áreas internas e estrutura de pastas do
+> Drive. Etapas oficiais definidas (sai o [A VALIDAR]); novos campos (tamanho, pausa, política de pagamento do cliente,
+> cobrança adicional, alíquota da organização, área das tarefas internas, ID legado); módulo de Arquivos vira **Drive**;
+> mapeamento coluna a coluna da planilha → banco (seção 20); estado da implementação (seção 21).
 
 ---
 
@@ -49,7 +60,12 @@ Plataforma web própria que substitui o Monday.com, as planilhas e a comunicaç�
 | **Organização** | Tenant da plataforma. Na V1 existe uma: a Draw. |
 | **Módulo** | Parte fixa do sistema: Comercial, Projetos, Financeiro, Administrativo, Cadastros, Painel. |
 | **Cliente** | Empresa atendida. Obrigatório em todo projeto. Pode pertencer a um grupo econômico e ter vários projetos. |
-| **Projeto** | Unidade central de trabalho (no Monday, "caso"). Código legível por tipo, ex.: `MEM-031`. |
+| **Projeto** | Unidade central de trabalho. **Na operação a equipe chama de "caso"** (quadro "1. Casos", planilha "Status Caso"); na plataforma o termo é Projeto. Código legível por tipo, ex.: `MEM-031`. |
+| **Projeto interno** | Iniciativa da própria Draw (ex.: "Draw The Case Room"). Não tem cliente: é uma tarefa do módulo Administrativo na área `projetos_internos`. |
+| **Área interna** | Agrupamento das tarefas internas: Administrativo, Comercial e Marketing, Projetos (internos), Financeiro, Outros. |
+| **Drive** | Área de arquivos em pastas, seguindo a estrutura de pastas da Draw (seção 6.5). |
+| **Pausado ("caso parado")** | Projeto ativo temporariamente parado (ex.: aguardando cliente). Não muda a etapa e sai dos alertas de prazo. |
+| **Cobrança adicional** | Valor extra cobrado do cliente além do contratado (recebível do tipo `adicional`). |
 | **Origem do projeto** | `cotacao` (nasce no Comercial e vira ativo ao aprovar a proposta) ou `direto` (nasce já aprovado, com financeiro preenchido). |
 | **Tipo de projeto** | Item de catálogo (memorial jurídico, apresentação, contrato visual…). Define prefixo do código e modelo de tarefas. Mantido pelo admin. |
 | **Etapa** | Fase fixa do processo (comercial ou de execução), definida no código. As colunas do kanban são as etapas. |
@@ -105,8 +121,8 @@ Carga de referência: ~8 usuários no lançamento, ~20 simultâneos como teto de
 
 | Camada | Escolha |
 |---|---|
-| Front-end | **React + Vite + TypeScript** (SPA) |
-| Roteamento / dados | TanStack Router + TanStack Query |
+| Front-end | **Next.js 15 (App Router) + React 19 + TypeScript** — decidido na implementação (ADR-011). Páginas são client components; nada de regra de negócio em server components |
+| Roteamento / dados | App Router + TanStack Query (hooks em `src/data/hooks.ts`) |
 | UI | **Tailwind CSS + shadcn/ui** (Radix), ícones lucide |
 | Formulários | react-hook-form + zod (alinhado ao OpenAPI) |
 | Drag-and-drop | dnd-kit (mudar etapa, reordenar prioridade) |
@@ -119,7 +135,7 @@ Carga de referência: ~8 usuários no lançamento, ~20 simultâneos como teto de
 | Back-end | **[A DECIDIR — ADR-001]**. Candidato: Node.js (Fastify ou NestJS) + ORM tipado. Requisitos na seção 11. |
 | Fila | No Postgres (ex.: pg-boss) |
 | E-mail | **Brevo** (principal) e **Resend** (reserva), nos planos gratuitos, atrás da abstração `MailTransport` (RNF-12); templates compatíveis com Gmail e Outlook |
-| Infra | VPS + Docker Compose, proxy reverso com TLS; homologação e produção separadas |
+| Infra | Front: **Cloudflare Workers** via OpenNext (ADR-012). Back-end: VPS + Docker Compose, proxy reverso com TLS; homologação e produção separadas |
 
 ---
 
@@ -156,7 +172,7 @@ erDiagram
 
 | Tabela | Campos principais |
 |---|---|
-| `organizations` | `name`, `slug`, `settings jsonb` (somente parâmetros técnicos, ex.: dia de pagamento) |
+| `organizations` | `name`, `slug`, `settings jsonb` (somente parâmetros técnicos): `freelancer_payment_day` (20), `due_soon_days` (2), `tax_rate_pct` (6 — alíquota sobre faturamento usada na planilha) |
 | `users` | `email citext unique`, `name`, `user_type` (`internal`/`freelancer`/`client`), `role` (enum fixo), `password_hash` (argon2id), `mfa_secret` (cifrado), `status`, `last_login_at` |
 | `sessions` | sessões (cookie httpOnly) |
 | `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active` |
@@ -168,7 +184,7 @@ erDiagram
 | Tabela | Campos principais |
 |---|---|
 | `client_groups` | `name` |
-| `clients` | `group_id` (nulo), `legal_name`, `trade_name`, `cnpj` (único por organização, validado), `address` (colunas próprias), `segment`, `status`, `notes` |
+| `clients` | `group_id` (nulo), `legal_name`, `trade_name`, `cnpj` (único por organização, validado), `address` (colunas próprias), `segment`, `status`, `notes`, `payment_terms_note` (texto, ex.: "20 dias após emissão da NF"), `payment_term_days` (int, nulo) |
 | `client_contacts` | `client_id`, `name`, `email`, `phone`, `job_title`, `is_billing_contact`, `is_decision_maker` |
 | `freelancers` | `user_id` (nulo até ter login), `name`, `email`, `phone`, `legal_name`, `document` (CPF/CNPJ, cifrado), `pix_key` (cifrado), `bank_*` (cifrados), `status`, `notes` |
 | `freelancer_specialties` | `freelancer_id`, `specialty` (enum: `design`/`roteiro`/`juridico`/`outro`) |
@@ -179,8 +195,11 @@ erDiagram
 
 | Tabela | Conteúdo inicial |
 |---|---|
-| `quote_stages` | `entrada`, `diagnostico`, `elaboracao`, `enviada`, `negociacao`, `aprovada`, `perdida` |
-| `project_stages` | `entrada`, `roteiro`, `ajustes_roteiro`, `validacao_cliente_roteiro`, `design`, `ajustes_design`, `validacao_final`, `concluido` **[A VALIDAR etapas oficiais]** |
+| `quote_stages` | `entrada` ("Possíveis casos"), `diagnostico`, `elaboracao` ("A fazer proposta"), `enviada`, `negociacao`, `aprovada`, `perdida` |
+| `project_stages` | `roteiro`, `ajustes_roteiro`, `design`, `ajustes_design`, `validacao_cliente` ("Com cliente para validação"), `concluido` — **oficiais**, espelham o quadro "1. Casos" da Draw (22/11/2026). O projeto aprovado entra em `roteiro` |
+| `adm_areas` | `administrativo`, `comercial_marketing`, `projetos_internos`, `financeiro`, `outros` (quadro "Visão geral da empresa") |
+| `project_sizes` | `pequeno`, `medio`, `grande` (planilha: Tamanho) |
+| `payment_conditions` | `a_vista`, `50_50`, `parcelado` (planilha: Condição de Pagamento) |
 | `task_statuses` | `a_fazer`, `em_andamento`, `em_revisao`, `concluida` |
 | `priorities` | `baixa`, `media`, `alta`, `urgente` |
 
@@ -190,10 +209,10 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 
 | Tabela | Campos principais |
 |---|---|
-| `projects` | `client_id` **NOT NULL**, `project_type_id` **NOT NULL**, `code` (único; RN-05), `title`, `briefing`, `origin` (`cotacao`/`direto`), `status` (`cotacao`/`ativo`/`concluido`/`arquivado`/`perdido`/`cancelado`), `quote_stage_key` (quando `cotacao`), `project_stage_key` (quando `ativo`), `priority_key`, `owner_id`, `billing_contact_id`, datas: `entered_at`, `quote_sent_at`, `approved_at`, `started_at`, `due_at`, `estimated_end_at`, `completed_at`, `archived_at`; `contracted_amount_cents`, `lost_reason`, `is_environment` (futuro, default `false`) |
+| `projects` | `client_id` **NOT NULL**, `project_type_id` **NOT NULL**, `code` (único; RN-05), `title`, `briefing`, `origin` (`cotacao`/`direto`), `status` (`cotacao`/`ativo`/`concluido`/`arquivado`/`perdido`/`cancelado`), `quote_stage_key` (quando `cotacao`), `project_stage_key` (quando `ativo`), `priority_key`, `owner_id`, `billing_contact_id`, datas: `entered_at`, `quote_sent_at`, `approved_at`, `started_at`, `due_at`, `estimated_end_at`, `completed_at`, `archived_at`; `contracted_amount_cents`, `lost_reason`, `is_environment` (futuro, default `false`), `size` (ref. `project_sizes`, nulo), `payment_condition` (nulo), `paused_at` + `paused_reason` ("caso parado"), `legacy_code` (ID da planilha, ex.: `P001`, único por organização quando presente — chave da importação) |
 | `proposals` | `project_id`, `version`, `amount_cents`, `payment_terms` (parcelas: tabela `proposal_installments`), `status` (`rascunho`/`enviada`/`aprovada`/`recusada`), `sent_at`, `approved_at`, `file_id` |
 | `proposal_installments` | `proposal_id`, `number`, `amount_cents`, `due_rule` ou `due_at` |
-| `tasks` | `project_id` (nulo só para tarefas do módulo Administrativo), `module` (`projeto`/`adm`), `parent_task_id`, `stage_key` (etapa do projeto a que pertence), `title`, `description`, `assignee_user_id` ou `assignee_freelancer_id`, `status_key`, `priority_key`, `start_at`, `due_at`, `estimate_minutes`, `position` (fractional index), `sprint_id`, `completed_at` |
+| `tasks` | `project_id` (nulo só para tarefas do módulo Administrativo), `module` (`projeto`/`adm`), `parent_task_id`, `stage_key` (etapa do projeto a que pertence), `title`, `description`, `assignee_user_id` ou `assignee_freelancer_id`, `status_key`, `priority_key`, `start_at`, `due_at`, `estimate_minutes`, `position` (fractional index), `sprint_id`, `completed_at`, `area` (ref. `adm_areas`; só quando `module = adm`) |
 | `sprints` | `name`, `start_at`, `end_at`, `status` (módulo Administrativo) |
 | `milestones` | `project_id`, `title`, `date`, `learning` |
 | `project_deliverable_metrics` | `project_id`, `metric` (enum fixo: `paginas_antes`, `paginas_depois`, `tempo_leitura_antes`, `tempo_leitura_depois`…), `value` **[A VALIDAR lista]** |
@@ -204,7 +223,8 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 |---|---|
 | `comments` | `project_id`, `task_id` (nulo), `author_id`, `body`, `mentions uuid[]` |
 | `approvals` | `project_id`, `stage_key`, `requested_from`, `decision` (`aprovado`/`ajustes`/`negado`), `reason`, `decided_by`, `decided_at` |
-| `files` | `project_id` (ou `client_id`, ou `module = adm`), `task_id` (nulo), `category` (`entrega`/`briefing`/`marca_cliente`/`proposta`/`nf`/`institucional`/`outro`), `name`, `current_version_id`, `released_to_freelancers` |
+| `folders` | `parent_id` (nulo = raiz), `name`, `system_key` (raízes fixas), `allowed_roles role[]` (vazio = todos os internos), `order`. Raízes semeadas: `01. Projetos`, `02. Vendas`, `03. Financeiro` (admin/gestão/financeiro), `04. Adm & Operacional`, `05. Marketing`, `06. Design`, `07. Cérebro Draw`, `08. Cérebro Paula` (só admin), `10. Estratégia`, `11. Jurídico & RH`, `Eventos 2026`, `Planilha Projetos Marina e equipe`. Raízes não são renomeadas nem excluídas |
+| `files` | `project_id` (ou `client_id`, ou `module = adm`), `folder_id` (nulo para arquivos de projeto), `task_id` (nulo), `category` (`entrega`/`briefing`/`marca_cliente`/`proposta`/`nf`/`institucional`/`outro`), `name`, `current_version_id`, `released_to_freelancers`. **Em `01. Projetos` as pastas são virtuais**: `<Cliente>/<Código — Título>` montadas pelos relacionamentos (arquivo continua ligado ao projeto — P1) |
 | `file_versions` | `file_id`, `version`, `storage_key`, `size`, `mime`, `sha256`, `uploaded_by`, `note` |
 | `share_links` | `token_hash`, `purpose` (`nf_freelancer`, futuro: `entrega`), `project_id`, `target_id`, `expires_at`, `password_hash`, `max_uses`, `use_count`, `revoked_at` |
 
@@ -212,7 +232,7 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 
 | Tabela | Campos principais |
 |---|---|
-| `receivables` | `project_id` **NOT NULL**, `client_id`, `proposal_installment_id` (nulo em projeto direto), `description`, `amount_cents`, `tax_cents`, `expected_at`, `invoice_number`, `invoice_file_id`, `issued_at`, `received_at`, `status` (`previsto`/`faturado`/`recebido`/`vencido`/`cancelado`) |
+| `receivables` | `project_id` **NOT NULL**, `client_id`, `proposal_installment_id` (nulo em projeto direto ou adicional), `kind` (`parcela`/`adicional`), `description`, `amount_cents`, `tax_cents` (= `amount × tax_rate_pct`), `expected_at`, `invoice_number`, `invoice_file_id`, `issued_at`, `received_at`, `status` (`previsto`/`faturado`/`recebido`/`vencido`/`cancelado`), `collection_note` (comentário de cobrança) |
 | `payables` | `project_id` (nulo só em despesa administrativa), `kind` (`freelancer`/`despesa_projeto`/`despesa_adm`), `freelancer_id`, `project_member_id`, `description`, `agreed_amount_cents`, `invoiced_amount_cents`, `invoice_file_id`, `due_at`, `paid_at`, `status` (`aguardando_nf`/`em_conferencia`/`divergente`/`aprovado`/`pago`), `divergence_note` |
 | `freelancer_invoice_requests` | `payable_id`, `share_link_id`, `sent_at`, `submitted_at`, dados declarados (colunas) |
 | `v_project_financials` (view) | por projeto: contratado, previsto, faturado, recebido, a receber, custo com freelancers, outras despesas, **margem** e **margem %** |
@@ -413,6 +433,10 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 | RN-10 | Exclusões são *soft delete*; exclusão definitiva só por `admin`, registrada. |
 | RN-11 | Datas de envio e aprovação de proposta são registradas pelo sistema, não digitadas. |
 | RN-12 | Um projeto nunca troca de cliente depois de ter recebível emitido. |
+| RN-13 | **Pausar projeto** exige motivo; só projetos `ativo`. Pausado não muda etapa, não conta como atrasado e aparece com selo "Parado"; retomar limpa `paused_at`/`paused_reason`. Eventos `project.paused` / `project.resumed`. |
+| RN-14 | **Cobrança adicional** cria recebível `kind = adicional` ligado ao projeto, imposto pela alíquota da organização; não altera `contracted_amount_cents` (margem considera recebíveis adicionais à parte). |
+| RN-15 | **Imposto** de recebível = `amount_cents × organizations.settings.tax_rate_pct / 100` (padrão 6%, como na planilha). |
+| RN-16 | **Pastas**: raízes do sistema não são renomeadas/excluídas; pasta só é excluída vazia; arquivos de projeto não são movidos para fora do projeto; `allowed_roles` da pasta-mãe é herdado ao criar subpasta. |
 
 ---
 
@@ -467,10 +491,14 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 | `/adm/tarefas`, `/adm/documentos`, `/adm/cofre`, `/adm/recursos` | Administrativo |
 | `/clientes`, `/clientes/:id` | Ficha do cliente com todos os projetos |
 | `/freelancers`, `/freelancers/:id` | Ficha do freelancer |
-| `/painel` | Indicadores |
+| `/painel` | Indicadores (abas: Visão geral, Comercial, Operação, Financeiro, Equipe, Burndown) |
 | `/configuracoes/usuarios`, `/configuracoes/tipos-de-projeto`, `/configuracoes/preferencias`, `/configuracoes/email` | Admin (inclui SMTP do sistema, RF-M11-01) |
 | `/minha-conta/email` | Conectar caixa, assinatura (RF-M11-02, RF-M11-04) |
 | `/nf/:token` | Formulário público de NF |
+| `/arquivos` | **Drive** (`?pasta=<id>`; pastas virtuais `cli:<id>` e `prj:<id>` em 01. Projetos) |
+| `/offline` | Página servida pelo service worker sem conexão |
+
+> Rotas implementadas usam o mesmo caminho em pt-BR; filtros, abas (`?aba=`), visão (`?visao=`), painéis (`?tarefa=`, `?n=`) ficam na URL.
 
 ### 10.4 Componentes base
 
@@ -626,8 +654,11 @@ Ordem de construção do front (com mocks): layout e autenticação → cadastro
 | ADR-009 | E-mail do usuário: API do Gmail (OAuth) × SMTP com senha de app | Recomendado: API do Gmail com app Interno ao domínio da Draw; SMTP genérico como alternativa. Confirmar provedor de e-mail da Draw |
 | ADR-010 | Login com Google (OAuth) | Opcional, sem custo; se entrar, app "Externo" (freelancers usam e-mail próprio) e login por e-mail/senha mantido |
 | ADR-007 | Etapas como tabela de referência × enum do Postgres | Recomendado: tabela de referência semeada (permite rótulo e ordem sem migração de tipo) |
+| ADR-011 | Framework do front | **Decidido:** Next.js 15 App Router (no lugar de Vite + TanStack Router), PWA com service worker próprio |
+| ADR-012 | Hospedagem do front | **Decidido:** Cloudflare Workers via OpenNext (`wrangler.jsonc`, `docs/DEPLOY.md`) |
+| ADR-013 | Arquivos | **Decidido:** Drive com estrutura de pastas da Draw; pastas de projeto virtuais (projeto continua dono do arquivo) |
 
-Pendências com a cliente: etapas oficiais (comercial e execução); campos obrigatórios; emissor de NF; exceções da regra do dia 20; acessos financeiros por perfil; motivo obrigatório em aprovações; lista de métricas de entrega; escopo da importação; limites e retenção de arquivos.
+Pendências com a cliente: ~~etapas oficiais~~ (definidas em 0.4); campos obrigatórios; emissor de NF; exceções da regra do dia 20; acessos financeiros por perfil; motivo obrigatório em aprovações; lista de métricas de entrega; escopo da importação; limites e retenção de arquivos.
 
 ---
 
@@ -675,3 +706,129 @@ Tudo no próprio servidor (ou em planos gratuitos, como o e-mail), por regras pr
 | Integração com emissor de NF / contabilidade | `receivables`, `payables` |
 | Webhooks e API pública | `events`, OpenAPI |
 | Longo prazo: IA | só com plataforma consolidada e histórico suficiente |
+
+---
+
+## 20. Operação atual da Draw → modelo (referência para migração)
+
+Fontes analisadas em 22/11/2026:
+- planilha **"Planilha Master | Controle de Projetos | 2026"**, com as abas Projetos & Pagamentos, Resumo Freelancers, Pagamentos Freelancers e uma aba por freelancer;
+- quadros **"1. Casos"** e **"Visão geral da empresa"** (áreas 2 a 6);
+- estrutura de pastas do Drive.
+
+### 20.1 Quadro "1. Casos" → etapas
+
+| Coluna do quadro | Onde fica na plataforma |
+|---|---|
+| Possíveis casos | `projects.status = cotacao`, `quote_stage = entrada` |
+| A fazer proposta | `quote_stage = elaboracao` (proposta em rascunho) |
+| Roteiro · Ajustes roteiro · Design · Ajustes de design · Com cliente para validação | `project_stages` homônimas (status `ativo`) |
+| Casos concluídos | `status = concluido` (etapa `concluido`) |
+| Checklist do cartão ("Concluídas · N") | Tarefas e subtarefas do projeto |
+
+### 20.2 Quadro "Visão geral da empresa" → áreas internas
+
+O cabeçalho do quadro mostra "16 casos · 5 projetos · 33 pendências". Na plataforma esses números vêm de `metrics.companyOverview`:
+- **casos**: projetos ativos ou em cotação;
+- **projetos**: tarefas internas abertas na área `projetos_internos`;
+- **pendências**: tarefas internas abertas.
+
+As colunas do quadro (2. Administrativo, 3. Comercial e Marketing, 4. Projetos, 5. Financeiro, 6. Outros) correspondem a `tasks.module = adm` agrupadas por `tasks.area`.
+
+### 20.3 Planilha master — aba "Projetos & Pagamentos" (54 colunas)
+
+| Coluna da planilha | Destino no banco | Observação |
+|---|---|---|
+| ID (P001) | `projects.legacy_code` | Chave idempotente da importação |
+| PROJETO ("Leroy - BMB") | `projects.title` | Padrão "Cliente - Nome". Importar sem o prefixo do cliente quando ele for igual ao cliente |
+| Cliente / CNPJ Cliente | `clients.trade_name` / `clients.cnpj` | O CNPJ vem com tabulação no fim: normalizar. A lista de validação traz os clientes atuais |
+| Data Entrada / Mês de entrada | `projects.entered_at` | O mês é derivado (não armazenar) |
+| Tamanho | `projects.size` | Pequeno / Médio / Grande |
+| Tipo de Projeto ("Apresentação PPT") | `projects.project_type_id` | Mapear para o catálogo `project_types` |
+| Link Proposta | `proposals.file_id` ou link | "Não encontrada" vira nulo |
+| Valor Total (R$) | `projects.contracted_amount_cents` | Valor em reais × 100 |
+| Imposto (R$) = 6% × Valor | `receivables.tax_cents` | Regra RN-15 |
+| Data Emissão NF | `receivables.issued_at` | |
+| Previsão / Data / Valor Pagto Parcela 1 e 2 | `receivables` (uma linha por parcela): `expected_at`, `received_at`, `amount_cents` | Condição "50/50" gera 2 parcelas; "À vista" gera 1 |
+| Mês do pagamento | — | Derivado |
+| Status Projeto (Caso Iniciando / Em Andamento / Caso Parado / Caso Finalizado) | `projects.status` + `paused_at` | Iniciando e Em Andamento → `ativo` (a etapa vem do quadro); Parado → `paused_at`; Finalizado → `concluido` |
+| Data Entrega | `projects.completed_at` | |
+| STATUS DO PAGAMENTO (A RECEBER / AGUARDANDO VALOR / PARCIAL / PAGO / ATRASADO / COBRANÇA ADICIONAL) | Derivado de `receivables.status` | "Aguardando valor" = projeto sem valor contratado |
+| Obs Política Pagto Cliente | `clients.payment_terms_note` (+ `payment_term_days`) | |
+| Status/Comentários Cobrança | `receivables.collection_note` | |
+| Designer / Advogado / Roteirista / Outros Freelancers | `project_members` (`member_role` designer / advogado / roteirista / apoio) | "Não teve" vira sem membro |
+| Valor (por papel) | `project_members.agreed_amount_cents` | Valores em texto ("R$ 1.920") precisam ser normalizados |
+| Liberado para pagto? (SIM/NÃO) | `payables.status`: `aprovado` (SIM) / `em_conferencia` ou `aguardando_nf` (NÃO) | |
+| Data Pagto / Status Pagto (por papel) — REALIZADO / PAGO / x | `payables.paid_at`, `status = pago` | "x" significa não se aplica |
+| Total Custos Freelancers / Lucro Líquido / Margem % | `v_project_financials` | Derivados: não armazenar |
+| Status Caso | Igual a Status Projeto | Coluna duplicada na planilha |
+| Condição de Pagamento (50/50, À vista) | `projects.payment_condition` | |
+| Total Recebido / Valor a Receber | `v_project_financials.received / to_receive` | Derivados |
+| Valor / Status / Data Cobrança Adicional | `receivables` com `kind = adicional` | RN-14 |
+
+### 20.4 Abas de freelancers
+
+| Aba | Destino |
+|---|---|
+| Pagamentos Freelancers (Projeto, Data de Entrada, Profissional, Função, Valor, Previsão, Status, Observações) | `payables` (`kind = freelancer`) + `project_members` |
+| Resumo Freelancers (Nº Projetos, Total, Pago, Pendente) | Derivado. Aparece nas colunas da lista `/freelancers` |
+| Uma aba por freelancer (ex.: "Arthur") | A área do freelancer (`/freelancers/:id` → Pagamentos) |
+
+A regra escrita na aba ("pagos no dia 20 de cada mês, contado a partir da data de encerramento do caso") é a RN-06. Na planilha há exceções: o roteirista pode receber no mês seguinte ao designer. A regra das exceções continua **[A VALIDAR]**.
+
+### 20.5 Estrutura de pastas → Drive
+
+As pastas-raiz da Draw são semeadas em `folders` com `system_key` (seção 6.5). `01. Projetos` mostra as pastas virtuais por cliente e por projeto. Subpastas sugeridas na semente:
+- `02. Vendas/Propostas modelo`
+- `03. Financeiro/Notas fiscais`
+- `04. Adm & Operacional/Documentos institucionais`
+- `05. Marketing/Posts`
+- `06. Design/Templates`
+- `07. Cérebro Draw/Playbooks`
+
+### 20.6 Ordem de importação (complementa a seção 13)
+
+1. Clientes, a partir da validação da coluna Cliente e do CNPJ.
+2. Freelancers, a partir dos nomes únicos nas colunas de papel e nas abas.
+3. Tipos de projeto.
+4. Projetos (`legacy_code`).
+5. Membros e valores acordados.
+6. Recebíveis: parcelas e adicionais.
+7. Pagáveis.
+8. Arquivos (Drive), na mesma árvore.
+
+---
+
+## 21. Estado da implementação do front-end (referência para o back-end)
+
+O front está completo e funcional com dados locais (localStorage + seed determinística). O back-end substitui **apenas**
+`src/data/services/*`, mantendo as assinaturas.
+
+| Onde | O que é |
+|---|---|
+| `src/data/types.ts` | Modelo de domínio (espelho das tabelas da seção 6, em camelCase) |
+| `src/data/reference.ts` | Tabelas de referência (etapas, status, áreas, tamanhos, condições), que viram migrações de seed |
+| `src/data/services/*.ts` | Uma função por endpoint, com as regras RN-01…RN-16, autorização (`lib/permissions.ts`) e redação de valores (RF-M1-05). O `ApiError` carrega o status e os `fieldErrors` (RFC 9457) |
+| `src/data/services/*.test.ts` | Cenários de regra (Vitest), que viram testes de contrato do back-end |
+| `src/data/seed.ts` | Dados de demonstração coerentes, com datas relativas a hoje |
+
+### 21.1 Funções do front → endpoints sugeridos
+
+| Serviço (front) | Endpoint REST sugerido |
+|---|---|
+| `projectsApi.list / get / createQuote / createDirect / update / move / pause / resume / markLost / reopenQuote / complete / archive / unarchive / cancel / members / addMember / updateMember / removeMember / financials` | `GET/POST /projects`, `GET/PATCH /projects/:id`, `POST /projects/:id/{move,pause,resume,lose,reopen,complete,archive,unarchive,cancel}`, `…/members`, `GET /projects/:id/financials` |
+| `proposalsApi.listByProject / create / update / send / approve / reject` | `GET/POST /projects/:id/proposals`, `PATCH /proposals/:id`, `POST /proposals/:id/{send,approve,reject}` (approve com `Idempotency-Key`) |
+| `tasksApi.list / get / create / update / remove / sprints / createSprint / setSprintStatus` | `/tasks`, `/sprints` |
+| `clientsApi.*`, `freelancersApi.*`, `projectTypesApi.*` | `/clients`, `/client-groups`, `/client-contacts`, `/freelancers`, `/project-types` |
+| `financeApi.receivables / issueInvoice / receive / updateReceivable / addAdditionalCharge / setCollectionNote / cancelReceivable / payables / createExpense / approvePayable / markDivergent / pay / resendInvoiceLink / overview` | `/receivables…`, `/payables…`, `GET /finance/overview` |
+| `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
+| `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
+| `commentsApi`, `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `/approvals`, `/events`, `/notifications` |
+| `authApi`, `usersApi`, `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/auth`, `/users`, `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
+
+### 21.2 Divergências conscientes da versão 0.3
+
+- **Front:** Next.js, não Vite (ADR-011).
+- **Autenticação:** simulada no front, com credencial em variável de build. Serve só para demonstração; argon2id e sessão httpOnly vêm com o back-end.
+- **2FA:** a tela existe, mas o código não é validado.
+- **XLSX:** a importação aceita CSV; XLSX entra com o back-end.
