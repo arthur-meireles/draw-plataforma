@@ -1,105 +1,110 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Avatar, BrandMark, Button, DropdownMenu, Icon, Kbd, Tooltip, type MenuItem } from "@/components/ui";
+import { Avatar, BrandMark, Button, DropdownMenu, Icon, IconButton, Kbd, Tooltip, type MenuItem } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUnreadCount } from "@/data/hooks";
 import { authApi } from "@/data/services";
 import { ROLE_LABEL } from "@/data/reference";
 import { usePwa } from "@/components/pwa/pwa-provider";
 import { InstallAppButton } from "@/components/pwa/pwa-ui";
-import { isActive, MODULES, PERSONAL, RAIL, REGISTRY, SETTINGS, type NavItem } from "./nav-config";
+import { isActive, SECTIONS, sectionOf, type NavGroup, type NavItem, type NavSection } from "./nav-config";
 import { usePermissions } from "./session";
 import { useLayout } from "./layout-context";
 import { ProfileSwitcherDialog } from "./profile-switcher";
 
-function useVisible() {
+/** Seções e itens visíveis para o perfil atual. */
+export function useNav() {
   const perm = usePermissions();
-  return (items: NavItem[]): NavItem[] =>
-    items
-      .filter((i) => (!i.resource || (i.requireAll ? perm.canWriteAll(i.resource) : perm.canRead(i.resource))) && (!i.roles || i.roles.includes(perm.role)))
-      .map((i) => ({ ...i, children: i.children ? i.children.filter((c) => (!c.resource || (c.requireAll ? perm.canWriteAll(c.resource) : perm.canRead(c.resource))) && (!c.roles || c.roles.includes(perm.role))) : undefined }));
+  return useMemo(() => {
+    const okItem = (i: NavItem) => (!i.resource || (i.requireAll ? perm.canWriteAll(i.resource) : perm.canRead(i.resource))) && (!i.roles || i.roles.includes(perm.role));
+    return SECTIONS.map((s) => ({
+      ...s,
+      groups: s.groups
+        .map((g) => ({ ...g, items: g.items.filter(okItem) }))
+        .concat(s.key === "inicio" && perm.isFreelancer ? [{ title: "Você", items: [{ label: "Meus dados e pagamentos", href: `/freelancers/${perm.user.freelancerId}`, icon: "freelancer" as const }] }] : [])
+        .filter((g) => g.items.length > 0),
+    })).filter((s) => (!s.resource || (s.requireAll ? perm.canWriteAll(s.resource) : perm.canRead(s.resource))) && (!s.roles || s.roles.includes(perm.role)) && s.groups.length > 0);
+  }, [perm]);
 }
 
-/* ───────── Rail (≥1280px) ───────── */
+/** Destino ao clicar na seção: a própria entrada, ou o primeiro item permitido. */
+const entryOf = (s: NavSection & { groups: NavGroup[] }) => (s.groups.some((g) => g.items.some((i) => i.href === s.href)) ? s.href : s.groups[0].items[0].href);
+
+/* ───────── 1º nível: rail de seções ───────── */
 export function Rail() {
   const pathname = usePathname();
-  const visible = useVisible();
+  const sections = useNav();
+  const current = sectionOf(pathname);
+  const { sidebarCollapsed, toggleSidebar } = useLayout();
+  const renderItem = (s: (typeof sections)[number]) => {
+    const active = s.key === current;
+    return (
+      <Tooltip key={s.key} content={sidebarCollapsed ? s.label : s.description} side="right">
+        <Link
+          href={entryOf(s)}
+          aria-label={s.label}
+          aria-current={active ? "page" : undefined}
+          className={cn("group relative flex w-14 flex-col items-center gap-1 rounded-lg py-1.5 transition-colors", active ? "text-rail-fg-active" : "text-rail-fg hover:text-rail-fg-active")}
+        >
+          {active && <span aria-hidden className="absolute -left-2 top-2 bottom-2 w-0.5 rounded-full bg-accent-solid" />}
+          <span className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-rail-active" : "group-hover:bg-rail-hover")}>
+            <Icon name={s.icon} size="md" />
+          </span>
+          <span className={cn("max-w-full truncate text-[10px] leading-none", active ? "font-semibold" : "font-medium")}>{s.short}</span>
+        </Link>
+      </Tooltip>
+    );
+  };
   return (
-    <nav aria-label="Atalhos" className="flex w-rail shrink-0 flex-col items-center gap-1 border-r border-rail-line bg-rail py-3 max-xl:hidden">
-      <Link href="/" aria-label="Draw — início" className="mb-3 rounded-lg">
+    <nav aria-label="Seções" className="flex w-rail shrink-0 flex-col items-center gap-1.5 border-r border-rail-line bg-rail py-3 max-md:hidden">
+      <Link href="/" aria-label="Draw — início" className="mb-2 rounded-lg">
         <BrandMark size="md" />
       </Link>
-      {visible(RAIL).map((item) => {
-        const active = item.href === "/projetos" ? pathname.startsWith("/projetos") || pathname.startsWith("/comercial") : isActive(pathname, item);
-        return (
-          <Tooltip key={item.href} content={item.label} side="right">
-            <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-lg transition-colors", active ? "bg-rail-active text-rail-fg-active" : "text-rail-fg hover:bg-rail-hover hover:text-rail-fg-active")}>
-              <Icon name={item.icon} size="md" />
-            </Link>
-          </Tooltip>
-        );
-      })}
+      {sections.filter((s) => !s.bottom).map(renderItem)}
+      <span className="flex-1" />
+      {sections.filter((s) => s.bottom).map(renderItem)}
+      <Tooltip content={sidebarCollapsed ? "Mostrar painel  [" : "Recolher painel  ["} side="right">
+        <button type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Mostrar painel lateral" : "Recolher painel lateral"} aria-pressed={!sidebarCollapsed} className="flex size-9 items-center justify-center rounded-lg text-rail-fg hover:bg-rail-hover hover:text-rail-fg-active max-xl:hidden">
+          <Icon name={sidebarCollapsed ? "panelRight" : "sidebar"} size="md" />
+        </button>
+      </Tooltip>
+      <div className="xl:hidden">
+        <UserMenu compact />
+      </div>
     </nav>
   );
 }
 
-/* ───────── Itens da sidebar ───────── */
-function SideLink({ item, badge, onNavigate, depth = 0 }: { item: NavItem; badge?: number; onNavigate?: () => void; depth?: number }) {
+/* ───────── Itens do 2º nível ───────── */
+function SideLink({ item, badge, onNavigate }: { item: NavItem; badge?: number; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const active = isActive(pathname, item);
+  const search = useSearchParams();
+  const active = isActive(pathname, item, search);
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      className={cn(
-        "group flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors max-md:h-10",
-        depth > 0 && "h-7 pl-8 text-[13px] max-md:h-9",
-        active ? "bg-layer-active font-medium text-fg" : "text-fg-muted hover:bg-layer-hover hover:text-fg",
-      )}
+      className={cn("group flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors max-md:h-10", active ? "bg-layer-active font-medium text-fg" : "text-fg-muted hover:bg-layer-hover hover:text-fg")}
     >
-      {depth === 0 && <Icon name={item.icon} size="sm" className={active ? "text-fg" : "text-fg-subtle group-hover:text-fg-muted"} />}
+      <Icon name={item.icon} size="sm" className={active ? "text-accent" : "text-fg-subtle group-hover:text-fg-muted"} />
       <span className="flex-1 truncate">{item.label}</span>
       {!!badge && <span className="rounded-full bg-accent-solid px-1.5 text-2xs font-semibold leading-4 text-accent-fg tabular-nums">{badge > 99 ? "99+" : badge}</span>}
     </Link>
   );
 }
 
-function SideGroup({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
-  const pathname = usePathname();
-  const inside = pathname.startsWith(item.href) || item.children?.some((c) => isActive(pathname, c));
-  const [open, setOpen] = useState(!!inside);
-  useEffect(() => {
-    if (inside) setOpen(true);
-  }, [inside]);
-  if (!item.children?.length) return <SideLink item={item} onNavigate={onNavigate} />;
-  return (
-    <div>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={cn("group flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors max-md:h-10", inside ? "text-fg" : "text-fg-muted hover:bg-layer-hover hover:text-fg")}>
-        <Icon name={item.icon} size="sm" className="text-fg-subtle group-hover:text-fg-muted" />
-        <span className="flex-1 truncate text-left">{item.label}</span>
-        <Icon name="chevronRight" size="xs" className={cn("text-fg-placeholder transition-transform", open && "rotate-90")} />
-      </button>
-      {open && (
-        <div className="relative mt-px flex flex-col gap-px before:absolute before:bottom-1 before:left-[15px] before:top-1 before:w-px before:bg-line">
-          {item.children.map((c) => (
-            <SideLink key={c.href} item={c} depth={1} onNavigate={onNavigate} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SideSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SideGroupBlock({ group, onNavigate, unread }: { group: NavGroup; onNavigate?: () => void; unread?: number }) {
   return (
     <div className="flex flex-col gap-px">
-      <p className="px-2 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wide text-fg-placeholder">{title}</p>
-      {children}
+      {group.title && <p className="px-2 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wide text-fg-placeholder">{group.title}</p>}
+      {group.items.map((i) => (
+        <SideLink key={i.href} item={i} onNavigate={onNavigate} badge={i.badge === "unread" ? unread : undefined} />
+      ))}
     </div>
   );
 }
@@ -155,71 +160,76 @@ export function UserMenu({ compact }: { compact?: boolean }) {
   );
 }
 
-/* ───────── Sidebar ───────── */
-export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const visible = useVisible();
+/* ───────── 2º nível: painel da seção ───────── */
+function SearchAndCreate({ onNavigate }: { onNavigate?: () => void }) {
   const perm = usePermissions();
   const { openCommand } = useLayout();
+  return (
+    <div className="flex flex-col gap-2 px-3 pb-2">
+      <button type="button" onClick={() => { onNavigate?.(); openCommand(); }} className="flex h-8 items-center gap-2 rounded-md border border-line bg-layer-2 px-2 text-sm text-fg-placeholder hover:border-line-strong max-md:h-10">
+        <Icon name="search" size="sm" />
+        <span className="flex-1 text-left">Buscar</span>
+        <span className="flex gap-0.5 max-md:hidden">
+          <Kbd>⌘</Kbd>
+          <Kbd>K</Kbd>
+        </span>
+      </button>
+      {perm.canWriteAll("projects") && (
+        <Button asChild variant="primary" size="md" className="w-full justify-start max-md:h-10">
+          <Link href="/projetos/novo" onClick={onNavigate}>
+            <Icon name="add" size="sm" />
+            Novo projeto
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Conteúdo do 2º nível.
+ *  - `mode="section"` (desktop): só a seção ativa (definida pela URL).
+ *  - `mode="all"` (gaveta do celular/tablet): todas as seções empilhadas.
+ */
+export function SidebarContent({ onNavigate, mode = "section" }: { onNavigate?: () => void; mode?: "section" | "all" }) {
+  const pathname = usePathname();
+  const sections = useNav();
   const unread = useUnreadCount();
-  const modules = visible(MODULES);
-  const registry = visible(REGISTRY);
-  const settings = visible(SETTINGS);
+  const { toggleSidebar } = useLayout();
+  const current = sections.find((s) => s.key === sectionOf(pathname)) ?? sections[0];
+  const shown = mode === "all" ? sections : [current];
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-header shrink-0 items-center gap-2 px-3">
-        <BrandMark size="sm" className="xl:hidden" />
-        <span className="flex-1 truncate font-display text-sm font-bold text-fg">Draw the Law</span>
+        {mode === "all" ? (
+          <>
+            <BrandMark size="sm" />
+            <span className="flex-1 truncate font-display text-sm font-bold text-fg">Draw the Law</span>
+          </>
+        ) : (
+          <>
+            <Icon name={current.icon} size="md" className="text-accent" />
+            <span className="flex-1 truncate font-display text-sm font-bold text-fg">{current.label}</span>
+            <IconButton icon="sidebar" label="Recolher painel  [" size="sm" onClick={toggleSidebar} />
+          </>
+        )}
       </div>
-      <div className="flex flex-col gap-2 px-3 pb-2">
-        {perm.canWriteAll("projects") && (
-          <Button asChild variant="primary" size="md" className="w-full justify-start max-md:h-10">
-            <Link href="/projetos/novo" onClick={onNavigate}>
-              <Icon name="add" size="sm" />
-              Novo projeto
-            </Link>
-          </Button>
-        )}
-        <button type="button" onClick={() => { onNavigate?.(); openCommand(); }} className="flex h-8 items-center gap-2 rounded-md border border-line bg-layer-2 px-2 text-sm text-fg-placeholder hover:border-line-strong max-md:h-10">
-          <Icon name="search" size="sm" />
-          <span className="flex-1 text-left">Buscar</span>
-          <span className="flex gap-0.5 max-md:hidden">
-            <Kbd>⌘</Kbd>
-            <Kbd>K</Kbd>
-          </span>
-        </button>
-      </div>
-      <nav aria-label="Navegação principal" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
-        <div className="flex flex-col gap-px">
-          {PERSONAL.map((i) => (
-            <SideLink key={i.href} item={i} onNavigate={onNavigate} badge={i.href === "/caixa-de-entrada" ? unread.data : undefined} />
-          ))}
-        </div>
-        {modules.length > 0 && (
-          <SideSection title="Módulos">
-            {modules.map((m) => (
-              <SideGroup key={m.href} item={m} onNavigate={onNavigate} />
+      <SearchAndCreate onNavigate={onNavigate} />
+      <nav aria-label="Navegação da seção" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
+        {shown.map((s) => (
+          <div key={s.key} className={cn("flex flex-col gap-1", mode === "all" && "border-t border-line pt-1 first:border-0")}>
+            {mode === "all" && (
+              <p className="flex items-center gap-1.5 px-2 pb-0.5 pt-2 font-display text-xs font-bold text-fg-muted">
+                <Icon name={s.icon} size="xs" className="text-fg-subtle" />
+                {s.label}
+              </p>
+            )}
+            {s.groups.map((g, i) => (
+              <SideGroupBlock key={`${s.key}-${i}`} group={g} onNavigate={onNavigate} unread={unread.data} />
             ))}
-          </SideSection>
-        )}
-        {registry.length > 0 && (
-          <SideSection title="Cadastros">
-            {registry.map((m) => (
-              <SideLink key={m.href} item={m} onNavigate={onNavigate} />
-            ))}
-          </SideSection>
-        )}
-        {perm.isFreelancer && (
-          <SideSection title="Você">
-            <SideLink item={{ label: "Meus dados e pagamentos", href: `/freelancers/${perm.user.freelancerId}`, icon: "freelancer" }} onNavigate={onNavigate} />
-          </SideSection>
-        )}
-        {settings.length > 0 && (
-          <SideSection title="Administração">
-            {settings.map((m) => (
-              <SideGroup key={m.href} item={m} onNavigate={onNavigate} />
-            ))}
-          </SideSection>
-        )}
+          </div>
+        ))}
+        {mode === "section" && <p className="mt-auto px-2 pt-4 text-2xs leading-relaxed text-fg-placeholder">{current.description}</p>}
       </nav>
       <div className="shrink-0 space-y-1 border-t border-line p-2 pb-safe">
         <InstallAppButton />
@@ -230,9 +240,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
+  const { sidebarCollapsed } = useLayout();
   return (
-    <aside className="w-sidebar shrink-0 border-r border-line bg-surface max-xl:hidden">
-      <SidebarContent />
+    <aside aria-hidden={sidebarCollapsed || undefined} className={cn("w-sidebar shrink-0 overflow-hidden border-r border-line bg-surface transition-[width,opacity] duration-200 max-xl:hidden", sidebarCollapsed && "w-0 border-r-0 opacity-0")}>
+      <div className="h-full w-sidebar">
+        <SidebarContent />
+      </div>
     </aside>
   );
 }

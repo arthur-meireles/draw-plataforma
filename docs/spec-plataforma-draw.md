@@ -12,7 +12,7 @@
 >
 > **Mudança da 0.3:** novo módulo **M11 — E-mail** (bônus): SMTP próprio da Draw configurável pelo admin e envio de e-mails de dentro do sistema com a conta de quem está logado, registrados no projeto. Login com Google entra como opcional **[A DECIDIR]**. Agenda Google sincronizada fica no futuro, com o requisito de verificação do Google documentado. A V2 passa a se chamar **Draw Case Room**.
 
-> **Mudança da 0.4:** front-end implementado (Next.js, dados locais com seed) e **validado contra a operação real da
+> **Mudança da 0.4:** navegação em dois níveis ligados (seções no rail → itens no painel recolhível); visualizações de tarefas lista/kanban/calendário/Gantt em todos os lugares (RF-X-06). Front-end implementado (Next.js, dados locais com seed) e **validado contra a operação real da
 > Draw**: planilha master de controle de projetos, quadro "1. Casos", quadro de áreas internas e estrutura de pastas do
 > Drive. Etapas oficiais definidas (sai o [A VALIDAR]); novos campos (tamanho, pausa, política de pagamento do cliente,
 > cobrança adicional, alíquota da organização, área das tarefas internas, ID legado); módulo de Arquivos vira **Drive**;
@@ -477,12 +477,14 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 - Cor só com significado: status (âmbar aguardando, vermelho atraso, verde concluído, azul ativo) e tipo de projeto (ícone no cartão).
 - Referência: `tela-kanban.png`.
 
-### 10.2 Navegação (fixa)
+### 10.2 Navegação (fixa, dois níveis ligados — atualizado na 0.4)
 
-- **Rail:** Início · Projetos · Painel · Arquivos.
-- **Sidebar:** Novo projeto · busca · Início · Caixa de entrada · Minhas tarefas · **Módulos** (Comercial, Projetos → Ativos / Concluídos, Financeiro, Administrativo) · **Cadastros** (Clientes, Freelancers) · Configurações (admin).
-- **Topo:** breadcrumb, seletor de visualização (lista, kanban, calendário, Gantt), filtros.
+- **1º nível — rail de seções** (ícone + rótulo curto): Início · Projetos · Financeiro · Administrativo · Cadastros · Painel · Arquivos · (rodapé) Configurações. Clicar abre a página de entrada da seção **e troca o 2º nível**; a seção ativa vem da URL (`sectionOf`), com indicador lateral.
+- **2º nível — painel da seção**: título da seção, **Busca (⌘K)**, **Novo projeto** (logo abaixo da busca), itens da seção (ex.: Projetos → Funil de cotações · Ativos · Concluídos; Painel → abas de indicadores) e menu do usuário. **Recolhível** (botão ou tecla `[`), preferência lembrada por pessoa.
+- Celular: barra inferior (Início, Projetos, Tarefas, Entrada, Mais); "Mais" abre a gaveta com **todas** as seções empilhadas. Tablet: rail + gaveta.
+- **Topo da página:** breadcrumb, seletor de visualização (lista, kanban, calendário, Gantt), filtros.
 - Sem criação de quadros, colunas ou campos pela interface.
+- Configuração única em `src/components/layout/nav-config.ts` (`SECTIONS`), filtrada pela matriz de permissões.
 
 ### 10.3 Rotas
 

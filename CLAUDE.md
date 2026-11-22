@@ -129,8 +129,8 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 
 | Faixa | Layout |
 |---|---|
-| ≥ 1280 (`xl`) | Rail + sidebar + conteúdo |
-| 768–1279 (`md`–`lg`) | Sidebar em gaveta; kanban com rolagem horizontal; prontuário em uma coluna |
+| ≥ 1280 (`xl`) | Rail de seções + painel da seção (recolhível com `[`) + conteúdo. Nova seção/item → só em `nav-config.ts` (`SECTIONS`) |
+| 768–1279 (`md`–`lg`) | Rail + painel em gaveta; kanban com rolagem horizontal; prontuário em uma coluna |
 | < 768 | Barra inferior; **lista no lugar do kanban** por padrão; diálogos em tela cheia; ação principal em `Fab` |
 
 - Alvos de toque ≥ 44 px no celular (os componentes do kit já fazem isso com `max-md:`).

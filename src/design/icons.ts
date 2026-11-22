@@ -13,7 +13,7 @@ import {
   SignalHigh, SignalLow, SignalMedium, Smartphone, Sparkles, Star, Sun, Tag, Target, Timer, Trash2, TrendingDown, TrendingUp, Undo2,
   Upload, User, UserPlus, Users, Wallet, WifiOff, X, XCircle, Zap, Wrench, History, Flag, Layers, CircleCheckBig, Hourglass, Banknote,
   FolderOpen, FolderLock, FolderInput, FolderPlus, Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact, LayoutGrid, Camera,
-  Pause, Play,
+  Pause, Play, ClipboardList, ContactRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,7 +29,8 @@ export const icons = {
   projects: Layers,
   commercial: Briefcase,
   finance: Wallet,
-  adm: Building2,
+  adm: ClipboardList,
+  registry: ContactRound,
   client: Building,
   clients: Building2,
   freelancer: Contact,

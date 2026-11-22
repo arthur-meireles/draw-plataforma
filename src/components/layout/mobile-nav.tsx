@@ -17,7 +17,7 @@ export function MobileDrawer({ open, onOpenChange }: { open: boolean; onOpenChan
         <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 w-[min(20rem,86vw)] border-r border-line bg-surface shadow-overlay outline-none pt-safe animate-slide-in-left xl:hidden">
           <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Navegação da plataforma</DialogPrimitive.Description>
-          <SidebarContent onNavigate={() => onOpenChange(false)} />
+          <SidebarContent mode="all" onNavigate={() => onOpenChange(false)} />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
