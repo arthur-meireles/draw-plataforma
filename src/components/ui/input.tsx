@@ -147,19 +147,6 @@ export function MoneyField({ label, hint, error, required, className, ...props }
   );
 }
 
-/** Data (yyyy-mm-dd). */
-export const DateInput = forwardRef<HTMLInputElement, InputProps>(function DateInput(props, ref) {
-  return <Input ref={ref} type="date" {...props} className={cn("[&::-webkit-calendar-picker-indicator]:opacity-60 dark:[&::-webkit-calendar-picker-indicator]:invert", props.className)} />;
-});
-
-export function DateField({ label, hint, error, required, containerClassName, ...props }: InputProps & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string }) {
-  return (
-    <Field label={label} hint={hint} error={error} required={required} className={containerClassName}>
-      {({ id, describedBy, invalid }) => <DateInput id={id} aria-describedby={describedBy} invalid={invalid} {...props} />}
-    </Field>
-  );
-}
-
 /** Busca com debounce e atalho para limpar. */
 export function SearchInput({ value, onChange, placeholder = "Buscar…", className, autoFocus, debounce = 200 }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string; autoFocus?: boolean; debounce?: number }) {
   const [text, setText] = useState(value);

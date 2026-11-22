@@ -2,6 +2,7 @@
 export * from "./icon";
 export * from "./button";
 export * from "./input";
+export * from "./date-picker";
 export * from "./select";
 export * from "./overlay";
 export * from "./display";

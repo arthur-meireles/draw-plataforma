@@ -2,7 +2,7 @@
 /** Exibição: Badge, Pill, Avatar, AvatarStack, Skeleton, Spinner, Progress, Kbd, Separator, Card, Section, Stat, PropertyRow, EmptyState, ErrorState, Tabs. */
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { forwardRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/format";
@@ -62,7 +62,7 @@ export const Pill = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTM
 );
 
 /* ───────── Avatar ───────── */
-const avatarSizes = { xs: "size-4 text-[8px]", sm: "size-5 text-[9px]", md: "size-6 text-[10px]", lg: "size-8 text-xs", xl: "size-12 text-base" };
+const avatarSizes = { xs: "size-4 text-[7px] tracking-tighter", sm: "size-5 text-[8px] tracking-tight", md: "size-6 text-[10px]", lg: "size-8 text-xs", xl: "size-12 text-base" };
 
 export function Avatar({ name, color, src, size = "md", className, tooltip = false }: { name: string; color?: string | null; src?: string | null; size?: keyof typeof avatarSizes; className?: string; tooltip?: boolean }) {
   const el = (
@@ -80,7 +80,7 @@ export function AvatarStack({ people, max = 3, size = "sm" }: { people: { id: st
   const rest = people.length - shown.length;
   return (
     <Tooltip content={people.map((p) => p.name).join(", ")}>
-      <span className="flex items-center -space-x-1.5">
+      <span className="flex items-center -space-x-1">
         {shown.map((p) => (
           <Avatar key={p.id} name={p.name} color={p.color} size={size} className="ring-2 ring-layer-2" />
         ))}
@@ -284,22 +284,55 @@ export interface TabItem<V extends string = string> {
 }
 
 /** Abas sublinhadas (estilo Plane). Roláveis no celular. */
+/** Detecta conteúdo rolável horizontalmente para mostrar esmaecimento nas bordas. */
+function useHorizontalOverflow<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", update);
+    };
+  }, [update]);
+  return { ref, edges };
+}
+
+/** Abas sublinhadas (estilo Plane). Roláveis, com esmaecimento indicando mais abas; aba ativa entra na tela. */
 export function Tabs<V extends string>({ value, onChange, items, children, className, listClassName }: { value: V; onChange: (v: V) => void; items: TabItem<V>[]; children?: React.ReactNode; className?: string; listClassName?: string }) {
+  const { ref, edges } = useHorizontalOverflow<HTMLDivElement>();
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("[data-state=active]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [value, ref]);
   return (
     <TabsPrimitive.Root value={value} onValueChange={(v) => onChange(v as V)} className={className}>
-      <TabsPrimitive.List className={cn("flex items-center gap-1 overflow-x-auto border-b border-line px-4 scrollbar-none", listClassName)}>
-        {items.filter((i) => !i.hidden).map((i) => (
-          <TabsPrimitive.Trigger
-            key={i.value}
-            value={i.value}
-            className="relative flex h-10 shrink-0 items-center gap-1.5 px-2 text-sm text-fg-subtle transition-colors hover:text-fg data-[state=active]:text-fg data-[state=active]:after:absolute data-[state=active]:after:inset-x-1 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-accent"
-          >
-            {i.icon && <Icon name={i.icon} size="sm" />}
-            {i.label}
-            {i.count != null && <span className="rounded-sm bg-layer px-1 text-2xs tabular-nums text-fg-subtle">{i.count}</span>}
-          </TabsPrimitive.Trigger>
-        ))}
-      </TabsPrimitive.List>
+      <div className="relative">
+        <TabsPrimitive.List ref={ref} className={cn("flex items-center gap-1 overflow-x-auto border-b border-line px-4 scrollbar-none", listClassName)}>
+          {items.filter((i) => !i.hidden).map((i) => (
+            <TabsPrimitive.Trigger
+              key={i.value}
+              value={i.value}
+              className="relative flex h-10 shrink-0 items-center gap-1.5 px-2 text-sm text-fg-subtle transition-colors hover:text-fg data-[state=active]:text-fg data-[state=active]:after:absolute data-[state=active]:after:inset-x-1 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-accent"
+            >
+              {i.icon && <Icon name={i.icon} size="sm" />}
+              {i.label}
+              {i.count != null && <span className="rounded-sm bg-layer px-1 text-2xs tabular-nums text-fg-subtle">{i.count}</span>}
+            </TabsPrimitive.Trigger>
+          ))}
+        </TabsPrimitive.List>
+        {edges.left && <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-surface to-transparent" />}
+        {edges.right && <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface to-transparent" />}
+      </div>
       {children}
     </TabsPrimitive.Root>
   );

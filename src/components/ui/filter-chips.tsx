@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Combobox, type Option } from "./select";
+import type { Option } from "./select";
+import { FilterSelect } from "./filter-select";
 import { FilterChip } from "./page";
 import { Popover, PopoverContent, PopoverTrigger } from "./overlay";
 import { Input } from "./input";
@@ -8,19 +9,9 @@ import { Button } from "./button";
 import type { IconName } from "./icon";
 import { monthTitle } from "@/lib/format-month";
 
-/** Chip de filtro que abre uma lista pesquisável de opções. `value` vazio = sem filtro. */
+/** Variante com `undefined` como "sem filtro" — delega ao FilterSelect (fonte única do visual). */
 export function FilterSelectChip<V extends string>({ label, icon, value, onChange, options, searchPlaceholder }: { label: string; icon?: IconName; value: V | undefined; onChange: (v: V | undefined) => void; options: Option<V>[]; searchPlaceholder?: string }) {
-  const selected = options.find((o) => o.value === value);
-  return (
-    <Combobox
-      options={options}
-      value={value ?? null}
-      onChange={(v) => onChange(v ?? undefined)}
-      searchPlaceholder={searchPlaceholder}
-      contentClassName="w-64"
-      trigger={<FilterChip label={label} icon={icon} value={selected?.label} onClear={() => onChange(undefined)} />}
-    />
-  );
+  return <FilterSelect label={label} icon={icon} options={options} value={value ?? null} onChange={(v) => onChange(v ?? undefined)} searchPlaceholder={searchPlaceholder} />;
 }
 
 /** Chip de filtro de mês (yyyy-mm). */

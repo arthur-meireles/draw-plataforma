@@ -49,7 +49,7 @@ import type {
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -613,8 +613,13 @@ export function createSeed(): Database {
         const stOrder = PROJECT_STAGES.find((st) => st.key === t.stageKey)!.order;
         const status: TaskStatusKey = isDone || stOrder < currentOrder ? "concluida" : stOrder === currentOrder ? (i % 2 === 0 ? "em_andamento" : chance(0.5) ? "em_revisao" : "a_fazer") : "a_fazer";
         const a = pickAssignee(t.stageKey);
-        const start = (approvedOffset ?? 0) + Math.floor((span * i) / tpl.length);
-        const due = start + t.defaultDurationDays;
+        let start = (approvedOffset ?? 0) + Math.floor((span * i) / tpl.length);
+        let due = start + t.defaultDurationDays;
+        // tarefas abertas: prazos realistas (poucas atrasadas, a maioria à frente)
+        if (status !== "concluida") {
+          due = stOrder === currentOrder ? Math.max(due, chance(0.25) ? int(-4, -1) : int(0, 8)) : Math.max(due, int(4, 12) + (stOrder - currentOrder) * 5);
+          start = Math.min(start, due - t.defaultDurationDays);
+        }
         const task: Task = {
           ...base("tsk", (approvedOffset ?? 0) + 1, "usr_beatriz"),
           projectId: p.id,

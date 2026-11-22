@@ -27,7 +27,7 @@ export function ActiveProjectsScreen() {
           <>
             <ViewSwitcher value={view} onChange={setView} views={["kanban", "lista", "calendario", "gantt"]} />
             {canCreate && (
-              <Button asChild variant="primary" className="max-md:hidden">
+              <Button asChild variant="primary" size="sm" className="max-md:hidden">
                 <Link href="/projetos/novo">
                   <Icon name="add" size="sm" />
                   Novo projeto
