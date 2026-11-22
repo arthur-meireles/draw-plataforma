@@ -326,6 +326,8 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-12 | Concluir projeto dispara RN-03; arquivar mantém tudo (RN-07). | R1 |
 | RF-M4-13 | Alertas de prazo próximo (padrão 2 dias) e atraso. | R1 |
 | RF-M4-14 | Marcos e aprendizados; métricas de entrega (`project_deliverable_metrics`). | R2 |
+| RF-M4-15 | Pausar/retomar projeto (RN-13) com motivo; selo "Parado" em cartões, linhas e prontuário; filtro "Situação". Tamanho (P/M/G) e condição de pagamento no prontuário e no assistente — "À vista" gera 1 parcela, "50/50" gera 2 (na aprovação / na entrega). | R1 |
+| RF-M4-16 | Cobrança adicional pelo prontuário (RN-14) e comentário de cobrança por recebível; ao emitir NF, sugerir vencimento pelo prazo do cliente (`payment_term_days`). | R1 |
 
 ### M5 — Financeiro
 
@@ -348,6 +350,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M6-02 | Documentos institucionais com validade e alerta. | R2 |
 | RF-M6-03 | Cofre de credenciais cifrado, com log de revelação. | R2 |
 | RF-M6-04 | Biblioteca de recursos (ferramentas, templates, playbooks). | R2 |
+| RF-M6-05 | **Quadro por área** (visão padrão de `/adm/tarefas`): colunas 2. Administrativo · 3. Comercial e Marketing · 4. Projetos · 5. Financeiro · 6. Outros; arrastar muda `tasks.area`; adição rápida por coluna. | R1 |
 
 ### M7 — Arquivos
 
@@ -368,6 +371,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M8-03 | Indicadores da seção 12, com período e exportação CSV. | R2 |
 | RF-M8-04 | Carga por pessoa e por freelancer. | R2 |
 | RF-M8-05 | Burndown por projeto. | R2 |
+| RF-M8-06 | **Visão geral da empresa** no Início: casos · projetos internos · pendências (+ parados), como no quadro atual da Draw (`metrics.companyOverview`). | R1 |
 
 ### M9 — Área do freelancer
 
