@@ -10,7 +10,7 @@ import { ProjectDataStep } from "./project-data-step";
 import { ProjectFinancialStep } from "./project-financial-step";
 import { ProjectOriginStep } from "./project-origin-step";
 import { ProjectReviewStep } from "./project-review-step";
-import { directPayload, initialWizardState, quotePayload, stepOfField, stepsFor, validateStep, type FieldErrors, type ProjectOrigin, type WizardState, type WizardStepKey } from "./project-wizard-model";
+import { directPayload, initialWizardState, installmentsForCondition, quotePayload, stepOfField, stepsFor, validateStep, type FieldErrors, type ProjectOrigin, type WizardState, type WizardStepKey } from "./project-wizard-model";
 
 /** Move o foco para o primeiro campo com erro (campos marcados com data-field). */
 function focusFirstError(errors: FieldErrors, root: HTMLElement | null) {
@@ -54,6 +54,9 @@ export function NewProjectWizard() {
       if (p.contractedCents !== undefined && s.installments.length === 1 && (s.installments[0].amountCents === 0 || s.installments[0].amountCents === s.contractedCents)) {
         next.installments = [{ ...s.installments[0], amountCents: p.contractedCents }];
       }
+      // Condição pronta (à vista, 50/50) mantém as parcelas em sincronia com o valor contratado.
+      const touchesPlan = p.contractedCents !== undefined || p.paymentCondition !== undefined || (p.dueAt !== undefined && next.paymentCondition === "50_50");
+      if (touchesPlan && next.paymentCondition && next.paymentCondition !== "parcelado") next.installments = installmentsForCondition(next.paymentCondition, next.contractedCents, next.dueAt, s.installments);
       return next;
     });
     if (Object.keys(errors).length) setErrors({});

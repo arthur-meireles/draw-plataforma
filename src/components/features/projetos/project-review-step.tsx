@@ -1,7 +1,7 @@
 "use client";
 import { DescriptionList, Section } from "@/components/ui";
 import { Money, PriorityPill, usePeopleOptions } from "@/components/domain";
-import { MEMBER_ROLE_LABEL } from "@/data/reference";
+import { MEMBER_ROLE_LABEL, PAYMENT_CONDITION_LABEL, PROJECT_SIZE_LABEL } from "@/data/reference";
 import { useClientOptions, useProjectTypes } from "@/data/hooks";
 import { dateFull, fromDateInput } from "@/lib/format";
 import type { WizardState } from "./project-wizard-model";
@@ -25,6 +25,7 @@ export function ProjectReviewStep({ state }: { state: WizardState }) {
             { label: "Título", value: state.title },
             { label: "Responsável", value: people.find(state.owner)?.name },
             { label: "Prioridade", value: <PriorityPill value={state.priority} /> },
+            { label: "Tamanho", value: state.size ? PROJECT_SIZE_LABEL[state.size] : "Não definido" },
             { label: "Prazo", value: state.dueAt ? dateFull(fromDateInput(state.dueAt)) : "Sem prazo" },
             { label: "Briefing", value: state.briefing || "Sem briefing" },
           ]}
@@ -33,7 +34,7 @@ export function ProjectReviewStep({ state }: { state: WizardState }) {
       {direct && (
         <>
           <Section title="Financeiro">
-            <DescriptionList columns={1} items={[{ label: "Valor contratado", value: <Money cents={state.contractedCents} /> }]} />
+            <DescriptionList columns={1} items={[{ label: "Valor contratado", value: <Money cents={state.contractedCents} /> }, { label: "Condição de pagamento", value: state.paymentCondition ? PAYMENT_CONDITION_LABEL[state.paymentCondition] : "Não definida" }]} />
             <ul className="mt-3 divide-y divide-line rounded-md border border-line text-sm">
               {state.installments.map((r) => (
                 <li key={r.key} className="flex items-center justify-between gap-3 px-3 py-2">

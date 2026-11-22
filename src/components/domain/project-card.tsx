@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AvatarStack, Badge, Icon, ProgressRing, Tooltip } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ProjectListItem } from "@/data/services";
+import { PausedBadge, ProjectSizeChip } from "./project-flags";
 import { BillingBadge, DueChip, Money, PriorityPill, ProjectCode, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel } from "./badges";
 
 export function ProjectCard({ project: p, dragging, href, compact }: { project: ProjectListItem; dragging?: boolean; href?: string; compact?: boolean }) {
@@ -35,6 +36,8 @@ export function ProjectCard({ project: p, dragging, href, compact }: { project: 
             </span>
           </Tooltip>
         )}
+        {p.pausedAt && <PausedBadge reason={p.pausedReason} />}
+        <ProjectSizeChip size={p.size} />
         {p.origin === "direto" && <Badge size="xs" tone="neutral">Direto</Badge>}
       </div>
       <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-fg">{p.title}</p>
@@ -67,10 +70,14 @@ export function ProjectRow({ project: p, showStage = true, showValue = false, hr
     <Link href={href ?? `/projetos/${p.code}`} className="group flex min-h-11 items-center gap-3 border-b border-line px-4 py-2 last:border-0 hover:bg-layer-hover/60 max-md:flex-wrap max-md:gap-y-1.5 max-md:py-3">
       <ProjectCode code={p.code} className="w-16" />
       <span className="min-w-0 flex-1 max-md:basis-[calc(100%-5rem)]">
-        <span className="block truncate text-sm font-medium text-fg">{p.title}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-fg">{p.title}</span>
+          {p.pausedAt && <PausedBadge reason={p.pausedReason} />}
+        </span>
         <span className="block truncate text-xs text-fg-subtle md:hidden">{p.clientName}</span>
       </span>
       <span className="w-36 truncate text-xs text-fg-subtle max-md:hidden">{p.clientName}</span>
+      <span className="w-5 max-sm:hidden"><ProjectSizeChip size={p.size} /></span>
       <span className="flex items-center gap-1.5 max-md:pl-[4.75rem]">
         {showStage && (
           <span className="w-40 truncate text-xs text-fg-muted max-lg:hidden">

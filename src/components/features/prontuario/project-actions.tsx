@@ -50,7 +50,7 @@ function CompleteProjectDialog({ project, open, onOpenChange }: { project: Proje
   );
 }
 
-type Pending = "lost" | "cancel" | "complete" | "archive" | null;
+type Pending = "lost" | "cancel" | "complete" | "archive" | "pause" | null;
 
 /** Ações do cabeçalho conforme status e permissão; secundárias no menu. */
 export function ProjectActions({ project, onNewProposal }: { project: ProjectDetail; onNewProposal: () => void }) {
@@ -60,6 +60,8 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
   const lost = useApiMutation((reason: string) => projectsApi.markLost(project.id, reason), { success: "Cotação marcada como perdida", onSuccess: close });
   const cancel = useApiMutation((reason: string) => projectsApi.cancel(project.id, reason), { success: "Projeto cancelado", onSuccess: close });
   const archive = useApiMutation(() => projectsApi.archive(project.id), { success: "Projeto arquivado. Nada foi apagado.", onSuccess: close });
+  const pause = useApiMutation((reason: string) => projectsApi.pause(project.id, reason), { success: "Projeto marcado como parado", onSuccess: close });
+  const resume = useApiMutation(() => projectsApi.resume(project.id), { success: "Projeto retomado" });
   const unarchive = useApiMutation(() => projectsApi.unarchive(project.id), { success: "Projeto desarquivado" });
   const reopen = useApiMutation(() => projectsApi.reopenQuote(project.id), { success: "Cotação reaberta em Negociação" });
 
@@ -69,6 +71,8 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
   const items: MenuItem[] = [
     { label: "Nova proposta", icon: "proposal", hidden: !(s === "cotacao" && commercial && money), onSelect: onNewProposal },
     { label: "Marcar como perdida…", icon: "stageLost", destructive: true, hidden: !(s === "cotacao" && commercial), onSelect: () => setPending("lost") },
+    { label: "Pausar projeto…", icon: "pause", hidden: !(s === "ativo" && manage && !project.pausedAt), onSelect: () => setPending("pause") },
+    { label: "Retomar projeto", icon: "resume", hidden: !(s === "ativo" && manage && !!project.pausedAt), onSelect: () => resume.mutate(undefined) },
     { label: "Cancelar projeto…", icon: "close", destructive: true, hidden: !(s === "ativo" && manage), onSelect: () => setPending("cancel") },
     { label: "Reabrir cotação", icon: "restore", hidden: !(s === "perdido" && commercial), onSelect: () => reopen.mutate(undefined) },
     { label: "Arquivar", icon: "archive", hidden: !(["concluido", "perdido", "cancelado"].includes(s) && manage), onSelect: () => setPending("archive") },
@@ -87,6 +91,11 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
       {s === "cotacao" && commercial && money && (
         <Button size="sm" variant="primary" icon="add" onClick={onNewProposal} className="max-md:hidden">
           Nova proposta
+        </Button>
+      )}
+      {s === "ativo" && manage && (
+        <Button size="sm" icon={project.pausedAt ? "resume" : "pause"} loading={resume.isPending} onClick={() => (project.pausedAt ? resume.mutate(undefined) : setPending("pause"))} className="max-md:hidden">
+          {project.pausedAt ? "Retomar projeto" : "Pausar projeto…"}
         </Button>
       )}
       {s === "ativo" && manage && (
@@ -117,6 +126,16 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
         reason={{ label: "Motivo da perda", placeholder: "Ex.: cliente fechou com outro fornecedor, orçamento cortado…", required: true }}
         loading={lost.isPending}
         onConfirm={(r) => lost.mutate(r ?? "")}
+      />
+      <ConfirmDialog
+        open={pending === "pause"}
+        onOpenChange={(o) => !o && close()}
+        title={`Pausar ${project.code}?`}
+        description="O projeto continua na mesma etapa, mas fica marcado como parado e deixa de gerar alertas de prazo. Você pode retomar quando quiser."
+        confirmLabel="Pausar projeto"
+        reason={{ label: "Motivo da pausa", placeholder: "Ex.: aguardando retorno do cliente, documentos pendentes…", required: true }}
+        loading={pause.isPending}
+        onConfirm={(r) => pause.mutate(r ?? "")}
       />
       <ConfirmDialog
         open={pending === "cancel"}

@@ -46,6 +46,10 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "restore", text: <>reabriu a cotação</> };
     case "project.cancelled":
       return { icon: "stageLost", text: <>cancelou o projeto: {b(String(d.reason ?? ""))}</> };
+    case "project.paused":
+      return { icon: "pause", text: <>pausou o projeto: {b(String(d.reason ?? ""))}</> };
+    case "project.resumed":
+      return { icon: "resume", text: <>retomou o projeto</> };
     case "project.member_added":
       return { icon: "invite", text: <>adicionou um membro à equipe</> };
     case "project.member_removed":
@@ -88,6 +92,10 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "invoice", text: <>emitiu a NF {b(String(d.invoiceNumber))} de {money(d.amountCents as number)}</> };
     case "receivable.received":
       return { icon: "receivable", text: <>deu baixa no recebimento de {b(money(d.amountCents as number))}</> };
+    case "receivable.additional_created":
+      return { icon: "receivable", text: <>lançou a cobrança adicional {b(String(d.description ?? ""))} de {b(money(d.amountCents as number))}</> };
+    case "receivable.collection_note":
+      return { icon: "comment", text: <>atualizou a nota de cobrança</> };
     case "receivable.cancelled":
       return { icon: "close", text: <>cancelou o lançamento a receber</> };
     case "payable.link_resent":

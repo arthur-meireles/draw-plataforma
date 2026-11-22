@@ -2,6 +2,8 @@
 import { DateField, SelectField, TextareaField, TextField } from "@/components/ui";
 import { ClientField, PersonField, ProjectTypeField, priorityOptions } from "@/components/domain";
 import { useProjectTypes } from "@/data/hooks";
+import { PROJECT_SIZE_LABEL } from "@/data/reference";
+import type { ProjectSize } from "@/data/types";
 import type { FieldErrors, WizardState } from "./project-wizard-model";
 
 /** Etapa 2 — dados do projeto. Cada campo vai num `data-field` para foco no primeiro erro. */
@@ -27,6 +29,7 @@ export function ProjectDataStep({ state, patch, errors }: { state: WizardState; 
         <PersonField label="Responsável" required internalOnly value={state.owner} onChange={(owner) => patch({ owner })} error={errors.ownerId} />
       </div>
       <SelectField label="Prioridade" options={priorityOptions} value={state.priority} onChange={(v) => v && patch({ priority: v })} />
+      <SelectField label="Tamanho" hint="Porte do projeto. Opcional." options={(Object.keys(PROJECT_SIZE_LABEL) as ProjectSize[]).map((k) => ({ value: k, label: PROJECT_SIZE_LABEL[k] }))} value={state.size} onChange={(size) => patch({ size })} placeholder="Sem tamanho definido" clearable />
       <div data-field="dueAt">
         <DateField label="Prazo" value={state.dueAt} onChange={(e) => patch({ dueAt: e.target.value })} error={errors.dueAt} hint="Opcional. Alimenta alertas, calendário e Gantt." />
       </div>

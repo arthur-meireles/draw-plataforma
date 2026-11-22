@@ -14,3 +14,5 @@ export * from "./team-editor";
 export * from "./files";
 export * from "./proposals";
 export * from "./access-gate";
+export * from "./project-flags";
+export * from "./additional-charge-dialog";
