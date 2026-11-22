@@ -14,7 +14,7 @@ export function QuoteSummary({ items, loading }: { items: QuoteItem[] | undefine
   const c = ind.data?.commercial;
   const median = c?.conversionDaysMedian;
   return (
-    <div className="grid grid-cols-2 gap-2 border-b border-line bg-surface-2 p-3 md:gap-3 md:px-4 xl:grid-cols-4">
+    <div className="flex gap-2 overflow-x-auto border-b border-line bg-surface-2 p-3 scrollbar-none md:grid md:grid-cols-2 md:gap-3 md:px-4 xl:grid-cols-4 [&>*]:max-md:min-w-52 [&>*]:max-md:shrink-0">
       <Stat label="Cotações abertas" icon="commercial" value={open.length} hint={`${waiting} aguardando o cliente`} loading={loading} />
       <Stat label="Em propostas enviadas" icon="money" tone="accent" value={<Money cents={sentValue} compact />} hint="Enviadas e em negociação" loading={loading} />
       <Stat label="Conversão (90 dias)" icon="target" tone="success" value={ind.isError ? "—" : percent(c?.conversionRate)} hint={c ? `${c.approved} de ${c.sent} propostas aprovadas` : ind.isError ? "Sem acesso aos indicadores" : undefined} loading={ind.isLoading} />

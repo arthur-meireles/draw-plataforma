@@ -25,7 +25,7 @@ export function ClientProjectsTab({ client: c, canCreate }: { client: ClientDeta
         const rows = c.projects.filter((p) => p.status === status);
         if (!rows.length) return null;
         return (
-          <ProjectGroup key={status} title={PROJECT_STATUS_LABEL[status]} count={rows.length} defaultOpen={status === "ativo" || status === "cotacao"}>
+          <ProjectGroup key={status} title={PROJECT_STATUS_LABEL[status]} count={rows.length}>
             {rows.map((p) => (
               <ProjectRow key={p.id} project={p} showValue />
             ))}

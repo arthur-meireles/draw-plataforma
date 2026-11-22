@@ -47,7 +47,10 @@ export function ContactFormDialog({ open, onOpenChange, clientId, contact }: { o
     if (Object.keys(errs).length) return focusFirst(errs);
     save.mutate(form);
   };
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors((e) => (e[k] ? { ...e, [k]: "" } : e));
+  };
 
   return (
     <Dialog

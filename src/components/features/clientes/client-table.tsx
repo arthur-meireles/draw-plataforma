@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { DataTable, RowActions, type Column } from "@/components/ui";
 import { Money } from "@/components/domain";
-import { dateFull, formatCnpj } from "@/lib/format";
+import { dateFull, formatCnpj, plural } from "@/lib/format";
 import { ClientStatusBadge } from "./client-status-badge";
 import type { ClientRow } from "./use-clients";
 
@@ -48,7 +48,7 @@ export function ClientTable({ rows, isLoading, error, onRetry, hasFilters, onCle
       sortValue: (c) => c.projectsActive,
       cell: (c) => (
         <span className="whitespace-nowrap tabular-nums text-fg-muted">
-          <span className="font-medium text-fg">{c.projectsActive}</span> ativos / {c.projectsTotal}
+          <span className="font-medium text-fg">{plural(c.projectsActive, "ativo", "ativos")}</span> / {c.projectsTotal}
         </span>
       ),
     },

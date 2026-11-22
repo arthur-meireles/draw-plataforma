@@ -23,7 +23,7 @@ export function ClientHeader({ client: c }: { client: ClientDetail }) {
             {c.group && (
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 <Icon name="clients" size="xs" />
-                Grupo {c.group.name}
+                <span title="Grupo econômico">{c.group.name}</span>
                 {c.siblings.length > 0 && (
                   <>
                     <span aria-hidden>·</span>

@@ -61,7 +61,10 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
     },
   );
 
-  const set = <K extends keyof FreelancerInput>(k: K, v: FreelancerInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof FreelancerInput>(k: K, v: FreelancerInput[K]) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors((e) => (e[k] ? { ...e, [k]: "" } : e));
+  };
   const submit = () => {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Informe o nome";

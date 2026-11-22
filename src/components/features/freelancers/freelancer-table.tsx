@@ -1,6 +1,7 @@
 "use client";
 /** Tabela de freelancers (RF-M2-03): avatar+nome, especialidades, contato, carga, acesso e status. */
 import { useRouter } from "next/navigation";
+import { plural } from "@/lib/format";
 import { Avatar, Badge, Button, DataTable, RowActions, type Column } from "@/components/ui";
 import { SpecialtyBadges } from "./specialty-badges";
 import type { FreelancerRow } from "./use-freelancers";
@@ -52,8 +53,8 @@ export function FreelancerTable({ rows, isLoading, error, onRetry, hasFilters, o
         </span>
       ),
     },
-    { id: "projects", header: "Projetos ativos", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.activeProjects, cell: (f) => <span className="tabular-nums text-fg-muted">{f.activeProjects} ativos</span> },
-    { id: "tasks", header: "Tarefas abertas", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.openTasks, cell: (f) => <span className="tabular-nums text-fg-muted">{f.openTasks} tarefas</span> },
+    { id: "projects", header: "Projetos ativos", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.activeProjects, cell: (f) => <span className="tabular-nums text-fg-muted">{plural(f.activeProjects, "ativo", "ativos")}</span> },
+    { id: "tasks", header: "Tarefas abertas", align: "right", hideBelow: "lg", mobile: "meta", sortValue: (f) => f.openTasks, cell: (f) => <span className="tabular-nums text-fg-muted">{plural(f.openTasks, "tarefa", "tarefas")}</span> },
     {
       id: "access",
       header: "Acesso",
