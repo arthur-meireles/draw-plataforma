@@ -9,3 +9,6 @@ export * from "./data-table";
 export * from "./page";
 export * from "./filter-select";
 export * from "./stepper";
+export * from "./file-dropzone";
+export * from "./filter-chips";
+export * from "./status-chips";
