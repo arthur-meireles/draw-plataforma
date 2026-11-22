@@ -51,8 +51,8 @@ export function FolderItem({ folder, href, variant, menu }: Props) {
         <Link href={href} className="flex items-center gap-3 rounded-lg border border-line bg-surface p-3 pr-10 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent max-md:min-h-16">
           {icon}
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-medium text-fg" title={folder.name}>{displayName(folder)}</span>
+            <span className="flex items-start gap-1.5">
+              <span className="line-clamp-2 break-words text-sm font-medium leading-snug text-fg" title={folder.name}>{displayName(folder)}</span>
               {folder.restricted && <LockBadge />}
             </span>
             <span className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-subtle">
