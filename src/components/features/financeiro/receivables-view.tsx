@@ -26,7 +26,7 @@ const columns: Column<ReceivableRow>[] = [
     sortValue: (r) => r.projectCode,
     mobile: "title",
     cell: (r) => (
-      <Link href={`/projetos/${r.projectCode}?aba=financeiro`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 hover:underline">
+      <Link href={`/projetos/${r.projectCode}?aba=financeiro`} onClick={(e) => e.stopPropagation()} className="inline-flex items-baseline gap-2 hover:underline">
         <ProjectCode code={r.projectCode} />
         <span className="hidden max-md:inline">{r.description}</span>
       </Link>
@@ -88,7 +88,7 @@ export function ReceivablesView() {
           )
         }
       >
-        <SearchInput value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar projeto, cliente, NF…" />
+        <SearchInput className="max-md:w-48 max-md:shrink-0" value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar projeto, cliente, NF…" />
         <FilterSelectChip label="Cliente" icon="clients" value={f.cliente} onChange={(v) => set({ cliente: v })} options={clientOptions} searchPlaceholder="Buscar cliente…" />
         <FilterSelectChip label="Projeto" icon="project" value={project?.id} onChange={(v) => set({ projeto: v ? (projects.data?.find((p) => p.id === v)?.code ?? v) : undefined })} options={projectOptions} searchPlaceholder="Buscar projeto…" />
         <MonthFilterChip value={f.mes} onChange={(v) => set({ mes: v })} />

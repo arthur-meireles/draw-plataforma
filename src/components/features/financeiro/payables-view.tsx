@@ -64,7 +64,7 @@ export function PayablesView() {
         }
       />
       <Toolbar>
-        <SearchInput value={f.q} onChange={(v) => set({ q: v })} placeholder={isFreelancer ? "Buscar projeto…" : "Buscar favorecido, projeto…"} />
+        <SearchInput className="max-md:w-48 max-md:shrink-0" value={f.q} onChange={(v) => set({ q: v })} placeholder={isFreelancer ? "Buscar projeto…" : "Buscar favorecido, projeto…"} />
         {!isFreelancer && <FilterSelectChip label="Tipo" icon="filter" value={f.tipo as PayableKind | undefined} onChange={(v) => set({ tipo: v })} options={KINDS} />}
         <MonthFilterChip label="Vencimento" value={f.mes} onChange={(v) => set({ mes: v })} />
         <ClearFiltersButton show={filtered} onClick={() => set({ status: "todos", tipo: undefined, mes: undefined, q: "", aberto: undefined })} />
