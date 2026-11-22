@@ -11,3 +11,5 @@ export * from "./calendar";
 export * from "./gantt";
 export * from "./installments-editor";
 export * from "./team-editor";
+export * from "./files";
+export * from "./proposals";
