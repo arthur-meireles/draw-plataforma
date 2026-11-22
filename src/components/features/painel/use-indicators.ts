@@ -38,3 +38,6 @@ export function useIndicators(f: PainelFilters, enabled = true) {
 
 export const fmtDays = (v: number | null | undefined) => (v == null ? "—" : `${v.toFixed(1).replace(".", ",")} dias`);
 export const fmtPct = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+
+/** Altura de gráfico de barras horizontais conforme o número de linhas (rótulos sempre visíveis). */
+export const rowsHeight = (rows = 0, per = 34) => Math.max(180, rows * per + 40);

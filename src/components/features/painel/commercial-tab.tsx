@@ -4,7 +4,7 @@ import { BarSeriesChart, DonutChart, RankBars } from "@/components/domain";
 import { number, plural } from "@/lib/format";
 import { ChartSection } from "./chart-section";
 import { IndicatorCard } from "./indicator-card";
-import { fmtDays, fmtPct, type useIndicators } from "./use-indicators";
+import { fmtDays, fmtPct, rowsHeight, type useIndicators } from "./use-indicators";
 
 type Props = { q: ReturnType<typeof useIndicators> };
 
@@ -29,7 +29,7 @@ export function CommercialTab({ q }: Props) {
           empty={!c?.byType.length}
           csv={{ filename: "conversao-por-tipo", headers: ["Tipo", "Enviadas", "Aprovadas", "Taxa de conversão (%)"], rows: (c?.byType ?? []).map((r) => [r.label, r.sent, r.approved, Math.round(r.rate * 100)]) }}
         >
-          <BarSeriesChart data={c?.byType ?? []} xKey="label" series={[{ key: "rate", label: "Taxa de conversão" }]} format="percent" />
+          <BarSeriesChart data={c?.byType ?? []} xKey="label" series={[{ key: "rate", label: "Taxa de conversão" }]} format="percent" horizontal height={rowsHeight(c?.byType.length)} />
         </ChartSection>
         <ChartSection
           {...common}

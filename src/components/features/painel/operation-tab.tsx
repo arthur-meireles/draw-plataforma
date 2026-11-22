@@ -6,7 +6,7 @@ import { number } from "@/lib/format";
 import { ChartSection } from "./chart-section";
 import { IndicatorCard } from "./indicator-card";
 import { StageTimeBars } from "./stage-time-bars";
-import { fmtDays, fmtPct, type useIndicators } from "./use-indicators";
+import { fmtDays, fmtPct, rowsHeight, type useIndicators } from "./use-indicators";
 
 export function OperationTab({ q }: { q: ReturnType<typeof useIndicators> }) {
   const o = q.data?.operation;
@@ -30,7 +30,7 @@ export function OperationTab({ q }: { q: ReturnType<typeof useIndicators> }) {
           emptyText="Nenhum projeto concluído no período"
           csv={{ filename: "ciclo-por-tipo", headers: ["Tipo", "Ciclo mediano (dias)", "Projetos concluídos"], rows: (o?.cycleByType ?? []).map((r) => [r.label, Number(r.days.toFixed(1)), r.count]) }}
         >
-          <BarSeriesChart data={o?.cycleByType ?? []} xKey="label" series={[{ key: "days", label: "Ciclo mediano" }]} format="days" />
+          <BarSeriesChart data={o?.cycleByType ?? []} xKey="label" series={[{ key: "days", label: "Ciclo mediano" }]} format="days" horizontal height={rowsHeight(o?.cycleByType.length)} />
         </ChartSection>
         <ChartSection
           {...common}
@@ -61,7 +61,7 @@ export function OperationTab({ q }: { q: ReturnType<typeof useIndicators> }) {
           emptyText="Nada em andamento"
           csv={{ filename: "em-andamento-por-etapa", headers: ["Etapa", "Projetos", "Tarefas abertas"], rows: (o?.wip ?? []).map((w) => [w.label, w.projects, w.tasks]) }}
         >
-          <BarSeriesChart data={o?.wip ?? []} xKey="label" series={[{ key: "projects", label: "Projetos" }, { key: "tasks", label: "Tarefas" }]} />
+          <BarSeriesChart data={o?.wip ?? []} xKey="label" series={[{ key: "projects", label: "Projetos" }, { key: "tasks", label: "Tarefas" }]} horizontal height={rowsHeight((o?.wip.length ?? 0) * 2, 18)} />
         </ChartSection>
       </div>
     </div>

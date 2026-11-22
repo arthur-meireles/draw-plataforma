@@ -73,7 +73,7 @@ export function WeekAgenda({ tasks, projects, onOpenTask }: { tasks: TaskView[];
                 ))}
                 {ts.map((t) => (
                   <li key={t.id}>
-                    <Button variant="ghost" size="sm" onClick={() => onOpenTask(t)} className="h-auto w-full justify-start gap-1.5 whitespace-normal rounded-md border border-line bg-layer-2 px-2 py-1.5 text-left text-xs font-normal">
+                    <Button variant="ghost" size="sm" onClick={() => onOpenTask(t)} className="h-auto w-full min-w-0 justify-start gap-1.5 overflow-hidden whitespace-normal break-words rounded-md border border-line bg-layer-2 px-2 py-1.5 text-left text-xs font-normal max-md:min-h-11">
                       <TaskStatusIcon status={t.statusKey} size={12} />
                       <span className={cn("min-w-0 flex-1", t.statusKey === "concluida" && "text-fg-subtle line-through")}>{t.title}</span>
                     </Button>

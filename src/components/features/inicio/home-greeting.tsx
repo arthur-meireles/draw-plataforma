@@ -9,13 +9,14 @@ export function greetingFor(date = new Date()) {
 
 export function HomeGreeting() {
   const { user } = usePermissions();
-  const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo" });
+  const raw = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo" });
+  const today = raw.charAt(0).toUpperCase() + raw.slice(1);
   return (
     <div className="min-w-0">
       <h1 className="truncate text-lg font-semibold text-fg max-md:text-md">
         {greetingFor()}, {user.name.split(" ")[0]}
       </h1>
-      <p className="text-sm capitalize text-fg-subtle">{today}</p>
+      <p className="text-sm text-fg-subtle">{today}</p>
     </div>
   );
 }

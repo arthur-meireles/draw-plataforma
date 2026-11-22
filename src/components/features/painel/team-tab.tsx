@@ -25,7 +25,7 @@ export function TeamTab({ days }: { days: number }) {
   const back = Math.min(days, 90);
   const activity = useApiQuery(["metrics", "team-activity", back], () => metricsApi.teamActivity(back));
   const workload = useApiQuery(["metrics", "workload"], metricsApi.workload);
-  const load = (workload.data ?? []).filter((w) => w.open > 0 || w.projects > 0).map((w) => ({ name: w.kind === "freelancer" ? `${w.name} (freelancer)` : w.name, atrasadas: w.overdue, proximas: w.dueSoon, outras: Math.max(0, w.open - w.overdue - w.dueSoon), open: w.open }));
+  const load = (workload.data ?? []).filter((w) => w.open > 0 || w.projects > 0).map((w) => ({ name: w.name, atrasadas: w.overdue, proximas: w.dueSoon, outras: Math.max(0, w.open - w.overdue - w.dueSoon), open: w.open }));
 
   return (
     <div className="space-y-4 md:space-y-6">

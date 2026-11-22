@@ -35,12 +35,13 @@ export function FreelancerHome() {
 
       {pending.length > 0 && <PendingInvoices items={pending} loading={home.isLoading} />}
 
+      <WeekAgenda tasks={open ?? []} projects={projects.data ?? []} onOpenTask={(t) => setUrl({ tarefa: t.id })} />
+
       <div className="grid gap-4 md:gap-6 xl:grid-cols-3">
         <div className="min-w-0 space-y-4 md:space-y-6 xl:col-span-2">
           <Section title="Suas tarefas" icon="myTasks" bodyClassName="p-0" actions={<Link href="/minhas-tarefas" className="text-xs text-accent hover:underline">Ver todas</Link>}>
             <TaskList tasks={open?.slice(0, 12)} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} groupBy="due" showProject onOpen={(t) => setUrl({ tarefa: t.id })} empty={{ icon: "success", title: "Nenhuma tarefa aberta", description: "Quando a gestão atribuir uma tarefa, ela aparece aqui." }} />
           </Section>
-          <WeekAgenda tasks={open ?? []} projects={projects.data ?? []} onOpenTask={(t) => setUrl({ tarefa: t.id })} />
         </div>
         <div className="min-w-0 space-y-4 md:space-y-6">
           <Section title="Seus projetos" icon="project">
