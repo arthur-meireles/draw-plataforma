@@ -88,6 +88,10 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "invoice", text: <>emitiu a NF {b(String(d.invoiceNumber))} de {money(d.amountCents as number)}</> };
     case "receivable.received":
       return { icon: "receivable", text: <>deu baixa no recebimento de {b(money(d.amountCents as number))}</> };
+    case "receivable.cancelled":
+      return { icon: "close", text: <>cancelou o lançamento a receber</> };
+    case "payable.link_resent":
+      return { icon: "send", text: <>reenviou o link de envio da NF ao freelancer</> };
     case "payable.created":
       return { icon: "payable", text: <>gerou conta a pagar de {b(money((d.agreedAmountCents ?? d.amountCents) as number))}</> };
     case "payable.invoice_submitted":

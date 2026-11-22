@@ -9,3 +9,4 @@ export * from "./data-table";
 export * from "./page";
 export * from "./file-dropzone";
 export * from "./filter-chips";
+export * from "./status-chips";
