@@ -39,11 +39,11 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
   const marginTone = f ? (f.marginCents < 0 ? "danger" : f.marginPct != null && f.marginPct < 0.2 ? "warning" : "success") : undefined;
 
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className="space-y-4">
       {fin.error ? (
         <Section title="Resumo financeiro" icon="finance"><p className="text-sm text-danger">{fin.error.message}</p><Button className="mt-2" size="sm" icon="refresh" onClick={() => fin.refetch()}>Tentar novamente</Button></Section>
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3">
           <Stat label="Contratado" icon="money" value={<Money cents={f?.contractedCents} />} loading={fin.isLoading} />
           <Stat label="Faturado" icon="invoice" value={<Money cents={f?.invoicedCents} />} loading={fin.isLoading} hint={f ? `de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format((f.expectedCents ?? 0) / 100)} previstos` : undefined} />
           <Stat label="Recebido" icon="receivable" tone="success" value={<Money cents={f?.receivedCents} />} loading={fin.isLoading} />

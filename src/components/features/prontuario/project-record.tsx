@@ -46,15 +46,15 @@ function Tabbed({ project }: { project: ProjectDetail }) {
   const showEmails = !isFreelancer && canRead("mail");
   const tab: Tab = (TABS as readonly string[]).includes(url.aba) && !(url.aba === "financeiro" && !showFinance) && !(url.aba === "emails" && !showEmails) ? (url.aba as Tab) : "visao-geral";
   const items: TabItem<Tab>[] = [
-    { value: "visao-geral", label: "Visão geral", icon: "project" },
-    { value: "tarefas", label: "Tarefas", icon: "task", count: project.subtasksTotal || undefined },
-    { value: "equipe", label: "Equipe", icon: "team", count: members.data?.filter((m) => m.active).length },
-    { value: "arquivos", label: "Arquivos", icon: "files" },
-    { value: "comentarios", label: "Comentários", icon: "comment" },
-    { value: "aprovacoes", label: "Aprovações", icon: "approval" },
-    { value: "financeiro", label: "Financeiro", icon: "money", hidden: !showFinance },
-    { value: "emails", label: "E-mails", icon: "email", hidden: !showEmails },
-    { value: "historico", label: "Histórico", icon: "history" },
+    { value: "visao-geral", label: "Visão geral" },
+    { value: "tarefas", label: "Tarefas", count: project.subtasksTotal || undefined },
+    { value: "equipe", label: "Equipe", count: members.data?.filter((m) => m.active).length },
+    { value: "arquivos", label: "Arquivos" },
+    { value: "comentarios", label: "Comentários" },
+    { value: "aprovacoes", label: "Aprovações" },
+    { value: "financeiro", label: "Financeiro", hidden: !showFinance },
+    { value: "emails", label: "E-mails", hidden: !showEmails },
+    { value: "historico", label: "Histórico" },
   ];
   const setTab = (aba: string) => setUrl({ aba, proposta: undefined, tarefa: undefined, arquivo: undefined, q: undefined, cat: undefined, vista: undefined, filtro: undefined } as never);
 

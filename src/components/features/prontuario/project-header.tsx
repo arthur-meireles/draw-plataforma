@@ -8,7 +8,7 @@ import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
 import type { ProjectStageKey, QuoteStageKey } from "@/data/types";
 import { cn } from "@/lib/cn";
-import { useProjectUpdate, type ProjectDetail } from "./use-project";
+import { useCanEditProject, useProjectUpdate, type ProjectDetail } from "./use-project";
 
 /** Título editável no próprio lugar (clique, Enter salva, Esc cancela). */
 function InlineTitle({ value, editable, onSave }: { value: string; editable: boolean; onSave: (v: string) => void }) {
@@ -71,10 +71,10 @@ function InlineTitle({ value, editable, onSave }: { value: string; editable: boo
 
 /** Bloco de identidade do registro: código, tipo, título, cliente, etapa, prioridade, prazo e equipe. */
 export function ProjectHeader({ project }: { project: ProjectDetail }) {
-  const { canWrite } = usePermissions();
+  const { isFreelancer } = usePermissions();
   const update = useProjectUpdate(project.id);
   const move = useApiMutation((stageKey: ProjectStageKey | QuoteStageKey) => projectsApi.move(project.id, { stageKey, position: project.position }), { success: "Etapa atualizada" });
-  const editable = canWrite("projects") && !["arquivado", "cancelado"].includes(project.status);
+  const editable = useCanEditProject(project);
   const done = project.status === "concluido" || project.status === "arquivado";
 
   const stagePill = (
@@ -95,10 +95,17 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
       </div>
       <InlineTitle value={project.title} editable={editable} onSave={(title) => update.mutate({ title })} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Link href={`/clientes/${project.clientId}`} className="inline-flex items-center gap-1.5 rounded-md text-sm text-fg-muted hover:text-accent hover:underline">
-          <Icon name="client" size="sm" className="text-fg-subtle" />
-          {project.clientName}
-        </Link>
+        {isFreelancer ? (
+          <span className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
+            <Icon name="client" size="sm" className="text-fg-subtle" />
+            {project.clientName}
+          </span>
+        ) : (
+          <Link href={`/clientes/${project.clientId}`} className="inline-flex items-center gap-1.5 rounded-md text-sm text-fg-muted hover:text-accent hover:underline">
+            <Icon name="client" size="sm" className="text-fg-subtle" />
+            {project.clientName}
+          </Link>
+        )}
         <span className="flex flex-wrap items-center gap-1.5">
           {canMoveStage ? (
             <Combobox

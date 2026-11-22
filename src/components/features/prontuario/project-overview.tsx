@@ -10,7 +10,7 @@ import { dateFull, plural, relative } from "@/lib/format";
 import { DeliveryInsights } from "./delivery-insights";
 import { KeyDates } from "./key-dates";
 import { StageStepper } from "./stage-stepper";
-import { useProjectUpdate, type ProjectDetail } from "./use-project";
+import { useCanEditProject, useProjectUpdate, type ProjectDetail } from "./use-project";
 
 function Briefing({ project, editable }: { project: ProjectDetail; editable: boolean }) {
   const update = useProjectUpdate(project.id);
@@ -86,8 +86,8 @@ function Burndown({ project }: { project: ProjectDetail }) {
 
 /** Aba "Visão geral": briefing, datas, etapas, progresso, aprovações, atividade e burndown. */
 export function ProjectOverview({ project, onTab, proposalOpen, onProposalOpen }: { project: ProjectDetail; onTab: (tab: string) => void; proposalOpen: boolean; onProposalOpen: (open: boolean) => void }) {
-  const { canWrite, money, isFreelancer } = usePermissions();
-  const editable = canWrite("projects") && !["arquivado", "cancelado"].includes(project.status);
+  const { money, isFreelancer } = usePermissions();
+  const editable = useCanEditProject(project);
   const pct = project.subtasksTotal ? Math.round((project.subtasksDone / project.subtasksTotal) * 100) : 0;
   const showProposals = money && !isFreelancer && (project.status === "cotacao" || project.origin === "cotacao" || project.status === "perdido");
 

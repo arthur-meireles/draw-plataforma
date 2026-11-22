@@ -441,11 +441,11 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
         </span>
       ),
     },
-    { id: "category", header: "Categoria", mobile: "meta", sortValue: (f) => FILE_CATEGORY_LABEL[f.category], cell: (f) => <CategoryBadge category={f.category} /> },
-    { id: "version", header: "Versão", mobile: "meta", hideBelow: "md", sortValue: (f) => f.current?.version ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">v{f.current?.version}<span className="ml-1.5 font-mono text-2xs text-fg-subtle">{shortHash(f.current?.sha256)}</span></span> },
-    { id: "uploader", header: "Enviado por", mobile: "subtitle", hideBelow: "lg", sortValue: (f) => f.uploaderName, cell: (f) => <span className="text-fg-muted">{f.uploaderName}</span> },
-    { id: "size", header: "Tamanho", align: "right", mobile: "meta", hideBelow: "lg", sortValue: (f) => f.current?.size ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">{fileSize(f.current?.size ?? 0)}</span> },
-    { id: "date", header: "Data", mobile: "meta", sortValue: (f) => f.current?.createdAt ?? "", cell: (f) => <span className="text-fg-muted" title={dateTime(f.current?.createdAt)}>{relative(f.current?.createdAt)}</span> },
+    { id: "category", width: "10rem", header: "Categoria", mobile: "meta", sortValue: (f) => FILE_CATEGORY_LABEL[f.category], cell: (f) => <CategoryBadge category={f.category} /> },
+    { id: "version", width: "8.5rem", header: "Versão", mobile: "meta", hideBelow: "md", sortValue: (f) => f.current?.version ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">v{f.current?.version}<span className="ml-1.5 font-mono text-2xs text-fg-subtle">{shortHash(f.current?.sha256)}</span></span> },
+    { id: "uploader", width: "11rem", header: "Enviado por", mobile: "subtitle", hideBelow: "lg", sortValue: (f) => f.uploaderName, cell: (f) => <span className="text-fg-muted">{f.uploaderName}</span> },
+    { id: "size", width: "6rem", header: "Tamanho", align: "right", mobile: "meta", hideBelow: "lg", sortValue: (f) => f.current?.size ?? 0, cell: (f) => <span className="tabular-nums text-fg-muted">{fileSize(f.current?.size ?? 0)}</span> },
+    { id: "date", width: "8.5rem", header: "Data", mobile: "meta", sortValue: (f) => f.current?.createdAt ?? "", cell: (f) => <span className="text-fg-muted" title={dateTime(f.current?.createdAt)}>{relative(f.current?.createdAt)}</span> },
     { id: "actions", header: <span className="sr-only">Ações</span>, align: "right", width: "48px", mobile: "trailing", cell: (f) => <RowActions items={menuFor(f)} /> },
   ];
 

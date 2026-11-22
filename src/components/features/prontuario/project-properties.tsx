@@ -8,16 +8,16 @@ import { useApiQuery } from "@/data/hooks";
 import { clientsApi } from "@/data/services";
 import { cn } from "@/lib/cn";
 import { dateFull, dateTime, formatCnpj, fromDateInput, toDateInput } from "@/lib/format";
-import { useProjectUpdate, type ProjectDetail } from "./use-project";
+import { useCanEditProject, useProjectUpdate, type ProjectDetail } from "./use-project";
 
-const ORIGIN_LABEL = { cotacao: "Cotação aprovada", direto: "Projeto direto" } as const;
+const ORIGIN_LABEL = { cotacao: "Veio de cotação", direto: "Projeto direto" } as const;
 
 /** Coluna de propriedades do prontuário (PropertyRow). Edições vão por `projectsApi.update` (RN-12 em toast). */
 export function ProjectProperties({ project, className }: { project: ProjectDetail; className?: string }) {
-  const { canWrite, canWriteAll, money } = usePermissions();
+  const { canWriteAll, money, isFreelancer } = usePermissions();
   const update = useProjectUpdate(project.id);
   const people = usePeopleOptions({ internalOnly: true });
-  const editable = canWrite("projects") && !["arquivado", "cancelado"].includes(project.status);
+  const editable = useCanEditProject(project);
   const manage = canWriteAll("projects") && editable;
   const contacts = useApiQuery(["client-contacts", project.clientId], () => clientsApi.get(project.clientId), { enabled: manage, staleTime: 30_000 });
   const contactOptions: Option[] = (contacts.data?.contacts ?? []).map((c) => ({ value: c.id, label: c.name, description: c.email }));
@@ -41,9 +41,9 @@ export function ProjectProperties({ project, className }: { project: ProjectDeta
       <PropertyRow label="Status" icon="stageOpen"><ProjectStatusBadge status={project.status} /></PropertyRow>
       <PropertyRow label="Etapa" icon="stageWaiting">{project.status === "cotacao" || project.status === "perdido" ? <QuoteStageLabel stageKey={project.quoteStageKey} /> : <ProjectStageLabel stageKey={project.projectStageKey} />}</PropertyRow>
       <PropertyRow label="Cliente" icon="client">
-        <Link href={`/clientes/${project.clientId}`} className="truncate text-accent hover:underline">{project.client.tradeName}</Link>
+        {isFreelancer ? <span className="truncate">{project.client.tradeName}</span> : <Link href={`/clientes/${project.clientId}`} className="truncate text-accent hover:underline">{project.client.tradeName}</Link>}
       </PropertyRow>
-      <PropertyRow label="Faturamento" icon="receivable">
+      {!isFreelancer && <PropertyRow label="Faturamento" icon="receivable">
         {manage && contactOptions.length ? (
           <Combobox
             options={contactOptions}
@@ -57,10 +57,10 @@ export function ProjectProperties({ project, className }: { project: ProjectDeta
         ) : (
           <span className="text-fg-subtle">Sem contato de faturamento</span>
         )}
-      </PropertyRow>
-      <PropertyRow label="CNPJ" icon="tag"><span className="tabular-nums text-fg-muted">{formatCnpj(project.client.cnpj)}</span></PropertyRow>
+      </PropertyRow>}
+      {!isFreelancer && <PropertyRow label="CNPJ" icon="tag"><span className="tabular-nums text-fg-muted">{formatCnpj(project.client.cnpj)}</span></PropertyRow>}
       <PropertyRow label="Tipo" icon="project"><span className="inline-flex items-center gap-1.5"><ProjectTypeIcon icon={project.typeIcon} size="xs" />{project.typeName}</span></PropertyRow>
-      <PropertyRow label="Origem" icon="commercial"><span className="text-fg-muted">{ORIGIN_LABEL[project.origin]}</span></PropertyRow>
+      {!isFreelancer && <PropertyRow label="Origem" icon="commercial"><span className="text-fg-muted">{ORIGIN_LABEL[project.origin]}</span></PropertyRow>}
       <PropertyRow label="Responsável" icon="user">
         {manage ? <Combobox options={people.options} value={`user:${project.ownerId}`} onChange={(v) => v && v !== `user:${project.ownerId}` && update.mutate({ ownerId: v.split(":")[1] })} trigger={ownerPill} contentClassName="w-64" searchPlaceholder="Buscar pessoa…" /> : ownerPill}
       </PropertyRow>
