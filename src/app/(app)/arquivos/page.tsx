@@ -1,11 +1,11 @@
 "use client";
 import { Suspense } from "react";
-import { FileLibrary } from "@/components/features/prontuario/file-library";
+import { DriveView } from "@/components/features/drive/drive-view";
 
 export default function FilesPage() {
   return (
     <Suspense fallback={null}>
-      <FileLibrary />
+      <DriveView />
     </Suspense>
   );
 }
