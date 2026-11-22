@@ -41,7 +41,7 @@ export function InboxView() {
   const markRead = useApiMutation((v: { id: string; read: boolean }) => notificationsApi.markRead(v.id, v.read), { success: false });
   const markAll = useApiMutation(notificationsApi.markAllRead, { success: "Todas as notificações foram marcadas como lidas" });
 
-  const all = q.data ?? [];
+  const all = useMemo(() => q.data ?? [], [q.data]);
   const unread = all.filter((n) => !n.readAt).length;
   const list = useMemo(() => all.filter((n) => (filter === "todas" || !n.readAt) && (!type || n.type === type)), [all, filter, type]);
   const selected = f.n ? all.find((n) => n.id === f.n) ?? null : null;

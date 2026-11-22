@@ -104,8 +104,8 @@ function DefaultTrigger({ children, invalid, disabled, id, className, placeholde
       type="button"
       id={id}
       disabled={disabled}
-      aria-invalid={invalid || undefined}
-      className={cn(controlBase, "flex h-8 items-center gap-2 px-2.5 text-left max-md:h-11", placeholderShown && "text-fg-placeholder", className)}
+      data-invalid={invalid || undefined}
+      className={cn(controlBase, "flex h-8 data-[invalid=true]:border-danger items-center gap-2 px-2.5 text-left max-md:h-11", placeholderShown && "text-fg-placeholder", className)}
       {...aria}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2 truncate">{children}</span>

@@ -122,16 +122,16 @@ export const tasksApi = {
   }) =>
     write((db, me) => {
       if (!input.title.trim()) throw new ApiError(422, "Dê um título para a tarefa.", { title: "Dê um título para a tarefa" });
-      const module = input.module ?? (input.projectId ? "projeto" : "adm");
+      const taskModule = input.module ?? (input.projectId ? "projeto" : "adm");
       const p = input.projectId ? assertProjectVisible(db, me, input.projectId) : null;
-      if (module === "adm" && !canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão no Administrativo.");
-      if (module === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
+      if (taskModule === "adm" && !canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão no Administrativo.");
+      if (taskModule === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
       const siblings = db.tasks.filter((t) => t.projectId === (p?.id ?? null) && t.parentTaskId === (input.parentTaskId ?? null));
       const parent = input.parentTaskId ? db.tasks.find((t) => t.id === input.parentTaskId) : null;
       const t: Task = {
         ...baseFields(me.id),
         projectId: p?.id ?? null,
-        module,
+        module: taskModule,
         parentTaskId: input.parentTaskId ?? null,
         stageKey: input.stageKey ?? parent?.stageKey ?? (p?.status === "cotacao" ? p.quoteStageKey : (p?.projectStageKey ?? null)),
         title: input.title.trim(),
