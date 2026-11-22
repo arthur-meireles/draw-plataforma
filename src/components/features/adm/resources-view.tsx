@@ -28,7 +28,7 @@ function Content() {
     <>
       <PageHeader crumbs={[{ label: "Administrativo", icon: "adm", href: "/adm/tarefas" }, { label: "Recursos" }]} count={q.data?.length} actions={canEdit && <Button size="sm" variant="primary" icon="add" onClick={() => setForm({ resource: null })} className="max-md:hidden">Novo recurso</Button>} />
       <Toolbar>
-        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar recurso…" />
+        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar recurso…" className="max-md:w-44 max-md:shrink-0" />
         <FilterSelect label="Categoria" value={f.categoria} options={resourceCategoryOptions} onChange={(v) => setF({ categoria: v })} />
         <ClearFiltersButton show={!!(f.q || f.categoria)} onClick={() => setF({ q: "", categoria: "" })} />
       </Toolbar>

@@ -81,7 +81,7 @@ function Content() {
             </div>
           )}
           {vista === "sprint" && current && <SprintStatusBadge status={current.status} />}
-          <SearchInput value={url.q} onChange={(v) => setUrl({ q: v })} placeholder="Buscar tarefa…" />
+          <SearchInput value={url.q} onChange={(v) => setUrl({ q: v })} placeholder="Buscar tarefa…" className="max-md:w-44 max-md:shrink-0" />
           <ClearFiltersButton show={!!url.q} onClick={() => setUrl({ q: "" })} />
         </Toolbar>
       )}

@@ -71,6 +71,7 @@ function Content() {
       id: "mfa",
       header: "2FA",
       hideBelow: "lg",
+      mobile: "hidden",
       align: "center",
       cell: (u) => (u.mfaEnabled ? <span className="inline-flex items-center gap-1 text-success"><Icon name="shield" size="sm" label="2FA ativo" /></span> : <span className="text-fg-placeholder" aria-label="2FA desligado">—</span>),
     },
@@ -115,7 +116,7 @@ function Content() {
       )}
       {aba === "usuarios" && (
         <Toolbar>
-          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar por nome ou e-mail…" />
+          <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar por nome ou e-mail…" className="max-md:w-52 max-md:shrink-0" />
           <FilterSelect label="Perfil" value={f.perfil} options={INVITABLE_ROLES.map((r) => ({ value: r as Role, label: ROLE_LABEL[r] }))} onChange={(v) => setF({ perfil: v })} />
           <FilterSelect label="Status" value={f.status} options={(Object.keys(STATUS) as UserStatus[]).map((s) => ({ value: s, label: STATUS[s].label }))} onChange={(v) => setF({ status: v })} />
           <ClearFiltersButton show={!!(f.q || f.perfil || f.status)} onClick={() => setF({ q: "", perfil: "", status: "" })} />

@@ -126,7 +126,7 @@ function Content() {
         </div>
       )}
       <Toolbar>
-        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar documento…" />
+        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar documento…" className="max-md:w-44 max-md:shrink-0" />
         <FilterSelect label="Categoria" value={f.categoria} options={documentCategoryOptions} onChange={(v) => setF({ categoria: v })} />
         <FilterSelect label="Validade" value={f.validade} options={STATE_OPTIONS} onChange={(v) => setF({ validade: v })} />
         <ClearFiltersButton show={!!(f.q || f.categoria || f.validade)} onClick={() => setF({ q: "", categoria: "", validade: "" })} />

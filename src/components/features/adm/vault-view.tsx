@@ -138,7 +138,7 @@ function Content() {
         </Callout>
       </div>
       <Toolbar>
-        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar item…" />
+        <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar item…" className="max-md:w-44 max-md:shrink-0" />
       </Toolbar>
       <PageBody padded={false}>
         <DataTable
