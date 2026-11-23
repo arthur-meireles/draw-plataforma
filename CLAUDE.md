@@ -133,7 +133,11 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 | 768–1279 (`md`–`lg`) | Rail + painel em gaveta; kanban com rolagem horizontal; prontuário em uma coluna |
 | < 768 | Barra inferior; **lista no lugar do kanban** por padrão; diálogos em tela cheia; ação principal em `Fab` |
 
-- Alvos de toque ≥ 44 px no celular (os componentes do kit já fazem isso com `max-md:`).
+- Alvos de toque ≥ 44 px no celular: controle visualmente pequeno (pílula, ícone, checkbox, switch) usa a
+  utilidade `touch-target` (área invisível de 44 px em telas de toque) — já aplicada nos componentes do kit.
+- Cartões de KPI (`Stat`) reduzem o valor por container query; cabeçalhos de `Section` quebram as ações só
+  quando falta espaço; `Callout` leva a ação para linha própria no celular; `DataTable` no celular mostra o
+  rótulo das colunas numéricas (`mobileLabel`).
 - Nada depende de hover. Tabelas viram cartões (`DataTable` já faz). Safe areas respeitadas
   (`pt-safe`/`pb-safe`). Conteúdo rolável deixa espaço para a barra inferior (`PageBody` já faz).
 - Testar em 360 px, 768 px, 1280 px e 1440 px.

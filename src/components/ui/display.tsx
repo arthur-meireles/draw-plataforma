@@ -38,7 +38,7 @@ export function Badge({ tone = "neutral", icon, dot, children, className, size =
 export const Pill = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName; leading?: React.ReactNode; tone?: "default" | "danger" | "warning" | "muted"; size?: "sm" | "md"; static?: boolean }>(
   function Pill({ icon, leading, tone = "default", size = "md", children, className, static: isStatic, ...props }, ref) {
     const cls = cn(
-      "inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-line bg-layer-2 text-xs text-fg-muted transition-colors",
+      "touch-target inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-line bg-layer-2 text-xs text-fg-muted transition-colors",
       size === "sm" ? "h-5 px-1" : "h-6 px-1.5 max-md:h-7",
       !isStatic && "hover:border-line-strong hover:bg-layer-hover cursor-pointer",
       tone === "danger" && "text-danger",
@@ -145,11 +145,11 @@ export function Section({ title, description, actions, children, className, body
     <section className={cn("rounded-xl border border-line bg-surface", className)}>
       <header className="flex min-h-11 flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {icon && <Icon name={icon} size="sm" className="text-fg-subtle" />}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[min(100%,13rem)] flex-1">
           <h2 className="font-display text-sm font-bold text-fg">{title}</h2>
           {description && <p className="text-xs text-fg-subtle">{description}</p>}
         </div>
-        {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-1.5">{actions}</div>}
       </header>
       <div className={cn("p-4", bodyClassName)}>{children}</div>
     </section>
@@ -160,7 +160,7 @@ export function Section({ title, description, actions, children, className, body
 export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loading }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: IconName; tone?: Tone; trend?: { value: string; up: boolean; good?: boolean }; href?: string; onClick?: () => void; loading?: boolean }) {
   const Comp = href ? Link : onClick ? "button" : "div";
   return (
-    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-left", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
+    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("@container flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-left max-sm:p-3", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
       <div className="flex items-center gap-2 text-xs font-medium text-fg-subtle">
         {icon && (
           <span className={cn("flex size-6 items-center justify-center rounded-md", tone ? toneClasses[tone] : "bg-layer text-fg-muted")}>
@@ -169,7 +169,7 @@ export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loa
         )}
         <span className="truncate">{label}</span>
       </div>
-      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate font-display text-xl font-bold tabular-nums text-fg">{value}</div>}
+      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate font-display text-xl font-bold tabular-nums text-fg @max-[12rem]:text-md @max-[9rem]:text-base">{value}</div>}
       {(hint || trend) && (
         <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
           {trend && (

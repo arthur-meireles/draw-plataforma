@@ -28,7 +28,7 @@ export function MyTasksView() {
     <>
       <PageHeader crumbs={[{ label: "Minhas tarefas", icon: "myTasks" }]} count={q.data ? open : undefined} actions={
           <>
-            {overdue > 0 && <Badge tone="danger" dot>{plural(overdue, "atrasada", "atrasadas")}</Badge>}
+            {overdue > 0 && <Badge tone="danger" dot className="max-sm:hidden">{plural(overdue, "atrasada", "atrasadas")}</Badge>}
             <ViewSwitcher value={view} onChange={setView} views={TASK_VIEW_OPTIONS} />
           </>
         }

@@ -19,8 +19,8 @@ export const buttonVariants = cva(
         link: "text-accent hover:underline underline-offset-2 !px-0 h-auto !rounded-none",
       },
       size: {
-        xs: "h-6 px-2.5 text-xs rounded-full",
-        sm: "h-7 px-3 text-xs rounded-full",
+        xs: "touch-target h-6 px-2.5 text-xs rounded-full",
+        sm: "touch-target h-7 px-3 text-xs rounded-full max-md:h-8",
         md: "h-8 px-3.5 text-sm rounded-full",
         lg: "h-10 px-5 text-base rounded-full max-md:h-11",
       },
@@ -67,7 +67,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 });
 
 const iconButtonVariants = cva(
-  "inline-flex items-center justify-center shrink-0 transition-[background-color,color] duration-150 disabled:pointer-events-none disabled:opacity-50 text-fg-subtle hover:text-fg",
+  "touch-target inline-flex items-center justify-center shrink-0 transition-[background-color,color] duration-150 disabled:pointer-events-none disabled:opacity-50 text-fg-subtle hover:text-fg",
   {
     variants: {
       variant: {

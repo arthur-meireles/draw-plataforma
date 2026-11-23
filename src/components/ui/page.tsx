@@ -73,7 +73,7 @@ export function Toolbar({ children, className, end }: { children: React.ReactNod
 export function FilterChip({ label, value, icon, onClear, active, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; value?: string | null; icon?: IconName; onClear?: () => void; active?: boolean }) {
   const isActive = active ?? !!value;
   return (
-    <span className={cn("inline-flex h-7 shrink-0 items-center rounded-md border text-xs transition-colors max-md:h-9", isActive ? "border-accent-line bg-accent-subtle text-accent" : "border-dashed border-line-strong text-fg-subtle hover:border-solid hover:bg-layer-hover hover:text-fg")}>
+    <span className={cn("inline-flex h-7 shrink-0 items-center rounded-md border text-xs transition-colors max-md:h-10", isActive ? "border-accent-line bg-accent-subtle text-accent" : "border-dashed border-line-strong text-fg-subtle hover:border-solid hover:bg-layer-hover hover:text-fg")}>
       <button type="button" className="flex h-full items-center gap-1.5 px-2" {...props}>
         {icon && <Icon name={icon} size="xs" />}
         <span>{label}</span>

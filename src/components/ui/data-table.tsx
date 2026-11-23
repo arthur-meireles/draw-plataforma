@@ -23,6 +23,8 @@ export interface Column<T> {
   hideBelow?: "md" | "lg" | "xl";
   /** Destaque no cartão mobile: "title" | "subtitle" | "meta" (padrão) | "hidden". */
   mobile?: "title" | "subtitle" | "meta" | "trailing" | "hidden";
+  /** No cartão mobile, prefixa o valor com o cabeçalho (padrão: colunas numéricas, `align: "right"`). */
+  mobileLabel?: boolean;
   className?: string;
 }
 
@@ -199,6 +201,7 @@ export function DataTable<T>({ rows, columns, getRowId, isLoading, error, onRetr
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-fg-subtle">
                       {mobileMeta.map((c) => (
                         <span key={c.id} className="inline-flex items-center gap-1">
+                          {typeof c.header === "string" && (c.mobileLabel ?? c.align === "right") && <span className="text-fg-placeholder">{c.header}:</span>}
                           {c.cell(row)}
                         </span>
                       ))}

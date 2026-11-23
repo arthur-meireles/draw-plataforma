@@ -291,3 +291,20 @@
 @utility bg-brand-gradient {
   background-image: var(--brand-gradient);
 }
+
+/* Área de toque mínima de 44px em telas de toque, sem mudar o visual (Lei 7).
+   Aplicada pelos componentes do kit em controles pequenos (pílulas, ícones, checkbox, switch). */
+@utility touch-target {
+  position: relative;
+  @media (pointer: coarse) {
+    &::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}
