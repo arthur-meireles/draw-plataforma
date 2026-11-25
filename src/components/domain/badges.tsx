@@ -1,5 +1,6 @@
 "use client";
 /** Indicadores visuais de domínio: etapa, prioridade, status, prazo, tipo de projeto, dinheiro. */
+import { useEffect, useRef, useState } from "react";
 import { Badge, Combobox, Icon, Pill, Tooltip, type Option, type Tone } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { stageCategoryColor, priorityColor } from "@/design/tokens";
@@ -112,7 +113,7 @@ export const priorityOptions: Option<PriorityKey>[] = PRIORITIES.map((p) => ({ v
 export function PriorityPill({ value, onChange, showLabel = true, size = "md" }: { value: PriorityKey; onChange?: (v: PriorityKey) => void; showLabel?: boolean; size?: "sm" | "md" }) {
   const label = priorityRef(value).label;
   const pill = (
-    <Pill size={size} static={!onChange} leading={<PriorityIcon priority={value} size={12} />} aria-label={`Prioridade: ${label}`}>
+    <Pill size={size} static={!onChange} pulseKey={value} leading={<PriorityIcon priority={value} size={12} />} aria-label={`Prioridade: ${label}`}>
       {showLabel ? label : undefined}
     </Pill>
   );
@@ -127,10 +128,60 @@ export function TaskStatusIcon({ status, size = 14 }: { status: TaskStatusKey; s
 }
 export const taskStatusOptions: Option<TaskStatusKey>[] = TASK_STATUSES.map((s) => ({ value: s.key, label: s.label, leading: <TaskStatusIcon status={s.key} /> }));
 
+/**
+ * Círculo clicável que conclui/reabre a tarefa. Ao concluir: o círculo se preenche, o ✓ se desenha e um anel fino
+ * com o gradiente da marca se expande e some. Reabrir reverte rápido. `done` deve vir já otimista do pai.
+ */
+export function TaskCheck({ status, done, onToggle, disabled, size = 15, className }: { status: TaskStatusKey; done: boolean; onToggle: () => void; disabled?: boolean; size?: number; className?: string }) {
+  const first = useRef(true);
+  const [burst, setBurst] = useState(0);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (done) setBurst((b) => b + 1);
+  }, [done]);
+  const c = size / 2;
+  return (
+    <button
+      type="button"
+      aria-label={done ? "Reabrir tarefa" : "Concluir tarefa"}
+      aria-pressed={done}
+      disabled={disabled}
+      data-done={done || undefined}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={cn("touch-target relative flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-layer-active disabled:pointer-events-none max-md:size-8", className)}
+    >
+      <span className={cn("flex transition-opacity duration-150", done && "opacity-0")}>
+        <TaskStatusIcon status={status === "concluida" ? "a_fazer" : status} size={size} />
+      </span>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="pointer-events-none absolute">
+        <circle className="motion-check-circle" cx={c} cy={c} r={c - 0.5} fill={stageCategoryColor.done} />
+        <path className="motion-check-path" pathLength={1} d={`M${size * 0.3} ${size * 0.52} L${size * 0.44} ${size * 0.66} L${size * 0.7} ${size * 0.38}`} stroke="white" strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {burst > 0 && done && <span key={burst} aria-hidden className="motion-burst m-auto size-[calc(100%-4px)]" />}
+    </button>
+  );
+}
+
+/** Título que se risca com um traço desenhado (e esmaece) quando `done`. `multiline`: risco estático + esmaecer (títulos que quebram linha). */
+export function DoneTitle({ done, children, className, multiline }: { done: boolean; children: React.ReactNode; className?: string; multiline?: boolean }) {
+  if (multiline) return <span className={cn("transition-opacity duration-200", done && "text-fg-subtle line-through opacity-60", className)}>{children}</span>;
+  return (
+    <span className={cn("motion-strike", done && "text-fg-subtle", className)} data-done={done || undefined}>
+      {children}
+    </span>
+  );
+}
+
 export function TaskStatusPill({ value, onChange, size = "md", showLabel = true }: { value: TaskStatusKey; onChange?: (v: TaskStatusKey) => void; size?: "sm" | "md"; showLabel?: boolean }) {
   const label = taskStatus(value).label;
   const pill = (
-    <Pill size={size} static={!onChange} leading={<TaskStatusIcon status={value} size={12} />} aria-label={`Status: ${label}`}>
+    <Pill size={size} static={!onChange} pulseKey={value} leading={<TaskStatusIcon status={value} size={12} />} aria-label={`Status: ${label}`}>
       {showLabel ? label : undefined}
     </Pill>
   );
@@ -140,26 +191,26 @@ export function TaskStatusPill({ value, onChange, size = "md", showLabel = true 
 
 /* ───────── Status (badges) ───────── */
 const projectStatusTone: Record<ProjectStatus, Tone> = { cotacao: "violet", ativo: "info", concluido: "success", arquivado: "neutral", perdido: "danger", cancelado: "neutral" };
-export const ProjectStatusBadge = ({ status }: { status: ProjectStatus }) => <Badge tone={projectStatusTone[status]} dot>{PROJECT_STATUS_LABEL[status]}</Badge>;
+export const ProjectStatusBadge = ({ status }: { status: ProjectStatus }) => <Badge tone={projectStatusTone[status]} pulseKey={status} dot>{PROJECT_STATUS_LABEL[status]}</Badge>;
 
 const receivableTone: Record<ReceivableStatus, Tone> = { previsto: "neutral", faturado: "info", recebido: "success", vencido: "danger", cancelado: "neutral" };
-export const ReceivableStatusBadge = ({ status }: { status: ReceivableStatus }) => <Badge tone={receivableTone[status]} dot>{RECEIVABLE_STATUS_LABEL[status]}</Badge>;
+export const ReceivableStatusBadge = ({ status }: { status: ReceivableStatus }) => <Badge tone={receivableTone[status]} pulseKey={status} dot>{RECEIVABLE_STATUS_LABEL[status]}</Badge>;
 
 const payableTone: Record<PayableStatus, Tone> = { aguardando_nf: "warning", em_conferencia: "info", divergente: "danger", aprovado: "accent", pago: "success" };
-export const PayableStatusBadge = ({ status }: { status: PayableStatus }) => <Badge tone={payableTone[status]} dot>{PAYABLE_STATUS_LABEL[status]}</Badge>;
+export const PayableStatusBadge = ({ status }: { status: PayableStatus }) => <Badge tone={payableTone[status]} pulseKey={status} dot>{PAYABLE_STATUS_LABEL[status]}</Badge>;
 
 const proposalTone: Record<ProposalStatus, Tone> = { rascunho: "neutral", enviada: "info", aprovada: "success", recusada: "danger" };
-export const ProposalStatusBadge = ({ status }: { status: ProposalStatus }) => <Badge tone={proposalTone[status]}>{PROPOSAL_STATUS_LABEL[status]}</Badge>;
+export const ProposalStatusBadge = ({ status }: { status: ProposalStatus }) => <Badge tone={proposalTone[status]} pulseKey={status}>{PROPOSAL_STATUS_LABEL[status]}</Badge>;
 
 const approvalTone: Record<ApprovalDecision, Tone> = { pendente: "warning", aprovado: "success", ajustes: "orange", negado: "danger" };
-export const ApprovalBadge = ({ decision }: { decision: ApprovalDecision }) => <Badge tone={approvalTone[decision]} dot>{APPROVAL_DECISION_LABEL[decision]}</Badge>;
+export const ApprovalBadge = ({ decision }: { decision: ApprovalDecision }) => <Badge tone={approvalTone[decision]} pulseKey={decision} dot>{APPROVAL_DECISION_LABEL[decision]}</Badge>;
 
 const billingLabel = { sem_faturamento: null, a_faturar: "A faturar", parcial: "Faturado parcial", faturado: "Faturado", recebido: "Recebido" } as const;
 const billingTone = { a_faturar: "neutral", parcial: "info", faturado: "info", recebido: "success" } as const;
 export function BillingBadge({ status }: { status: keyof typeof billingLabel }) {
   if (status === "sem_faturamento") return null;
   return (
-    <Badge tone={billingTone[status]} icon="receivable" size="xs">
+    <Badge tone={billingTone[status]} icon="receivable" size="xs" pulseKey={status}>
       {billingLabel[status]}
     </Badge>
   );

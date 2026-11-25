@@ -2,13 +2,14 @@
 /** Linha do tempo de eventos (RF-X-02) e conversa de comentários com menções. */
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Avatar, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, type IconName } from "@/components/ui";
+import { Avatar, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
 import { useApiMutation, useApiQuery, useInternalPeople } from "@/data/hooks";
 import { commentsApi, eventsApi } from "@/data/services";
 import { APPROVAL_DECISION_LABEL, PAYABLE_STATUS_LABEL, projectStage, quoteStage, taskStatus } from "@/data/reference";
 import type { ID, ProjectStageKey, QuoteStageKey, TaskStatusKey } from "@/data/types";
 import { dateTime, money, relative } from "@/lib/format";
 import { usePermissions } from "@/components/layout/session";
+import { cn } from "@/lib/cn";
 
 type EventRow = Awaited<ReturnType<typeof eventsApi.list>>[number];
 
@@ -184,7 +185,12 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
   const mentionQuery = useMemo(() => /@([\wÀ-ú]*)$/.exec(body)?.[1] ?? null, [body]);
   const suggestions = mentionQuery !== null ? (people.data ?? []).filter((p) => p.name.toLowerCase().includes(mentionQuery.toLowerCase()) && p.id !== user.id).slice(0, 5) : [];
 
-  const create = useApiMutation(commentsApi.create, { onSuccess: () => setBody(""), onError: (e) => setError(e.fieldErrors?.body ?? e.message) });
+  const sent = useSuccessFlash();
+  const enter = useEntrance();
+  const create = useApiMutation(commentsApi.create, { onSuccess: () => {
+      setBody("");
+      sent.flash();
+    }, onError: (e) => setError(e.fieldErrors?.body ?? e.message) });
   const remove = useApiMutation(commentsApi.remove, { success: "Comentário excluído" });
 
   const submit = () => {
@@ -199,12 +205,21 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
 
   return (
     <div className="space-y-4">
-      {q.isLoading && <Skeleton className="h-16" />}
+      {q.isLoading && (
+        <div className="space-y-3" aria-hidden>
+          {[0, 1].map((i) => (
+            <div key={i} className="flex gap-3">
+              <Skeleton className="size-8 rounded-full" />
+              <Skeleton className="h-16 flex-1 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      )}
       {q.error && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
       {q.data && !q.data.length && <p className="text-sm text-fg-subtle">Nenhum comentário ainda. Comece a conversa abaixo.</p>}
       <ul className="space-y-3">
         {q.data?.map((c) => (
-          <li key={c.id} className="flex gap-3">
+          <li key={c.id} {...enter(c.id)} className={cn("flex gap-3", enter(c.id).className)}>
             <Avatar name={c.authorName} color={c.authorColor} size="lg" />
             <div className="min-w-0 flex-1 rounded-xl border border-line bg-layer-2 px-3 py-2 shadow-raised">
               <div className="mb-0.5 flex items-center gap-2">
@@ -247,7 +262,7 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
             </ul>
           )}
           <div className="absolute bottom-2 right-2">
-            <Button size="sm" variant="primary" icon="send" loading={create.isPending} onClick={submit}>
+            <Button size="sm" variant="primary" icon="send" loading={create.isPending} success={sent.success} successLabel="Enviado" onClick={submit}>
               Enviar
             </Button>
           </div>

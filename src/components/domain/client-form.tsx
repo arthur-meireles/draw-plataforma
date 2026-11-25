@@ -1,7 +1,7 @@
 "use client";
 /** Formulário de cliente (criar/editar) — usado na listagem, na ficha e no cadastro rápido do projeto. */
 import { useEffect, useState } from "react";
-import { Button, Dialog, SelectField, TextField, TextareaField, type Option } from "@/components/ui";
+import { Button, Dialog, SelectField, TextField, TextareaField, type Option, useSuccessFlash } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { clientsApi, type ClientInput } from "@/data/services";
 import type { Client } from "@/data/types";
@@ -36,12 +36,14 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
     }
   }, [open, client]);
 
+  const saved = useSuccessFlash();
   const save = useApiMutation((input: ClientInput) => (client ? clientsApi.update(client.id, input) : clientsApi.create(input)), {
     success: client ? "Cliente atualizado" : "Cliente cadastrado",
-    onSuccess: (c) => {
-      onSaved?.(c);
-      onOpenChange(false);
-    },
+    onSuccess: (c) =>
+      saved.flash(() => {
+        onSaved?.(c);
+        onOpenChange(false);
+      }),
     onError: (e) => {
       if (e.fieldErrors) {
         setErrors(e.fieldErrors);
@@ -82,7 +84,7 @@ export function ClientFormDialog({ open, onOpenChange, client, onSaved }: { open
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button variant="primary" loading={save.isPending} onClick={submit}>
+          <Button variant="primary" loading={save.isPending} success={saved.success} successLabel={client ? "Salvo" : "Cadastrado"} onClick={submit}>
             {client ? "Salvar cliente" : "Cadastrar cliente"}
           </Button>
         </>

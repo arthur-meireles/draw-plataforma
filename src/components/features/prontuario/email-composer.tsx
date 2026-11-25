@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Badge, Button, Dialog, Field, Icon, IconButton, Input, MultiCombobox, SelectField, TextField, TextareaField, type Option } from "@/components/ui";
+import { Badge, Button, Dialog, Field, Icon, IconButton, Input, MultiCombobox, SelectField, TextField, TextareaField, useSuccessFlash, type Option } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { filesApi, projectMailApi, type MailTemplateKey } from "@/data/services";
 import type { ID } from "@/data/types";
@@ -112,9 +112,10 @@ export function EmailComposer({ project, onClose }: { project: ProjectDetail; on
     }
   };
 
+  const sent = useSuccessFlash();
   const send = useApiMutation(() => projectMailApi.send(project.id, { to, cc, subject, body, attachments: Object.values(attached), template }), {
     success: "E-mail enviado e registrado no projeto",
-    onSuccess: onClose,
+    onSuccess: () => sent.flash(onClose),
     onError: (e) => e.fieldErrors && setErrors(e.fieldErrors),
   });
 
@@ -142,7 +143,7 @@ export function EmailComposer({ project, onClose }: { project: ProjectDetail; on
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={send.isPending}>Cancelar</Button>
-          <Button variant="primary" icon="send" loading={send.isPending} onClick={submit}>Enviar e-mail</Button>
+          <Button variant="primary" icon="send" loading={send.isPending} success={sent.success} successLabel="Enviado" onClick={submit}>Enviar e-mail</Button>
         </>
       }
     >

@@ -1,7 +1,7 @@
 "use client";
 /** Cadastro/edição de freelancer (RF-M2-03). Dados fiscais e bancários só para quem tem acesso. */
 import { useEffect, useState } from "react";
-import { Button, Dialog, Icon, MultiSelectField, SelectField, TextField, TextareaField } from "@/components/ui";
+import { Button, Dialog, Icon, MultiSelectField, SelectField, TextField, TextareaField, useSuccessFlash } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { freelancersApi, type FreelancerInput } from "@/data/services";
@@ -44,6 +44,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
   }, [open, freelancer]);
 
   const focusFirst = (errs: Record<string, string>) => document.getElementById(`fl-${Object.keys(errs)[0]}`)?.focus();
+  const saved = useSuccessFlash();
   const save = useApiMutation(
     (input: FreelancerInput) => {
       const clean: FreelancerInput = { ...input, name: input.name.trim(), email: input.email.trim(), phone: input.phone || null, legalName: input.legalName?.trim() || null, document: input.document || null, pixKey: input.pixKey?.trim() || null, bankName: input.bankName?.trim() || null, bankAgency: input.bankAgency?.trim() || null, bankAccount: input.bankAccount?.trim() || null, notes: input.notes?.trim() || null };
@@ -51,7 +52,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
     },
     {
       success: freelancer ? "Freelancer atualizado" : "Freelancer cadastrado",
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => saved.flash(() => onOpenChange(false)),
       onError: (e) => {
         if (e.fieldErrors) {
           setErrors(e.fieldErrors);
@@ -90,7 +91,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button variant="primary" loading={save.isPending} onClick={submit}>
+          <Button variant="primary" loading={save.isPending} success={saved.success} successLabel={freelancer ? "Salvo" : "Cadastrado"} onClick={submit}>
             {freelancer ? "Salvar freelancer" : "Cadastrar freelancer"}
           </Button>
         </>

@@ -5,7 +5,7 @@
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing } from "@/components/ui";
+import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing, useEntrance } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
@@ -13,7 +13,7 @@ import type { AdmArea, ID, PriorityKey, TaskStatusKey } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
 import { ADM_AREAS, projectStage, quoteStage } from "@/data/reference";
 import { AssigneePill, type PersonRef } from "./pickers";
-import { DueChip, PriorityPill, ProjectCode, TaskStatusIcon, TaskStatusPill } from "./badges";
+import { DoneTitle, DueChip, PriorityPill, ProjectCode, TaskCheck, TaskStatusIcon, TaskStatusPill } from "./badges";
 import { CommentThread, EventTimeline } from "./timeline";
 
 const personOf = (t: Pick<TaskView, "assigneeUserId" | "assigneeFreelancerId">): PersonRef | null => (t.assigneeUserId ? { kind: "user", id: t.assigneeUserId } : t.assigneeFreelancerId ? { kind: "freelancer", id: t.assigneeFreelancerId } : null);
@@ -28,32 +28,32 @@ export function useTaskUpdate() {
 }
 
 /** Linha de tarefa estilo Plane: status clicável, título, propriedades à direita. */
-export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readOnly }: { task: TaskView; onOpen?: (t: TaskView) => void; showProject?: boolean; restrictAssignees?: PersonRef[]; readOnly?: boolean }) {
+export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readOnly, className, style }: { task: TaskView; onOpen?: (t: TaskView) => void; showProject?: boolean; restrictAssignees?: PersonRef[]; readOnly?: boolean; className?: string; style?: React.CSSProperties }) {
   const update = useTaskUpdate();
-  const done = t.statusKey === "concluida";
+  // conclusão otimista: o círculo responde na hora; volta se a API recusar
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  useEffect(() => setOptimistic(null), [t.statusKey]);
+  const done = optimistic ?? t.statusKey === "concluida";
+  const toggleDone = () => {
+    const next = !done;
+    setOptimistic(next);
+    update.mutate({ id: t.id, patch: { statusKey: next ? "concluida" : "a_fazer" } }, { onError: () => setOptimistic(null) });
+  };
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => onOpen?.(t)}
       onKeyDown={(e) => e.key === "Enter" && onOpen?.(t)}
-      className="group flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-line px-4 py-2 last:border-0 hover:bg-layer-hover/60 max-md:flex-wrap max-md:py-3"
+      style={style}
+      className={cn("group flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-line px-4 py-2 last:border-0 hover:bg-layer-hover/60 max-md:flex-wrap max-md:py-3", className)}
     >
-      <button
-        type="button"
-        aria-label={done ? "Reabrir tarefa" : "Concluir tarefa"}
-        disabled={readOnly}
-        onClick={(e) => {
-          e.stopPropagation();
-          update.mutate({ id: t.id, patch: { statusKey: done ? "a_fazer" : "concluida" } });
-        }}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-layer-active max-md:size-8"
-      >
-        <TaskStatusIcon status={t.statusKey} size={15} />
-      </button>
+      <TaskCheck status={t.statusKey} done={done} disabled={readOnly} onToggle={toggleDone} />
       {showProject && t.projectCode && <ProjectCode code={t.projectCode} className="w-16 max-md:hidden" />}
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-sm text-fg", done && "text-fg-subtle line-through")}>{t.title}</span>
+        <span className="block truncate text-sm text-fg">
+          <DoneTitle done={done}>{t.title}</DoneTitle>
+        </span>
         {showProject && (
           <span className="block truncate text-xs text-fg-subtle">
             {t.projectCode ? (
@@ -143,6 +143,7 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
   empty?: React.ComponentProps<typeof EmptyState>;
   readOnly?: boolean;
 }) {
+  const enter = useEntrance();
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
   if (isLoading || !tasks)
     return (
@@ -219,7 +220,7 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
             </header>
           )}
           {g.items.map((t) => (
-            <TaskRow key={t.id} task={t} onOpen={onOpen} showProject={showProject} restrictAssignees={restrictAssignees} readOnly={readOnly} />
+            <TaskRow key={t.id} task={t} onOpen={onOpen} showProject={showProject} restrictAssignees={restrictAssignees} readOnly={readOnly} {...enter(t.id)} />
           ))}
           {quickAdd && groupBy === "stage" && <TaskQuickAdd {...quickAdd} stageKey={g.key === "sem" ? null : g.key} />}
         </section>
