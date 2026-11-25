@@ -118,8 +118,7 @@ export function UserMenu({ compact }: { compact?: boolean }) {
   const { clearUserCaches } = usePwa();
   const [switcher, setSwitcher] = useState(false);
   const items: MenuItem[] = [
-    { label: "Minha conta e e-mail", icon: "account", onSelect: () => router.push("/minha-conta/email"), hidden: user.role === "freelancer" },
-    { label: "Preferências de notificação", icon: "notification", onSelect: () => router.push("/configuracoes/preferencias") },
+    { label: "Preferências e notificações", icon: "notification", onSelect: () => router.push("/configuracoes/preferencias") },
     { label: theme === "dark" ? "Tema claro" : "Tema escuro", icon: theme === "dark" ? "themeLight" : "themeDark", onSelect: () => setTheme(theme === "dark" ? "light" : "dark"), separatorBefore: true },
     { label: "Usar tema do sistema", icon: "themeSystem", onSelect: () => setTheme("system"), hidden: theme === "system" },
     { label: "Trocar perfil (demonstração)", icon: "team", onSelect: () => setSwitcher(true), separatorBefore: true },

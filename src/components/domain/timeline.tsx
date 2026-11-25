@@ -111,8 +111,6 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "payment", text: <>registrou pagamento de {b(money(d.amountCents as number))}</> };
     case "payable.divergent":
       return { icon: "warning", text: <>marcou NF como divergente</> };
-    case "email.sent":
-      return { icon: "emailSent", text: <>enviou e-mail: {b(String(d.subject))}</> };
     default:
       return { icon: "history", text: <>{e.type}</> };
   }

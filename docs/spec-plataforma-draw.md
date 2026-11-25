@@ -22,6 +22,8 @@
 > **Mudança da 0.5:** visualizações de tarefas em todos os lugares que listam tarefas — lista, kanban, calendário e Gantt (RF-X-06, RF-M4-17, RF-M6-06).
 >
 > **Mudança da 0.6:** qualidade percebida — micro-interações discretas (mudança de status, concluir tarefa, arrastar no kanban, confirmação de envio, entrada de listas, números e transição de página) e *skeletons* estruturais em todas as telas (seção 10.5). Sem impacto em modelo, regras ou contrato da API.
+
+> **Mudança da 0.7:** **não há e-mail interno.** Saem do escopo: conectar a caixa do usuário (Gmail/SMTP), assinatura, aba **E-mails** do projeto e envio de e-mail pelo projeto (antigos RF-M11-02 a 07, RNF-14, ADR-009, tabelas `mail_accounts`, `mail_signatures`, `project_emails`) e notificações por e-mail/resumo diário (RF-M10-02/03). A **Caixa de entrada** é só dentro do sistema: menções (sempre entregues), comentários e eventos ligados a você, e o que interessa ao administrador. Ficam apenas os e-mails **transacionais** para pessoas de fora: convite, recuperação de senha e pedido de NF ao freelancer (RF-M11-01).
 ---
 
 ## 0. Como usar este documento
@@ -256,14 +258,11 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 |---|---|
 | `events` | `entity_type`, `entity_id`, `project_id`, `client_id` (desnormalizados para consulta), `actor_id`, `type` (ex.: `project.stage_changed`), `data jsonb` (antes/depois), `occurred_at`. **Append-only.** |
 | `notifications` | `user_id`, `type`, `project_id`, `entity_type`, `entity_id`, `title`, `read_at` |
-| `notification_preferences` | `user_id`, `type`, `channel`, `enabled` |
+| `notification_preferences` | `user_id`, `type`, `enabled` (só no app — Caixa de entrada; `mencao` não pode ser desligada) |
 | `imports` | `kind`, `source_file_id`, `status`, `mapping jsonb`, `report jsonb`, `dry_run` |
-| `email_logs` | `channel` (`system`/`user`), `provider` (`brevo`/`resend`/`draw_smtp`/`gmail_api`/`user_smtp`), `user_id` (quando `user`), `project_id` (nulo para e-mails do sistema sem projeto), `provider_message_id`, `to`, `cc`, `subject`, `template`, `status` (`queued`/`sent`/`delivered`/`bounced`/`complained`/`failed`), `error`, `sent_at` |
+| `email_logs` | `channel` (`system` — só transacional para pessoas de fora), `provider` (`brevo`/`resend`/`draw_smtp`), `user_id`, `project_id` (nulo para e-mails do sistema sem projeto), `provider_message_id`, `to`, `cc`, `subject`, `template`, `status` (`queued`/`sent`/`delivered`/`bounced`/`complained`/`failed`), `error`, `sent_at` |
 | `email_provider_usage` | `provider`, `date`, `sent_count` (base do limite diário e do fallback) |
 | `system_mail_settings` | `transport` (`brevo_resend`/`draw_smtp`), `smtp_host`, `smtp_port`, `smtp_security`, `smtp_user`, `smtp_password` (cifrado), `from_name`, `from_address` — um registro por organização |
-| `mail_accounts` | `user_id`, `kind` (`gmail_oauth`/`smtp`), `address`, `display_name`, `oauth_refresh_token` (cifrado) ou `smtp_host`, `smtp_port`, `smtp_security`, `smtp_user`, `smtp_password` (cifrado), `status` (`connected`/`error`/`expired`), `last_checked_at` |
-| `mail_signatures` | `user_id`, `html`, `updated_at` |
-| `project_emails` | `project_id`, `email_log_id`, `sender_user_id`, `body_html`, `attachments` (lista de `file_version_id`) |
 
 ### 6.9 Integridade obrigatória (exemplos de `CHECK`/regras no banco)
 
@@ -319,7 +318,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-01 | **Criar projeto direto** (origem `direto`): cliente, tipo, título, valor contratado, parcelas a receber, equipe e prazo; entra como `ativo` e gera recebíveis (RN-02). | R1 |
 | RF-M4-02 | Projetos ativos por etapa fixa (`project_stages`) em **kanban** e **lista**; **calendário** e **Gantt** na R2. | R1 / R2 |
 | RF-M4-03 | Cartão do projeto: código, cliente, título, prioridade, prazo, equipe, progresso de subtarefas, atraso, status de aprovação e faturamento. | R1 |
-| RF-M4-04 | Página do projeto (prontuário), abas: Visão geral · Tarefas · Equipe · Arquivos · Comentários · Aprovações · Financeiro · E-mails (R2, M11) · Histórico. | R1 |
+| RF-M4-04 | Página do projeto (prontuário), abas: Visão geral · Tarefas · Equipe · Arquivos · Comentários · Aprovações · Financeiro · Histórico. | R1 |
 | RF-M4-05 | Ao ativar, gerar tarefas a partir do modelo do tipo de projeto, por etapa. | R1 |
 | RF-M4-06 | Tarefas e subtarefas com responsável (interno ou freelancer), prazo, prioridade, status, estimativa. | R1 |
 | RF-M4-07 | Prioridade manual por arrastar dentro da etapa. | R1 |
@@ -393,28 +392,17 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 
 | ID | Requisito | Release |
 |---|---|---|
-| RF-M10-01 | No app: atribuição, menção, prazo, atraso, aprovação, NF solicitada/recebida. | R1 |
-| RF-M10-02 | E-mail para os mesmos eventos, por preferência do usuário. | R1 |
-| RF-M10-03 | Resumo diário por e-mail (opcional). | R2 |
+| RF-M10-01 | Só no app (Caixa de entrada — **não há e-mail interno**): atribuição, menção (sempre entregue), prazo, atraso, aprovação, NF solicitada/recebida. Cada tipo, exceto menção, pode ser silenciado em Preferências. | R1 |
 
-### M11 — E-mail (bônus)
+### M11 — E-mail transacional do sistema
 
-Dois usos distintos, que não se misturam:
-
-- **E-mail do sistema** (notificações, convites, pedidos de NF): sai em nome da plataforma (ex.: `nao-responda@draw...`). Transporte padrão Brevo + Resend (RNF-12). O admin pode configurar o **SMTP próprio da Draw** como transporte principal, mantendo Brevo/Resend como reserva.
-- **E-mail do usuário** (falar com cliente e freelancer a partir do projeto): sai **da caixa de quem está logado**, com a assinatura dele, e fica registrado no projeto.
+Não há e-mail interno (decisão da 0.7): a comunicação da equipe acontece na plataforma (comentários, menções, Caixa de entrada). O sistema só envia e-mails **transacionais para pessoas de fora** — convite, recuperação de senha e pedido/lembrete de NF ao freelancer —, em nome da plataforma (ex.: `nao-responda@draw...`). Transporte padrão Brevo + Resend (RNF-12); o admin pode configurar o **SMTP próprio da Draw** como principal.
 
 | ID | Requisito | Release |
 |---|---|---|
 | RF-M11-01 | Tela de configuração de e-mail do sistema (admin): escolher transporte (Brevo/Resend padrão, ou SMTP próprio), host, porta, segurança (STARTTLS/SSL), usuário, senha (cifrada), remetente e botão "Enviar e-mail de teste". | R2 |
-| RF-M11-02 | Cada usuário interno conecta a própria caixa em "Minha conta → E-mail": **Conectar com Google** (OAuth, escopo de envio do Gmail) ou **SMTP genérico** (host, porta, usuário, senha de app). Status visível (conectada, erro, expirada) e botão de teste. | R2 |
-| RF-M11-03 | Escrever e-mail de dentro do projeto: destinatários sugeridos a partir dos contatos do cliente e da equipe; anexar arquivos do projeto (versão atual ou escolhida); modelos de e-mail (ex.: envio de proposta, entrega, pedido de aprovação). | R2 |
-| RF-M11-04 | Assinatura HTML por usuário, compatível com Gmail e Outlook (texto + logo hospedado, sem imagem única), resolvendo os e-mails "desconfigurados" de hoje. | R2 |
-| RF-M11-05 | Todo e-mail enviado pelo usuário fica no histórico do projeto (aba **E-mails** e linha do tempo), com remetente, destinatários, assunto, corpo, anexos (com versão) e data. Cópia também na pasta "Enviados" da caixa do usuário. | R2 |
-| RF-M11-06 | Freelancers não usam M11 (não conectam caixa); continuam recebendo e-mails do sistema. | R2 |
-| RF-M11-07 | Sem caixa conectada, a ação "Enviar e-mail" fica indisponível com orientação para conectar; nunca envia pelo transporte do sistema em nome do usuário. | R2 |
 
-Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (cliente de e-mail completo). Respostas do cliente chegam normalmente na caixa do usuário. Ver seção 19.2.
+Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas com cliente e freelancer seguem nos canais de cada pessoa; o registro do que importa fica no projeto (comentários, arquivos, aprovações).
 
 ### Transversais
 
@@ -510,7 +498,6 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 | `/freelancers`, `/freelancers/:id` | Ficha do freelancer |
 | `/painel` | Indicadores (abas: Visão geral, Comercial, Operação, Financeiro, Equipe, Burndown) |
 | `/configuracoes/usuarios`, `/configuracoes/tipos-de-projeto`, `/configuracoes/preferencias`, `/configuracoes/email` | Admin (inclui SMTP do sistema, RF-M11-01) |
-| `/minha-conta/email` | Conectar caixa, assinatura (RF-M11-02, RF-M11-04) |
 | `/nf/:token` | Formulário público de NF |
 | `/arquivos` | **Drive** (`?pasta=<id>`; pastas virtuais `cli:<id>` e `prj:<id>` em 01. Projetos) |
 | `/offline` | Página servida pelo service worker sem conexão |
@@ -538,7 +525,7 @@ infantilização). Só `transform`/`opacity`/`filter`; respeita `prefers-reduced
 | Status, prioridade ou etapa muda | Pílula/selo dá um "pop" (escala .92→1) com anel de destaque que se dissolve; contadores de filtro também |
 | Concluir tarefa | Círculo se preenche, ✓ se desenha, anel fino no gradiente da marca se expande e some; título se risca com traço desenhado (otimista — volta se a API recusar). Reabrir reverte rápido. A lista só se reorganiza ~0,7 s depois, sem atrasar a gravação; a tarefa que sai da lista (ex.: "Minhas tarefas") esmaece e recolhe em ~240 ms e os vizinhos sobem sem salto |
 | Arrastar no kanban | Cartão erguido (escala 1,03 + inclinação ≤ 1,5°, sombra profunda); coluna-alvo com borda em gradiente; lugar tracejado onde o cartão vai cair, inclusive entre colunas; ao soltar, assenta (220 ms) e pisca um anel uma vez |
-| Enviar/salvar | Botão mostra ✓ desenhado + "Enviado/Salvo" por ~1,2 s (comentário, e-mail do projeto, proposta salvar/enviar/aprovar, NF pública, upload, novo projeto, cliente, freelancer). Diálogos fecham logo após a confirmação |
+| Enviar/salvar | Botão mostra ✓ desenhado + "Enviado/Salvo" por ~1,2 s (comentário, proposta salvar/enviar/aprovar, NF pública, upload, novo projeto, cliente, freelancer). Diálogos fecham logo após a confirmação |
 | Upload | Arquivo em envio com barra indeterminada; concluído desliza com ✓; novo arquivo entra na lista |
 | Listas e cartões | Entrada escalonada (6 px, 30 ms, máx. 10 itens) só na montagem ou para itens novos — *refetch* não reanima |
 | Números | KPIs numéricos contam até o valor; barras de progresso crescem a partir de 0; contador de não lidas pulsa uma vez ao aumentar |
@@ -644,7 +631,6 @@ Todos calculados por SQL sobre os relacionamentos (P3), com *materialized views*
 | RNF-11 | Navegadores: duas últimas versões de Chrome, Edge, Safari e Firefox. |
 | RNF-12 | **E-mail por provedores externos, nos planos gratuitos** (o servidor não envia e-mail direto, para não expor o IP da VPS a listas de spam). `MailTransport` com dois adaptadores: **Brevo** (principal) e **Resend** (reserva). Regras: (a) contador diário de envios por provedor, persistido no banco; (b) ao atingir a cota gratuita do dia do Brevo, ou em erro 5xx/timeout, a fila envia pelo Resend; (c) se os dois estiverem na cota, o envio fica na fila para o dia seguinte e a gestão vê um aviso no painel; (d) reenvio com *backoff*; (e) notificações acumuladas de um mesmo usuário viram resumo. Prioridade na fila: convites e recuperação de senha > pedido de NF > notificações. Cotas configuradas por variável de ambiente **[confirmar cotas gratuitas atuais nos sites dos provedores]**. |
 | RNF-13 | Entregabilidade: domínio da Draw autenticado nos dois provedores (SPF com os dois `include`, DKIM de cada provedor, DMARC); remetente fixo no domínio da Draw; webhooks de entrega e devolução (*bounce*/*complaint*) dos dois provedores registrados em `email_logs` (provedor, mensagem, status, data). |
-| RNF-14 | **E-mail do usuário (M11):** credenciais (token OAuth ou senha SMTP) cifradas na aplicação, nunca expostas ao front; token renovado automaticamente e status "expirada" quando falhar; envio pela fila com limite por usuário abaixo do teto do provedor (Google Workspace: cerca de 2.000 mensagens/dia por usuário **[confirmar]**); remoção da conexão apaga as credenciais. |
 | RNF-15 | **Gmail via OAuth:** preferir a API do Gmail com escopo só de envio a SMTP com senha de app (o Google restringe acesso por senha). Se a Draw usa Google Workspace, registrar o app como **Interno** ao domínio: dispensa a verificação do Google. Se a caixa for Microsoft 365/Outlook, a autenticação SMTP básica tende a estar desativada: usar OAuth (Microsoft Graph) **[A DECIDIR conforme o provedor da Draw]**. |
 
 ---
@@ -687,7 +673,7 @@ Ordem de construção do front (com mocks): layout e autenticação → cadastro
 | ADR-005 | Fonte de CNPJ sem custo por uso | A decidir |
 | ADR-006 | Destino do backup externo | A decidir |
 | ADR-008 | Envio de e-mail do sistema | **Decidido:** Brevo (principal) + Resend (reserva), planos gratuitos; Amazon SES descartado por exigir cartão e não ser gratuito após 12 meses. SMTP próprio da Draw pode ser configurado como principal (RF-M11-01) |
-| ADR-009 | E-mail do usuário: API do Gmail (OAuth) × SMTP com senha de app | Recomendado: API do Gmail com app Interno ao domínio da Draw; SMTP genérico como alternativa. Confirmar provedor de e-mail da Draw |
+| ADR-009 | E-mail do usuário: API do Gmail (OAuth) × SMTP com senha de app | **Descartado na 0.7:** não haverá e-mail interno nem envio pela caixa do usuário |
 | ADR-010 | Login com Google (OAuth) | Opcional, sem custo; se entrar, app "Externo" (freelancers usam e-mail próprio) e login por e-mail/senha mantido |
 | ADR-007 | Etapas como tabela de referência × enum do Postgres | Recomendado: tabela de referência semeada (permite rótulo e ordem sem migração de tipo) |
 | ADR-011 | Framework do front | **Decidido:** Next.js 15 App Router (no lugar de Vite + TanStack Router), PWA com service worker próprio |
@@ -737,7 +723,6 @@ Tudo no próprio servidor (ou em planos gratuitos, como o e-mail), por regras pr
 | Calendário editorial de marketing com aprovação | novo módulo atrás de `feature_flags`, `approvals` |
 | Métricas de redes sociais | importadores, fila |
 | Google Agenda sincronizada e Meet por projeto (reuniões, horas e custo). API gratuita; escopo de agenda é "sensível" e exige verificação do Google (gratuita, dias a semanas) se o app for Externo, ou nenhuma se for Interno ao domínio | `events`, `project_members`, OAuth do M11 |
-| Caixa de entrada dentro do sistema (ler respostas e vinculá-las ao projeto). Leitura do Gmail é escopo "restrito": viável sem auditoria só com app Interno ao domínio | `mail_accounts`, `project_emails` (M11) |
 | Notificações push no celular | service worker do PWA já preparado para Web Push (10.6) |
 | Integração com emissor de NF / contabilidade | `receivables`, `payables` |
 | Webhooks e API pública | `events`, OpenAPI |

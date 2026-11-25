@@ -19,8 +19,7 @@ export type Resource =
   | "vault"
   | "metrics"
   | "commercial"
-  | "adm"
-  | "mail";
+  | "adm";
 
 /** T total · L leitura · P próprios/alocados · — sem acesso */
 export type Access = "T" | "L" | "P" | "-";
@@ -47,7 +46,6 @@ const MATRIX: Record<Resource, Record<Role, Access>> = {
   metrics: { admin: "T", gestao: "T", comercial: "P", financeiro: "P", operacao: "-", freelancer: "-" },
   commercial: { admin: "T", gestao: "T", comercial: "T", financeiro: "L", operacao: "-", freelancer: "-" },
   adm: { admin: "T", gestao: "T", comercial: "L", financeiro: "L", operacao: "L", freelancer: "-" },
-  mail: { admin: "T", gestao: "T", comercial: "T", financeiro: "T", operacao: "T", freelancer: "-" },
 };
 
 export function access(user: Pick<User, "role"> | null | undefined, resource: Resource): Access {

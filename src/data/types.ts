@@ -517,7 +517,7 @@ export interface Notification extends BaseEntity {
 export interface NotificationPreference extends BaseEntity {
   userId: ID;
   type: NotificationType;
-  channel: "app" | "email";
+  /** Notificações são só no app (Caixa de entrada) — não há e-mail interno. */
   enabled: boolean;
 }
 
@@ -533,9 +533,10 @@ export interface ImportJob extends BaseEntity {
 
 export type EmailStatus = "queued" | "sent" | "delivered" | "bounced" | "complained" | "failed";
 
+/** Só e-mails transacionais do sistema para pessoas de fora (convite, recuperação de senha, pedido de NF ao freelancer). */
 export interface EmailLog extends BaseEntity {
-  channel: "system" | "user";
-  provider: "brevo" | "resend" | "draw_smtp" | "gmail_api" | "user_smtp";
+  channel: "system";
+  provider: "brevo" | "resend" | "draw_smtp";
   userId: ID | null;
   projectId: ID | null;
   to: string[];
@@ -556,32 +557,6 @@ export interface SystemMailSettings extends BaseEntity {
   smtpPasswordSet: boolean;
   fromName: string;
   fromAddress: string;
-}
-
-export interface MailAccount extends BaseEntity {
-  userId: ID;
-  kind: "gmail_oauth" | "smtp";
-  address: string;
-  displayName: string;
-  smtpHost: string | null;
-  smtpPort: number | null;
-  smtpSecurity: "starttls" | "ssl" | null;
-  smtpUser: string | null;
-  status: "connected" | "error" | "expired";
-  lastCheckedAt: ISODate | null;
-}
-
-export interface MailSignature extends BaseEntity {
-  userId: ID;
-  html: string;
-}
-
-export interface ProjectEmail extends BaseEntity {
-  projectId: ID;
-  emailLogId: ID;
-  senderUserId: ID;
-  bodyHtml: string;
-  attachments: ID[];
 }
 
 /* ───────────── Banco local ───────────── */
@@ -625,9 +600,6 @@ export interface Database {
   imports: ImportJob[];
   emailLogs: EmailLog[];
   systemMailSettings: SystemMailSettings[];
-  mailAccounts: MailAccount[];
-  mailSignatures: MailSignature[];
-  projectEmails: ProjectEmail[];
   /** Sequência de código por prefixo (RN-05) — nunca reutilizada. */
   codeSequences: Record<string, number>;
 }

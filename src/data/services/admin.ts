@@ -1,7 +1,7 @@
 /** Administrativo (M6), usuários e autenticação (M1), e-mail (M11), importação, busca. */
 import { baseFields, loadDb, nowIso, resetDb, transaction } from "../db";
-import type { ID, ImportKind, InstitutionalDocument, MailAccount, Resource, Role, SystemMailSettings, VaultItem } from "../types";
-import { ApiError, actor, assertProjectVisible, emit, getSessionUserId, latency, read, setSessionUserId, touch, visibleProjects, write } from "./_core";
+import type { ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, VaultItem } from "../types";
+import { ApiError, actor, emit, getSessionUserId, latency, read, setSessionUserId, touch, visibleProjects, write } from "./_core";
 import { access, canRead, canWriteAll } from "@/lib/permissions";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 
@@ -350,83 +350,11 @@ export const mailApi = {
       db.emailLogs.push({ ...baseFields(null), channel: "system", provider: s.transport === "draw_smtp" ? "draw_smtp" : "brevo", userId: null, projectId: null, to: [to], cc: [], subject: "E-mail de teste da plataforma Draw", template: "teste", status: "delivered", error: null, sentAt: nowIso() });
       return true;
     }, 900),
-
-  myAccount: () =>
-    read((db, me) => ({
-      account: db.mailAccounts.find((a) => a.userId === me.id && !a.deletedAt) ?? null,
-      signature: db.mailSignatures.find((s) => s.userId === me.id)?.html ?? "",
-      canUse: me.role !== "freelancer",
-    })),
-  connect: (input: { kind: MailAccount["kind"]; address: string; displayName: string; smtpHost?: string; smtpPort?: number; smtpSecurity?: "starttls" | "ssl"; smtpUser?: string; smtpPassword?: string }) =>
-    write((db, me) => {
-      if (me.role === "freelancer") throw new ApiError(403, "Freelancers não conectam caixa de e-mail (RF-M11-06).");
-      const errors: Record<string, string> = {};
-      if (!/^\S+@\S+\.\S+$/.test(input.address)) errors.address = "Informe um e-mail válido";
-      if (input.kind === "smtp") {
-        if (!input.smtpHost) errors.smtpHost = "Informe o servidor SMTP";
-        if (!input.smtpUser) errors.smtpUser = "Informe o usuário";
-        if (!input.smtpPassword) errors.smtpPassword = "Informe a senha de app";
-      }
-      if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
-      db.mailAccounts.filter((a) => a.userId === me.id).forEach((a) => (a.deletedAt = nowIso()));
-      const acc: MailAccount = { ...baseFields(me.id), userId: me.id, kind: input.kind, address: input.address, displayName: input.displayName || me.name, smtpHost: input.smtpHost ?? null, smtpPort: input.smtpPort ?? null, smtpSecurity: input.smtpSecurity ?? null, smtpUser: input.smtpUser ?? null, status: "connected", lastCheckedAt: nowIso() };
-      db.mailAccounts.push(acc);
-      return acc;
-    }, 900),
-  disconnect: () =>
-    write((db, me) => {
-      db.mailAccounts.filter((a) => a.userId === me.id && !a.deletedAt).forEach((a) => (a.deletedAt = nowIso()));
-    }),
-  testMyAccount: () =>
-    write((db, me) => {
-      const a = db.mailAccounts.find((x) => x.userId === me.id && !x.deletedAt);
-      if (!a) throw new ApiError(409, "Conecte sua caixa primeiro.");
-      a.lastCheckedAt = nowIso();
-      a.status = "connected";
-      return true;
-    }, 800),
-  saveSignature: (html: string) =>
-    write((db, me) => {
-      const s = db.mailSignatures.find((x) => x.userId === me.id);
-      if (s) {
-        s.html = html;
-        touch(s);
-      } else db.mailSignatures.push({ ...baseFields(me.id), userId: me.id, html });
-    }),
-
-  projectEmails: (projectId: ID) =>
-    read((db, me) => {
-      const p = assertProjectVisible(db, me, projectId);
-      return db.projectEmails
-        .filter((e) => e.projectId === p.id && !e.deletedAt)
-        .map((e) => {
-          const log = db.emailLogs.find((l) => l.id === e.emailLogId)!;
-          return { ...e, log, senderName: db.users.find((u) => u.id === e.senderUserId)?.name ?? "—", attachmentsInfo: e.attachments.map((vid) => { const v = db.fileVersions.find((x) => x.id === vid); const f = v ? db.files.find((x) => x.id === v.fileId) : null; return { versionId: vid, name: f?.name ?? "arquivo", version: v?.version ?? 1 }; }) };
-        })
-        .sort((a, b) => (b.log.sentAt ?? "").localeCompare(a.log.sentAt ?? ""));
-    }),
-  /** RF-M11-03/05/07 — envia pela caixa do usuário e registra no projeto. */
-  sendProjectEmail: (projectId: ID, input: { to: string[]; cc: string[]; subject: string; bodyHtml: string; attachments: ID[]; template?: string | null }) =>
-    write((db, me) => {
-      const p = assertProjectVisible(db, me, projectId);
-      const acc = db.mailAccounts.find((a) => a.userId === me.id && !a.deletedAt && a.status === "connected");
-      if (!acc) throw new ApiError(409, "Conecte sua caixa de e-mail em Minha conta → E-mail para enviar.");
-      const errors: Record<string, string> = {};
-      if (!input.to.length) errors.to = "Adicione ao menos um destinatário";
-      if (input.to.concat(input.cc).some((e) => !/^\S+@\S+\.\S+$/.test(e))) errors.to = "Há um e-mail inválido entre os destinatários";
-      if (!input.subject.trim()) errors.subject = "Escreva o assunto";
-      if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
-      const sig = db.mailSignatures.find((s) => s.userId === me.id)?.html ?? "";
-      const log = { ...baseFields(me.id), channel: "user" as const, provider: acc.kind === "gmail_oauth" ? ("gmail_api" as const) : ("user_smtp" as const), userId: me.id, projectId: p.id, to: input.to, cc: input.cc, subject: input.subject.trim(), template: input.template ?? null, status: "sent" as const, error: null, sentAt: nowIso() };
-      db.emailLogs.push(log);
-      db.projectEmails.push({ ...baseFields(me.id), projectId: p.id, emailLogId: log.id, senderUserId: me.id, bodyHtml: input.bodyHtml + (sig ? `<br/>${sig}` : ""), attachments: input.attachments });
-      emit(db, me, { type: "email.sent", entityType: "email", entityId: log.id, project: p, data: { subject: log.subject, to: input.to } });
-      return log.id;
-    }, 700),
 };
 
 /* ───────── Importação (RF-M5-08) ───────── */
 type Row = Record<string, string>;
+
 export const importsApi = {
   list: () => read((db) => db.imports.filter((i) => !i.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))),
   /** Dry run: valida linha a linha sem gravar. */

@@ -29,5 +29,4 @@ export const RESOURCE_LABEL: Record<Resource, string> = {
   metrics: "Painel e métricas",
   commercial: "Comercial",
   adm: "Administrativo",
-  mail: "E-mail do usuário",
 };

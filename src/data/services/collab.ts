@@ -264,12 +264,14 @@ export const notificationsApi = {
       if (n) n.deletedAt = nowIso();
     }, 60),
   preferences: () => read((db, me) => db.notificationPreferences.filter((p) => p.userId === me.id)),
-  setPreference: (type: NotificationType, channel: "app" | "email", enabled: boolean) =>
+  /** Liga/desliga um tipo na Caixa de entrada (só no app — não há e-mail interno). Menções não podem ser desligadas. */
+  setPreference: (type: NotificationType, enabled: boolean) =>
     write((db, me) => {
-      const p = db.notificationPreferences.find((x) => x.userId === me.id && x.type === type && x.channel === channel);
+      if (type === "mencao" && !enabled) throw new ApiError(422, "Menções sempre chegam na sua caixa de entrada.");
+      const p = db.notificationPreferences.find((x) => x.userId === me.id && x.type === type);
       if (p) {
         p.enabled = enabled;
         touch(p);
-      } else db.notificationPreferences.push({ ...baseFields(me.id), userId: me.id, type, channel, enabled });
+      } else db.notificationPreferences.push({ ...baseFields(me.id), userId: me.id, type, enabled });
     }, 80),
 };

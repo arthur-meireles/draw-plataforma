@@ -198,7 +198,6 @@ export const SECTIONS: NavSection[] = [
         title: "Você",
         items: [
           { label: "Preferências", href: "/configuracoes/preferencias", icon: "settings" },
-          { label: "Minha conta e e-mail", href: "/minha-conta/email", icon: "email", roles: INTERNAL },
         ],
       },
       {

@@ -1,16 +1,13 @@
 /**
  * Extensões da "API" para o prontuário do projeto: marcos e métricas de entrega (RF-M4-14),
- * proposta com anexo em uma chamada (RF-M3-04), prévia da conclusão (RN-03) e apoio ao
- * envio de e-mail pelo projeto (RF-M11-03/05/07). Mesmas convenções de `_core`.
+ * proposta com anexo em uma chamada (RF-M3-04) e prévia da conclusão (RN-03). Mesmas convenções de `_core`.
  */
 import { baseFields } from "../db";
 import type { DeliverableMetricKey, ID, Milestone, ProjectDeliverableMetric } from "../types";
 import { ApiError, assertProjectVisible, emit, read, touch, write } from "./_core";
-import { mailApi } from "./admin";
 import { filesApi } from "./collab";
 import { proposalsApi, type InstallmentInput } from "./proposals";
-import { canSeeMoney, canWriteAll } from "@/lib/permissions";
-import { dateFull, money } from "@/lib/format";
+import { canWriteAll } from "@/lib/permissions";
 
 const canEditProject = (me: { role: string }) => canWriteAll(me as never, "projects") || me.role === "operacao";
 
@@ -108,73 +105,5 @@ export const projectsExtraApi = {
         freelancersWithAmount: members.filter((m) => m.agreedAmountCents && !already(m.id)).length,
         freelancersWithoutAmount: members.filter((m) => !m.agreedAmountCents).map((m) => db.freelancers.find((f) => f.id === m.freelancerId)?.name ?? "—"),
       };
-    }),
-};
-
-/* ───────── E-mail pelo projeto (RF-M11-03/05) ───────── */
-export type MailTemplateKey = "envio_proposta" | "entrega" | "pedido_aprovacao";
-
-const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-export const projectMailApi = {
-  /** Destinatários sugeridos: contatos do cliente + equipe do projeto. */
-  recipients: (projectId: ID) =>
-    read((db, me) => {
-      const p = assertProjectVisible(db, me, projectId);
-      const out: { email: string; name: string; source: "cliente" | "equipe"; detail: string }[] = [];
-      db.clientContacts
-        .filter((c) => c.clientId === p.clientId && !c.deletedAt)
-        .forEach((c) => out.push({ email: c.email, name: c.name, source: "cliente", detail: c.isBillingContact ? "Contato de faturamento" : (c.jobTitle ?? "Contato do cliente") }));
-      db.projectMembers
-        .filter((m) => m.projectId === p.id && m.active && !m.deletedAt)
-        .forEach((m) => {
-          const u = m.userId ? db.users.find((x) => x.id === m.userId) : null;
-          const f = m.freelancerId ? db.freelancers.find((x) => x.id === m.freelancerId) : null;
-          const person = u ? { email: u.email, name: u.name } : f ? { email: f.email, name: f.name } : null;
-          if (person && person.email !== me.email) out.push({ ...person, source: "equipe", detail: u ? "Equipe Draw" : "Freelancer" });
-        });
-      return out.filter((r, i, all) => all.findIndex((x) => x.email === r.email) === i);
-    }),
-
-  /** Modelos com assunto e corpo já preenchidos com os dados do projeto. */
-  templates: (projectId: ID) =>
-    read((db, me) => {
-      const p = assertProjectVisible(db, me, projectId);
-      const contact = db.clientContacts.find((c) => c.id === p.billingContactId) ?? db.clientContacts.find((c) => c.clientId === p.clientId && c.isDecisionMaker) ?? db.clientContacts.find((c) => c.clientId === p.clientId);
-      const hello = `Olá${contact ? `, ${contact.name.split(" ")[0]}` : ""}!`;
-      const bye = `Um abraço,\n${me.name}`;
-      const proposal = db.proposals.filter((x) => x.projectId === p.id && !x.deletedAt && x.status !== "recusada").sort((a, b) => b.version - a.version)[0];
-      const amount = proposal && canSeeMoney(me) ? ` no valor de ${money(proposal.amountCents)}` : "";
-      return [
-        {
-          key: "envio_proposta" as MailTemplateKey,
-          label: "Envio de proposta",
-          subject: `Proposta ${p.code} — ${p.title}`,
-          body: `${hello}\n\nSegue em anexo a proposta${proposal ? ` (versão ${proposal.version})` : ""}${amount} para o projeto "${p.title}". Ficamos à disposição para ajustar o escopo e as condições de pagamento.\n\n${bye}`,
-        },
-        {
-          key: "entrega" as MailTemplateKey,
-          label: "Entrega",
-          subject: `Entrega — ${p.code} ${p.title}`,
-          body: `${hello}\n\nTemos o prazer de entregar o material do projeto "${p.title}". Os arquivos finais seguem em anexo. Se precisar de qualquer ajuste, é só responder este e-mail.\n\n${bye}`,
-        },
-        {
-          key: "pedido_aprovacao" as MailTemplateKey,
-          label: "Pedido de aprovação",
-          subject: `Aprovação necessária — ${p.code} ${p.title}`,
-          body: `${hello}\n\nPrecisamos da sua aprovação para seguir com o projeto "${p.title}"${p.dueAt ? ` (prazo de entrega: ${dateFull(p.dueAt)})` : ""}. O material para análise está em anexo. Pode responder com "aprovado" ou indicar os ajustes necessários?\n\n${bye}`,
-        },
-      ];
-    }),
-
-  /** Converte o texto digitado em HTML seguro e envia pela caixa do usuário (RF-M11-07). */
-  send: (projectId: ID, input: { to: string[]; cc: string[]; subject: string; body: string; attachments: ID[]; template?: string | null }) =>
-    mailApi.sendProjectEmail(projectId, {
-      to: input.to,
-      cc: input.cc,
-      subject: input.subject,
-      bodyHtml: escapeHtml(input.body.trim()).replace(/\n/g, "<br/>"),
-      attachments: input.attachments,
-      template: input.template ?? null,
     }),
 };

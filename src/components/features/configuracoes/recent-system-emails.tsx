@@ -3,7 +3,7 @@ import { Badge, DataTable, Section, type Column } from "@/components/ui";
 import type { EmailLog, EmailStatus } from "@/data/types";
 import { dateTime } from "@/lib/format";
 
-const PROVIDER: Record<EmailLog["provider"], string> = { brevo: "Brevo", resend: "Resend", draw_smtp: "SMTP da Draw", gmail_api: "Gmail", user_smtp: "SMTP do usuário" };
+const PROVIDER: Record<EmailLog["provider"], string> = { brevo: "Brevo", resend: "Resend", draw_smtp: "SMTP da Draw" };
 const STATUS: Record<EmailStatus, { label: string; tone: "neutral" | "info" | "success" | "danger" | "warning" }> = {
   queued: { label: "Na fila", tone: "neutral" },
   sent: { label: "Enviado", tone: "info" },
@@ -23,7 +23,7 @@ export function RecentSystemEmails({ rows, isLoading, error, onRetry }: { rows: 
     { id: "at", header: "Enviado em", hideBelow: "lg", cell: (l) => <span className="whitespace-nowrap text-fg-subtle">{dateTime(l.sentAt)}</span> },
   ];
   return (
-    <Section title="E-mails recentes do sistema" description="Convites, recuperação de senha, notificações e testes" icon="emailSent" bodyClassName="p-0">
+    <Section title="E-mails recentes do sistema" description="Convites, recuperação de senha, pedidos de NF e testes" icon="emailSent" bodyClassName="p-0">
       <DataTable rows={rows} columns={columns} getRowId={(l) => l.id} isLoading={isLoading} error={error} onRetry={onRetry} pageSize={8} empty={{ icon: "email", title: "Nenhum e-mail enviado ainda", description: "Convites e notificações enviados pela plataforma aparecem aqui.", compact: true }} />
     </Section>
   );

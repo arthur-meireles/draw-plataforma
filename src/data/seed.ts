@@ -48,11 +48,10 @@ import type {
   User,
   VaultItem,
   FileCategory,
-  ProjectEmail,
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 7;
+export const SEED_VERSION = 8;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -1024,42 +1023,13 @@ export function createSeed(): Database {
   const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida"];
   for (const u of users) {
     for (const t of nTypes) {
-      for (const channel of ["app", "email"] as const) {
-        notificationPreferences.push({ ...base("npf", -200), userId: u.id, type: t, channel, enabled: channel === "app" || t !== "prazo" });
-      }
+      notificationPreferences.push({ ...base("npf", -200), userId: u.id, type: t, enabled: true });
     }
   }
 
   /* ───────── E-mail ───────── */
   const emailLogs: EmailLog[] = [];
-  const projectEmails: ProjectEmail[] = [];
-  projects.filter((p) => p.status === "ativo").slice(0, 5).forEach((p, i) => {
-    const contact = clientContacts.find((c) => c.clientId === p.clientId)!;
-    const log: EmailLog = {
-      ...base("eml", -5 + i),
-      channel: "user",
-      provider: "gmail_api",
-      userId: "usr_paula",
-      projectId: p.id,
-      to: [contact.email],
-      cc: ["beatriz@draw.com.br"],
-      subject: [`${p.code} — Roteiro para validação`, `${p.code} — Proposta comercial`, `${p.code} — Entrega da versão final`][i % 3],
-      template: ["pedido_aprovacao", "envio_proposta", "entrega"][i % 3],
-      status: i === 4 ? "bounced" : "delivered",
-      error: i === 4 ? "Caixa do destinatário cheia" : null,
-      sentAt: d(-5 + i),
-    };
-    emailLogs.push(log);
-    projectEmails.push({
-      ...base("pem", -5 + i),
-      projectId: p.id,
-      emailLogId: log.id,
-      senderUserId: "usr_paula",
-      bodyHtml: `<p>Olá, ${contact.name.split(" ")[0]}!</p><p>Segue em anexo o material para sua validação. Qualquer dúvida, estou à disposição.</p>`,
-      attachments: fileVersions.filter((fv) => files.find((f) => f.id === fv.fileId)?.projectId === p.id).slice(0, 1).map((fv) => fv.id),
-    });
-  });
-  ["Convite para a plataforma", "Recuperação de senha", "Envie sua nota fiscal", "Resumo diário"].forEach((subject, i) => {
+  ["Convite para a plataforma", "Recuperação de senha", "Envie sua nota fiscal"].forEach((subject, i) => {
     emailLogs.push({
       ...base("eml", -i - 1),
       channel: "system",
@@ -1149,13 +1119,6 @@ export function createSeed(): Database {
     systemMailSettings: [
       { ...base("sms", -60), transport: "brevo_resend", smtpHost: null, smtpPort: 587, smtpSecurity: "starttls", smtpUser: null, smtpPasswordSet: false, fromName: "Draw", fromAddress: "nao-responda@draw.com.br" },
     ],
-    mailAccounts: [
-      { ...base("mac", -30), userId: "usr_paula", kind: "gmail_oauth", address: "paula@draw.com.br", displayName: "Paula Andrade", smtpHost: null, smtpPort: null, smtpSecurity: null, smtpUser: null, status: "connected", lastCheckedAt: d(0) },
-    ],
-    mailSignatures: [
-      { ...base("sig", -30), userId: "usr_paula", html: "<p><strong>Paula Andrade</strong><br/>CEO · Draw Legal Design<br/>(11) 99999-0000 · draw.com.br</p>" },
-    ],
-    projectEmails,
     codeSequences,
   };
 }

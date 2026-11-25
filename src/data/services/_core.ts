@@ -122,8 +122,9 @@ export function notify(
   n: { userId: ID | null | undefined; type: NotificationType; title: string; body?: string; project?: Project | null; entityType?: string; entityId?: ID },
 ) {
   if (!n.userId || n.userId === me?.id) return;
-  const pref = db.notificationPreferences.find((p) => p.userId === n.userId && p.type === n.type && p.channel === "app");
-  if (pref && !pref.enabled) return;
+  // só dentro do sistema (Caixa de entrada); menções sempre chegam
+  const pref = db.notificationPreferences.find((p) => p.userId === n.userId && p.type === n.type);
+  if (pref && !pref.enabled && n.type !== "mencao") return;
   const row: Notification = {
     ...baseFields(me?.id ?? null),
     userId: n.userId,
@@ -136,11 +137,6 @@ export function notify(
     readAt: null,
   };
   db.notifications.push(row);
-  const emailPref = db.notificationPreferences.find((p) => p.userId === n.userId && p.type === n.type && p.channel === "email");
-  if (emailPref?.enabled) {
-    const u = db.users.find((x) => x.id === n.userId);
-    if (u) queueSystemEmail(db, { to: [u.email], subject: n.title, template: `notificacao_${n.type}`, projectId: n.project?.id ?? null });
-  }
 }
 
 /** RNF-12 — e-mail do sistema entra na fila (Brevo principal, Resend reserva). */

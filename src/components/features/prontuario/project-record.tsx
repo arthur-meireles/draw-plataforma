@@ -5,7 +5,6 @@ import { usePermissions } from "@/components/layout/session";
 import { useUrlState } from "@/lib/use-url-state";
 import { ProjectActions } from "./project-actions";
 import { ProjectApprovals } from "./project-approvals";
-import { ProjectEmails } from "./project-emails";
 import { ProjectFinance } from "./project-finance";
 import { ProjectHeader } from "./project-header";
 import { ProjectOverview } from "./project-overview";
@@ -15,7 +14,7 @@ import { ProjectTasks } from "./project-tasks";
 import { ProjectTeam } from "./project-team";
 import { useProject, useProjectMembers, type ProjectDetail } from "./use-project";
 
-const TABS = ["visao-geral", "tarefas", "equipe", "arquivos", "comentarios", "aprovacoes", "financeiro", "emails", "historico"] as const;
+const TABS = ["visao-geral", "tarefas", "equipe", "arquivos", "comentarios", "aprovacoes", "financeiro", "historico"] as const;
 type Tab = (typeof TABS)[number];
 
 function RecordSkeleton() {
@@ -27,13 +26,12 @@ function RecordSkeleton() {
 }
 
 function Tabbed({ project }: { project: ProjectDetail }) {
-  const { money, isFreelancer, canRead } = usePermissions();
+  const { money } = usePermissions();
   const [url, setUrl] = useUrlState({ aba: "visao-geral", proposta: undefined as string | undefined });
   const members = useProjectMembers(project.id);
 
   const showFinance = money;
-  const showEmails = !isFreelancer && canRead("mail");
-  const tab: Tab = (TABS as readonly string[]).includes(url.aba) && !(url.aba === "financeiro" && !showFinance) && !(url.aba === "emails" && !showEmails) ? (url.aba as Tab) : "visao-geral";
+  const tab: Tab = (TABS as readonly string[]).includes(url.aba) && !(url.aba === "financeiro" && !showFinance) ? (url.aba as Tab) : "visao-geral";
   const items: TabItem<Tab>[] = [
     { value: "visao-geral", label: "Visão geral" },
     { value: "tarefas", label: "Tarefas", count: project.subtasksTotal || undefined },
@@ -42,7 +40,6 @@ function Tabbed({ project }: { project: ProjectDetail }) {
     { value: "comentarios", label: "Comentários" },
     { value: "aprovacoes", label: "Aprovações" },
     { value: "financeiro", label: "Financeiro", hidden: !showFinance },
-    { value: "emails", label: "E-mails", hidden: !showEmails },
     { value: "historico", label: "Histórico" },
   ];
   const setTab = (aba: string) => setUrl({ aba, proposta: undefined, tarefa: undefined, arquivo: undefined, q: undefined, cat: undefined, vista: undefined, filtro: undefined } as never);
@@ -65,7 +62,6 @@ function Tabbed({ project }: { project: ProjectDetail }) {
         )}
         {tab === "aprovacoes" && <Card className="overflow-hidden"><ProjectApprovals project={project} /></Card>}
         {tab === "financeiro" && showFinance && <ProjectFinance project={project} />}
-        {tab === "emails" && showEmails && <Card className="overflow-hidden"><ProjectEmails project={project} /></Card>}
         {tab === "historico" && (
           <Card className="p-4">
             <EventTimeline projectId={project.id} />
