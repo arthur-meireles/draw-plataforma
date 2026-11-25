@@ -1,7 +1,7 @@
 "use client";
 import { Suspense } from "react";
 import { FreelancersScreen } from "@/components/features/freelancers/freelancers-screen";
-import { PageBody, PageHeader, Skeleton } from "@/components/ui";
+import { ListPageSkeleton, PageHeader } from "@/components/ui";
 
 export default function FreelancersPage() {
   return (
@@ -9,9 +9,7 @@ export default function FreelancersPage() {
       fallback={
         <>
           <PageHeader crumbs={[{ label: "Freelancers", icon: "freelancers" }]} />
-          <PageBody>
-            <Skeleton className="h-24" />
-          </PageBody>
+          <ListPageSkeleton header={false} />
         </>
       }
     >

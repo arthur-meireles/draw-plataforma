@@ -1,7 +1,7 @@
 "use client";
 /** Ficha do freelancer (RF-M2-04): cabeçalho + abas na URL. O freelancer só enxerga e edita o próprio registro. */
 import { useState } from "react";
-import { Button, ConfirmDialog, ErrorState, PageBody, PageHeader, Skeleton, TabPanel, Tabs, type Crumb, type TabItem } from "@/components/ui";
+import { Button, ConfirmDialog, ErrorState, PageBody, PageHeader, TabPanel, Tabs, type Crumb, type TabItem, DetailBodySkeleton } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { freelancersApi, freelancersExtraApi } from "@/data/services";
@@ -86,10 +86,8 @@ export function FreelancerDetailScreen({ id }: { id: string }) {
       />
       <PageBody padded={false}>
         {!f ? (
-          <div className="space-y-4 p-4 md:p-6">
-            <Skeleton className="h-20" />
-            <Skeleton className="h-10" />
-            <Skeleton className="h-48" />
+          <div className="p-4 md:p-6">
+            <DetailBodySkeleton tabs={6} />
           </div>
         ) : (
           <>

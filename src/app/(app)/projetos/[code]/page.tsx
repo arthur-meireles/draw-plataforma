@@ -1,7 +1,7 @@
 "use client";
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
-import { PageBody, PageHeader, Skeleton } from "@/components/ui";
+import { DetailPageSkeleton, PageHeader } from "@/components/ui";
 import { ProjectRecord } from "@/components/features/prontuario/project-record";
 
 export default function ProjectPage() {
@@ -11,7 +11,7 @@ export default function ProjectPage() {
       fallback={
         <>
           <PageHeader crumbs={[{ label: "Projetos", href: "/projetos", icon: "projects" }, { label: String(code) }]} />
-          <PageBody><Skeleton className="h-64" /></PageBody>
+          <DetailPageSkeleton header={false} />
         </>
       }
     >

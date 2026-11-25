@@ -4,6 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { forwardRef } from "react";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "./icon";
+import { SuccessCheck } from "./motion";
 
 export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 select-none",
@@ -35,17 +36,21 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   loading?: boolean;
   icon?: IconName;
   iconRight?: IconName;
+  /** Confirmação breve após a requisição (✓ que se desenha + `successLabel`). Dirija com `useSuccessFlash()`. */
+  success?: boolean;
+  /** Rótulo mostrado durante `success` (padrão "Salvo"). */
+  successLabel?: string;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant, size, asChild, loading, icon, iconRight, children, disabled, type = "button", ...props },
+  { className, variant, size, asChild, loading, icon, iconRight, children, disabled, type = "button", success, successLabel = "Salvo", onClick, ...props },
   ref,
 ) {
   const Comp = asChild ? Slot : "button";
   const iconSize = size === "xs" ? "xs" : size === "lg" ? "md" : "sm";
   if (asChild) {
     return (
-      <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+      <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} onClick={onClick} {...props}>
         {children}
       </Comp>
     );
@@ -57,11 +62,23 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      aria-disabled={success || undefined}
+      // durante a confirmação o botão não reenvia (sem esmaecer, para o ✓ ficar legível)
+      onClick={success ? (e) => e.preventDefault() : onClick}
       {...props}
     >
-      {loading ? <Icon name="loading" size={iconSize} spin /> : icon ? <Icon name={icon} size={iconSize} /> : null}
-      {children}
-      {iconRight && !loading ? <Icon name={iconRight} size={iconSize} /> : null}
+      {success && !loading ? (
+        <span key="success" className="motion-swap inline-flex items-center gap-1.5" role="status">
+          <SuccessCheck size={iconSize === "xs" ? 12 : iconSize === "md" ? 16 : 14} />
+          {successLabel}
+        </span>
+      ) : (
+        <>
+          {loading ? <Icon name="loading" size={iconSize} spin /> : icon ? <Icon name={icon} size={iconSize} /> : null}
+          {children}
+          {iconRight && !loading ? <Icon name={iconRight} size={iconSize} /> : null}
+        </>
+      )}
     </Comp>
   );
 });

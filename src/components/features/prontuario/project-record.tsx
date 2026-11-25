@@ -1,5 +1,5 @@
 "use client";
-import { Card, ErrorState, Fab, PageBody, PageHeader, Skeleton, TabPanel, Tabs, type TabItem } from "@/components/ui";
+import { Card, ErrorState, Fab, PageBody, PageHeader, TabPanel, Tabs, type TabItem, DetailBodySkeleton } from "@/components/ui";
 import { CommentThread, EventTimeline, FileManager } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useUrlState } from "@/lib/use-url-state";
@@ -20,20 +20,8 @@ type Tab = (typeof TABS)[number];
 
 function RecordSkeleton() {
   return (
-    <div aria-busy className="space-y-4 p-4 md:p-6">
-      <div className="space-y-2">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-7 w-2/3" />
-        <Skeleton className="h-6 w-1/2" />
-      </div>
-      <Skeleton className="h-10" />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-4">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-56" />
-        </div>
-        <Skeleton className="h-80 max-xl:hidden" />
-      </div>
+    <div aria-busy className="p-4 md:p-6">
+      <DetailBodySkeleton tabs={7} />
     </div>
   );
 }

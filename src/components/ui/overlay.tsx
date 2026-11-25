@@ -120,10 +120,13 @@ export interface ConfirmDialogProps {
   reason?: { label: string; placeholder?: string; required?: boolean };
   onConfirm: (reason?: string) => void;
   error?: string;
+  /** Confirmação breve no botão após sucesso (ver `useSuccessFlash`). */
+  success?: boolean;
+  successLabel?: string;
 }
 
 /** Confirmação explícita para ações destrutivas ou com consequência. */
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, cancelLabel = "Cancelar", destructive, loading, reason, onConfirm, error }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, cancelLabel = "Cancelar", destructive, loading, reason, onConfirm, error, success, successLabel }: ConfirmDialogProps) {
   const [text, setText] = useState("");
   const [touched, setTouched] = useState(false);
   const missing = !!reason?.required && !text.trim();
@@ -147,6 +150,8 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
           <Button
             variant={destructive ? "destructive" : "primary"}
             loading={loading}
+            success={success}
+            successLabel={successLabel}
             onClick={() => {
               setTouched(true);
               if (missing) return;

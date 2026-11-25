@@ -1,5 +1,11 @@
+import "../motion.css";
 import { AppShell } from "@/components/layout/app-shell";
+import { PageTransition } from "@/components/ui";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppShell>
+      <PageTransition>{children}</PageTransition>
+    </AppShell>
+  );
 }

@@ -1,7 +1,7 @@
 "use client";
 import { Suspense } from "react";
 import { FinanceOverview } from "@/components/features/financeiro/finance-overview";
-import { PageBody, PageHeader, SegmentedControl, Skeleton } from "@/components/ui";
+import { PageBody, PageHeader, SegmentedControl, DashboardSkeleton } from "@/components/ui";
 import { useUrlState } from "@/lib/use-url-state";
 
 const PERIODS = [
@@ -28,7 +28,7 @@ function Content() {
 
 export default function FinanceOverviewPage() {
   return (
-    <Suspense fallback={<Skeleton className="m-6 h-64" />}>
+    <Suspense fallback={<DashboardSkeleton stats={8} />}>
       <Content />
     </Suspense>
   );

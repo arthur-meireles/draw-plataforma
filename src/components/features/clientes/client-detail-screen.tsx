@@ -2,7 +2,7 @@
 /** Ficha do cliente (RF-M2-02): cabeçalho + abas na URL (?aba=). */
 import Link from "next/link";
 import { useState } from "react";
-import { Button, ErrorState, PageBody, PageHeader, Skeleton, TabPanel, Tabs, type TabItem } from "@/components/ui";
+import { Button, ErrorState, PageBody, PageHeader, TabPanel, Tabs, type TabItem, DetailBodySkeleton } from "@/components/ui";
 import { ClientFormDialog } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useUrlState } from "@/lib/use-url-state";
@@ -75,14 +75,8 @@ export function ClientDetailScreen({ id }: { id: string }) {
       />
       <PageBody padded={false}>
         {!c ? (
-          <div className="space-y-4 p-4 md:p-6">
-            <Skeleton className="h-16" />
-            <Skeleton className="h-10" />
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-24" />
-              ))}
-            </div>
+          <div className="p-4 md:p-6">
+            <DetailBodySkeleton tabs={5} />
           </div>
         ) : (
           <>

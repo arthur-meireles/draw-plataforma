@@ -9,6 +9,7 @@ import { initials } from "@/lib/format";
 import { Button } from "./button";
 import { Icon, type IconName } from "./icon";
 import { Tooltip } from "./overlay";
+import { CountUp, useChangePulse, useReducedMotion } from "./motion";
 
 /* ───────── Badge ───────── */
 export type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "info" | "violet" | "orange";
@@ -24,9 +25,10 @@ const toneClasses: Record<Tone, string> = {
   orange: "bg-warning-subtle text-orange border-transparent",
 };
 
-export function Badge({ tone = "neutral", icon, dot, children, className, size = "sm" }: { tone?: Tone; icon?: IconName; dot?: boolean; children: React.ReactNode; className?: string; size?: "xs" | "sm" }) {
+export function Badge({ tone = "neutral", icon, dot, children, className, size = "sm", pulseKey }: { tone?: Tone; icon?: IconName; dot?: boolean; children: React.ReactNode; className?: string; size?: "xs" | "sm"; /** Quando muda (ex.: status), o selo dá um "pop" curto. */ pulseKey?: unknown }) {
+  const pulse = useChangePulse(pulseKey);
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border font-display font-semibold", size === "xs" ? "h-[18px] px-1 text-2xs" : "h-5 px-1.5 text-xs", toneClasses[tone], className)}>
+    <span className={cn(pulse, "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border font-display font-semibold", size === "xs" ? "h-[18px] px-1 text-2xs" : "h-5 px-1.5 text-xs", toneClasses[tone], className)}>
       {dot && <span className="size-1.5 rounded-full bg-current" />}
       {icon && <Icon name={icon} size="xs" />}
       {children}
@@ -35,9 +37,11 @@ export function Badge({ tone = "neutral", icon, dot, children, className, size =
 }
 
 /* ───────── Pill (propriedade clicável estilo Plane) ───────── */
-export const Pill = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName; leading?: React.ReactNode; tone?: "default" | "danger" | "warning" | "muted"; size?: "sm" | "md"; static?: boolean }>(
-  function Pill({ icon, leading, tone = "default", size = "md", children, className, static: isStatic, ...props }, ref) {
+export const Pill = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName; leading?: React.ReactNode; tone?: "default" | "danger" | "warning" | "muted"; size?: "sm" | "md"; static?: boolean; /** Quando muda, a pílula dá um "pop" curto (mudança de status/prioridade). */ pulseKey?: unknown }>(
+  function Pill({ icon, leading, tone = "default", size = "md", children, className, static: isStatic, pulseKey, ...props }, ref) {
+    const pulse = useChangePulse(pulseKey);
     const cls = cn(
+      pulse,
       "touch-target inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border border-line bg-layer-2 text-xs text-fg-muted transition-colors",
       size === "sm" ? "h-5 px-1" : "h-6 px-1.5 max-md:h-7",
       !isStatic && "hover:border-line-strong hover:bg-layer-hover cursor-pointer",
@@ -92,19 +96,27 @@ export function AvatarStack({ people, max = 3, size = "sm" }: { people: { id: st
 
 /* ───────── Carregamento ───────── */
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-md bg-layer-active/70", className)} />;
+  return <div aria-hidden className={cn("motion-shimmer rounded-md bg-layer-active/70", className)} />;
 }
 
 export function Spinner({ className, label = "Carregando" }: { className?: string; label?: string }) {
   return <Icon name="loading" spin label={label} className={cn("text-fg-subtle", className)} />;
 }
 
+/** Barra de progresso. Cresce a partir de 0 na montagem e desliza ao mudar (só transform). */
 export function Progress({ value, max = 100, tone = "accent", className, label }: { value: number; max?: number; tone?: "accent" | "success" | "warning" | "danger"; className?: string; label?: string }) {
   const pct = max ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const bar = { accent: "bg-accent-solid", success: "bg-success", warning: "bg-warning", danger: "bg-danger" }[tone];
+  const reduced = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const shown = mounted || reduced ? pct : 0;
   return (
     <div role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label} className={cn("h-1.5 w-full overflow-hidden rounded-full bg-layer-active", className)}>
-      <div className={cn("h-full rounded-full transition-[width] duration-300", bar)} style={{ width: `${pct}%` }} />
+      <div className={cn("h-full w-full rounded-full transition-transform duration-500 ease-out", bar)} style={{ transform: `translateX(${shown - 100}%)` }} />
     </div>
   );
 }
@@ -160,7 +172,7 @@ export function Section({ title, description, actions, children, className, body
 export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loading }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: IconName; tone?: Tone; trend?: { value: string; up: boolean; good?: boolean }; href?: string; onClick?: () => void; loading?: boolean }) {
   const Comp = href ? Link : onClick ? "button" : "div";
   return (
-    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("@container flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-left max-sm:p-3", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
+    <Comp href={href as string} onClick={onClick} type={onClick ? "button" : undefined} className={cn("motion-rise @container flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-left max-sm:p-3", (href || onClick) && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
       <div className="flex items-center gap-2 text-xs font-medium text-fg-subtle">
         {icon && (
           <span className={cn("flex size-6 items-center justify-center rounded-md", tone ? toneClasses[tone] : "bg-layer text-fg-muted")}>
@@ -169,7 +181,7 @@ export function Stat({ label, value, hint, icon, tone, trend, href, onClick, loa
         )}
         <span className="truncate">{label}</span>
       </div>
-      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate font-display text-xl font-bold tabular-nums text-fg @max-[12rem]:text-md @max-[9rem]:text-base">{value}</div>}
+      {loading ? <Skeleton className="h-7 w-24" /> : <div className="truncate font-display text-xl font-bold tabular-nums text-fg @max-[12rem]:text-md @max-[9rem]:text-base">{typeof value === "number" ? <CountUp value={value} /> : value}</div>}
       {(hint || trend) && (
         <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
           {trend && (

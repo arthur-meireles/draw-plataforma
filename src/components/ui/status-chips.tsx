@@ -1,5 +1,12 @@
 "use client";
 import { cn } from "@/lib/cn";
+import { useChangePulse } from "./motion";
+
+/** Contagem que dá um "pop" quando muda (ex.: um item mudou de status). */
+function ChipCount({ count, active }: { count: number; active: boolean }) {
+  const pulse = useChangePulse(count);
+  return <span className={cn("inline-block rounded-sm tabular-nums", pulse, active ? "text-accent" : "text-fg-placeholder")}>{count}</span>;
+}
 
 export interface StatusChipOption<V extends string> {
   value: V;
@@ -25,7 +32,7 @@ export function StatusChips<V extends string>({ value, onChange, options, label 
             )}
           >
             {o.label}
-            {o.count != null && <span className={cn("tabular-nums", active ? "text-accent" : "text-fg-placeholder")}>{o.count}</span>}
+            {o.count != null && <ChipCount count={o.count} active={active} />}
           </button>
         );
       })}
