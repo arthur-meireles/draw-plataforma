@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Avatar, BrandLogo, BrandSymbol, Button, DropdownMenu, Icon, IconButton, Kbd, Tooltip, type MenuItem } from "@/components/ui";
+import { Avatar, BrandLogo, BrandSymbol, CountBadge, Button, DropdownMenu, Icon, IconButton, Kbd, Tooltip, type MenuItem } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUnreadCount } from "@/data/hooks";
 import { authApi } from "@/data/services";
@@ -93,7 +93,7 @@ function SideLink({ item, badge, onNavigate }: { item: NavItem; badge?: number; 
     >
       <Icon name={item.icon} size="sm" className={active ? "text-accent" : "text-fg-subtle group-hover:text-fg-muted"} />
       <span className="flex-1 truncate">{item.label}</span>
-      {!!badge && <span className="rounded-full bg-accent-solid px-1.5 text-2xs font-semibold leading-4 text-accent-fg tabular-nums">{badge > 99 ? "99+" : badge}</span>}
+      <CountBadge count={badge} />
     </Link>
   );
 }
