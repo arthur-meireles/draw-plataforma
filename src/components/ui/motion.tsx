@@ -6,12 +6,14 @@
  * - useReducedMotion()   → true quando o usuário pede menos movimento
  * - useChangePulse(v)    → classe que "estala" (pop + anel) quando o valor muda (não no 1º render)
  * - useEntrance()        → entrada escalonada de itens de lista (só na montagem / itens novos)
+ * - useExitingItems()    → mantém por um instante os itens que saíram da lista, marcados `exiting`
+ * - Collapse             → linha que esmaece e se recolhe (use com `exiting`)
  * - useSuccessFlash()    → dirige o estado `success` do Button após uma mutação
  * - CountUp / CountBadge → números que sobem até o valor; contador que pulsa ao aumentar
  * - PageTransition       → fade suave na troca de rota
  * - SuccessCheck         → ✓ que se desenha (usado pelo Button)
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
@@ -77,6 +79,61 @@ export function useEntrance() {
     if (now - entry.t > ENTER_WINDOW) return NONE;
     return { className: "motion-enter", style: { "--motion-i": entry.i } as React.CSSProperties };
   };
+}
+
+/* ───────── Saída de lista ───────── */
+export const EXIT_MS = 260;
+
+/**
+ * Saída suave de itens: quando um item deixa `items` (ex.: tarefa concluída que sai de "Minhas tarefas"),
+ * ele continua na lista por `ms`, na posição antiga e com os dados antigos, marcado `exiting: true` — renderize-o
+ * dentro de `<Collapse exiting>`. Com movimento reduzido, sai na hora.
+ */
+export function useExitingItems<T>(items: T[] | undefined, getId: (item: T) => string, ms = EXIT_MS): { item: T; exiting: boolean }[] | undefined {
+  const reduced = useReducedMotion();
+  const [version, expire] = useReducer((x: number) => x + 1, 0);
+  const prev = useRef<T[]>([]);
+  const ghosts = useRef(new Map<string, { item: T; index: number }>());
+  const getIdRef = useRef(getId);
+  getIdRef.current = getId;
+  const result = useMemo(() => {
+    if (!items) return undefined;
+    const id = getIdRef.current;
+    const current = new Set(items.map(id));
+    if (!reduced)
+      prev.current.forEach((item, index) => {
+        const key = id(item);
+        if (!current.has(key) && !ghosts.current.has(key)) ghosts.current.set(key, { item, index });
+      });
+    current.forEach((key) => ghosts.current.delete(key));
+    prev.current = items;
+    const out = items.map((item) => ({ item, exiting: false }));
+    [...ghosts.current.values()].sort((a, b) => a.index - b.index).forEach((g) => out.splice(Math.min(g.index, out.length), 0, { item: g.item, exiting: true }));
+    return out;
+    // `version` força o recálculo quando os fantasmas expiram
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, reduced, version]);
+  useEffect(() => {
+    if (!ghosts.current.size) return;
+    const t = setTimeout(() => {
+      ghosts.current.clear();
+      expire();
+    }, ms);
+    return () => clearTimeout(t);
+  }, [result, ms]);
+  return result;
+}
+
+/**
+ * Recolhe a altura e esmaece o conteúdo quando `exiting`. Exceção consciente à regra "só GPU": a altura precisa
+ * recolher para os vizinhos subirem sem salto (grid-template-rows 1fr→0fr, 240 ms, uma vez por item).
+ */
+export function Collapse({ exiting, children, className }: { exiting?: boolean; children: React.ReactNode; className?: string }) {
+  return (
+    <div aria-hidden={exiting || undefined} inert={exiting || undefined} className={cn("grid transition-[grid-template-rows,opacity] duration-[240ms] ease-out", exiting ? "pointer-events-none grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100", className)}>
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
 }
 
 /* ───────── Sucesso após mutação ───────── */

@@ -5,7 +5,7 @@
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing, useEntrance } from "@/components/ui";
+import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing, useEntrance, useExitingItems, Collapse } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
@@ -24,7 +24,7 @@ const areaLabel = (area: AdmArea | null) => {
 };
 
 /** Tempo da micro-interação de conclusão (check + anel + risco) antes de a lista se reorganizar. */
-const COMPLETE_SETTLE_MS = 900;
+const COMPLETE_SETTLE_MS = 700;
 
 export function useTaskUpdate() {
   return useApiMutation(({ id, patch }: { id: ID; patch: Parameters<typeof tasksApi.update>[1] }) => tasksApi.update(id, patch), {
@@ -150,6 +150,11 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
   readOnly?: boolean;
 }) {
   const enter = useEntrance();
+  // tarefas que saem da lista (ex.: concluídas em "Minhas tarefas") esmaecem e recolhem antes de sumir
+  const rows = useExitingItems(tasks, (t) => t.id);
+  const exiting = new Set(rows?.filter((r) => r.exiting).map((r) => r.item.id));
+  const live = (items: TaskView[]) => items.filter((t) => !exiting.has(t.id)).length;
+  tasks = rows?.map((r) => r.item);
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
   if (isLoading || !tasks)
     return (
@@ -222,12 +227,17 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
             <header className="sticky top-0 z-[5] flex h-9 items-center gap-2 border-b border-line bg-surface-2 px-4 text-sm">
               {g.icon}
               <span className="font-medium text-fg">{g.label}</span>
-              <span className="text-xs tabular-nums text-fg-subtle">{g.items.length}</span>
+              <span className="text-xs tabular-nums text-fg-subtle">{live(g.items)}</span>
             </header>
           )}
-          {g.items.map((t) => (
-            <TaskRow key={t.id} task={t} onOpen={onOpen} showProject={showProject} restrictAssignees={restrictAssignees} readOnly={readOnly} {...enter(t.id)} />
-          ))}
+          {g.items.map((t) => {
+            const e = enter(t.id);
+            return (
+              <Collapse key={t.id} exiting={exiting.has(t.id)} className="border-b border-line last:border-0">
+                <TaskRow task={t} onOpen={onOpen} showProject={showProject} restrictAssignees={restrictAssignees} readOnly={readOnly} style={e.style} className={cn("border-0", e.className)} />
+              </Collapse>
+            );
+          })}
           {quickAdd && groupBy === "stage" && <TaskQuickAdd {...quickAdd} stageKey={g.key === "sem" ? null : g.key} />}
         </section>
       ))}

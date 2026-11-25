@@ -180,6 +180,7 @@ infantilização). Na dúvida, menos.
 | "Pop" quando um valor muda | `pulseKey={valor}` em `Pill`/`Badge` (já em `TaskStatusPill`, `PriorityPill`, selos de status, etapa) ou `useChangePulse(valor)` |
 | Confirmação após mutação | `const ok = useSuccessFlash()` → `onSuccess: () => ok.flash(fecharOuNavegar)` + `<Button success={ok.success} successLabel="Enviado">` (`ConfirmDialog` aceita `success`) |
 | Concluir tarefa | `TaskCheck` + `DoneTitle` (domain) com estado otimista no pai |
+| Saída de lista (item que deixa de pertencer) | `const rows = useExitingItems(itens, getId)` + `<Collapse exiting>` (TaskList já faz). Única exceção à regra "só GPU": recolher a altura |
 | Entrada de lista | `const enter = useEntrance()` → `{...enter(id)}` no item (DataTable, TaskList, Kanban já fazem) |
 | Números / contador | `CountUp` (Stat numérico já usa), `CountBadge` (pulsa ao aumentar) |
 | Bloco que surge (passo de assistente) | `<Reveal key={passo}>` |
