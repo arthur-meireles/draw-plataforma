@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 import { Toaster } from "sonner";
-import { TooltipProvider } from "@/components/ui";
+import { SplashHost, TooltipProvider } from "@/components/ui";
 import { PwaProvider } from "@/components/pwa/pwa-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -20,6 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={client}>
         <TooltipProvider>
           <PwaProvider>{children}</PwaProvider>
+          <SplashHost />
           <Toaster
             position="bottom-right"
             closeButton

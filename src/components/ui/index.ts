@@ -1,6 +1,7 @@
 /** Kit de UI — telas importam SOMENTE daqui (ou de components/domain e components/layout). */
 export * from "./icon";
 export * from "./brand";
+export * from "./splash";
 export * from "./button";
 export * from "./input";
 export * from "./date-picker";

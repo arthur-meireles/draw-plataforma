@@ -1,50 +1,52 @@
 @import "tailwindcss";
-@import "@fontsource-variable/roboto";
 @import "@fontsource-variable/manrope";
 
 /*
  * Tokens de design — FONTE ÚNICA de cores, superfícies, raios, sombras e tipografia.
  * Espelhados em `src/design/tokens.ts` (para uso em JS: gráficos, SVG).
- * Temas partem do violeta da marca: claro = branco com neutros lavanda; escuro = violeta profundo (berinjela/índigo),
- * nunca preto neutro. Estrutura visual inspirada no Plane; identidade Draw the Law (marinho #071445, violeta #784BFD,
- * orquídea #B549D5, magenta #CC3366; Roboto + Manrope).
+ * Paleta OFICIAL do brandbook Draw the Law: Roxo #BD48D0, Roxo escuro #724AFF, Azul escuro #071445,
+ * Azul ciano #28ADEF, Cinza #DFDFDF, Preto #252525. Fonte oficial: Manrope (corpo e títulos).
+ * Temas: claro = branco limpo com neutros do Cinza/Preto oficiais; escuro = azul-violeta profundo (nunca preto neutro).
+ * Gradiente principal roxo→ciano e secundário roxo→roxo escuro: só decorativos (formas, marca, splash).
  * Telas NUNCA usam hex/px soltos: só as classes geradas daqui (bg-surface, text-fg-muted…).
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --canvas: #f8f7fc;
+  --canvas: #f7f7f9;
   --surface: #ffffff;
-  --surface-2: #fcfbfe;
-  --layer: #f5f3fb;
-  --layer-hover: #efecf8;
-  --layer-active: #e6e2f4;
+  --surface-2: #fbfbfc;
+  --layer: #f3f3f6;
+  --layer-hover: #ededf2;
+  --layer-active: #e4e3ec;
   --layer-2: #ffffff;
-  --line: #ebe8f4;
-  --line-strong: #d5d0e6;
-  --fg: #17122f;
-  --fg-muted: #3b3557;
-  --fg-subtle: #67618a;
-  --fg-placeholder: #9e99b7;
-  --accent: #5f35e0;
-  --accent-hover: #4a27b5;
-  --accent-solid: #784bfd;
-  --accent-solid-hover: #6a3cf2;
+  --line: #ebebef;
+  --line-strong: #dfdfdf;
+  --fg: #252525;
+  --fg-muted: #45434f;
+  --fg-subtle: #6a6878;
+  --fg-placeholder: #9d9ba8;
+  --accent: #5b36e6;
+  --accent-hover: #4626c2;
+  --accent-solid: #724aff;
+  --accent-solid-hover: #6238f2;
   --accent-subtle: #f4f0ff;
   --accent-line: #ddd2ff;
   --accent-fg: #ffffff;
   --navy: #071445;
   --navy-2: #0a1448;
-  --orchid: #b549d5;
+  --orchid: #bd48d0;
+  --cyan: #28adef;
   --magenta: #cc3366;
   --rail-bg: #ffffff;
-  --rail-fg: #8a84a8;
-  --rail-fg-active: #5f35e0;
+  --rail-fg: #7d7b8c;
+  --rail-fg-active: #5b36e6;
   --rail-active: #f1ecff;
-  --rail-hover: #f5f3fb;
-  --rail-line: #ebe8f4;
-  --brand-gradient: linear-gradient(90deg, #b549d5 0%, #784bfd 100%);
+  --rail-hover: #f3f3f6;
+  --rail-line: #ebebef;
+  --brand-gradient: linear-gradient(90deg, #bd48d0 0%, #724aff 100%);
+  --brand-gradient-signature: linear-gradient(135deg, #bd48d0 0%, #724aff 50%, #28adef 100%);
   --success: #22703a;
   --success-subtle: #e1f4e6;
   --warning: #a35a06;
@@ -56,46 +58,46 @@
   --orange: #c2570c;
   --violet: #7d2896;
   --violet-subtle: #f6ecfb;
-  --backdrop: rgb(23 18 47 / 0.4);
-  --shadow-color: 258 40% 20%;
-  --chart-1: #784bfd;
+  --backdrop: rgb(7 20 69 / 0.35);
+  --shadow-color: 240 20% 20%;
+  --chart-1: #724aff;
   --chart-2: #3fa557;
   --chart-3: #f0a83a;
-  --chart-4: #b549d5;
+  --chart-4: #bd48d0;
   --chart-5: #cc3366;
-  --chart-6: #3a7bd5;
-  --chart-grid: #ebe8f4;
+  --chart-6: #28adef;
+  --chart-grid: #ebebef;
 }
 
 .dark {
-  --canvas: #0d0a1c;
-  --surface: #141026;
-  --surface-2: #18132d;
-  --layer: #1e1836;
-  --layer-hover: #251e42;
-  --layer-active: #2e264f;
-  --layer-2: #1a1531;
-  --line: #2a2347;
-  --line-strong: #3c3363;
-  --fg: #f0ecfa;
-  --fg-muted: #cdc5e6;
-  --fg-subtle: #9e95c0;
-  --fg-placeholder: #6e6693;
+  --canvas: #0a0c1f;
+  --surface: #11132b;
+  --surface-2: #151731;
+  --layer: #1b1c3a;
+  --layer-hover: #232447;
+  --layer-active: #2c2c55;
+  --layer-2: #171936;
+  --line: #26274a;
+  --line-strong: #383964;
+  --fg: #f1f0f8;
+  --fg-muted: #cdcbe2;
+  --fg-subtle: #9c9abd;
+  --fg-placeholder: #6c6a91;
   --accent: #c3b0ff;
   --accent-hover: #ddd1ff;
-  --accent-solid: #784bfd;
-  --accent-solid-hover: #8a62ff;
+  --accent-solid: #724aff;
+  --accent-solid-hover: #8664ff;
   --accent-subtle: #271b55;
   --accent-line: #46358f;
   --accent-fg: #ffffff;
-  --navy: #1a1138;
-  --rail-bg: #0a0717;
-  --rail-fg: #7f77a3;
+  --navy: #071445;
+  --rail-bg: #070a1c;
+  --rail-fg: #7d7ba3;
   --rail-fg-active: #ffffff;
-  --rail-active: #2a1f55;
-  --rail-hover: #1b1533;
-  --rail-line: #1e1838;
-  --navy-2: #221747;
+  --rail-active: #252058;
+  --rail-hover: #171a36;
+  --rail-line: #1b1d3a;
+  --navy-2: #0c1a55;
   --success: #5ccf7d;
   --success-subtle: #10281f;
   --warning: #f0a83a;
@@ -107,9 +109,9 @@
   --orange: #fb923c;
   --violet: #e0a6f2;
   --violet-subtle: #2e1944;
-  --backdrop: rgb(6 3 16 / 0.7);
+  --backdrop: rgb(3 5 18 / 0.7);
   --shadow-color: 262 60% 2%;
-  --chart-grid: #2a2347;
+  --chart-grid: #26274a;
 }
 
 @theme inline {
@@ -139,6 +141,7 @@
   --color-rail-line: var(--rail-line);
   --color-navy-2: var(--navy-2);
   --color-orchid: var(--orchid);
+  --color-cyan: var(--cyan);
   --color-magenta: var(--magenta);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-line: var(--accent-line);
@@ -156,7 +159,7 @@
   --color-violet-subtle: var(--violet-subtle);
   --color-backdrop: var(--backdrop);
 
-  --font-sans: "Roboto Variable", "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 
@@ -198,6 +201,11 @@
   --animate-slide-in-left: slide-in-left 220ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-slide-in-bottom: slide-in-bottom 240ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-scale-in: scale-in 160ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* splash da marca (ui/splash.tsx) */
+  --animate-splash-write: splash-write 1000ms cubic-bezier(0.65, 0, 0.35, 1) both;
+  --animate-splash-glow: splash-glow 1600ms ease-out 150ms both;
+  --animate-splash-progress: splash-progress 1300ms cubic-bezier(0.65, 0, 0.35, 1) 200ms both;
+  --animate-splash-out: splash-out 380ms cubic-bezier(0.4, 0, 1, 1) both;
 
   @keyframes fade-in {
     from { opacity: 0; }
@@ -214,6 +222,23 @@
   @keyframes slide-in-bottom {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
+  }
+  @keyframes splash-write {
+    0% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateY(8px); }
+    20% { opacity: 1; }
+    100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translateY(0); }
+  }
+  @keyframes splash-glow {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 0.28; transform: scale(1); }
+  }
+  @keyframes splash-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes splash-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(1.03); }
   }
   @keyframes scale-in {
     from { opacity: 0; transform: scale(0.97); }
@@ -287,9 +312,13 @@
   padding-top: env(safe-area-inset-top);
 }
 
-/* Gradiente-assinatura Draw (orquídea → violeta) — SOMENTE decorativo (formas, logo), nunca fundo de texto pequeno. */
+/* Gradientes oficiais — SOMENTE decorativos (formas, marca, splash), nunca fundo de texto pequeno.
+   bg-brand-gradient: roxo → roxo escuro (secundário). bg-brand-signature: roxo → roxo escuro → ciano (principal). */
 @utility bg-brand-gradient {
   background-image: var(--brand-gradient);
+}
+@utility bg-brand-signature {
+  background-image: var(--brand-gradient-signature);
 }
 
 /* Área de toque mínima de 44px em telas de toque, sem mudar o visual (Lei 7).

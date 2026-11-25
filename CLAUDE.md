@@ -13,10 +13,11 @@ front é **completo e funcional com dados locais** (localStorage + seed). O back
 - Radix UI (primitivas acessíveis), cmdk, dnd-kit, Recharts, sonner, next-themes
 - TanStack Query sobre a "API" local (`src/data/services`)
 - Ícones: lucide, **somente** via registro `src/design/icons.ts`
-- Fontes: **Roboto** (corpo) e **Manrope** (títulos, rótulos, tags, números de KPI → `font-display`), via `@fontsource-variable/*`, sem CDN
+- Fonte oficial do brandbook: **Manrope** (corpo `font-sans` e títulos/KPIs `font-display`), via `@fontsource-variable/manrope`, sem CDN
 - Estrutura/fluxos: **Plane** (superfícies em camadas, bordas finas, alta densidade, peek lateral)
-- Identidade: **Draw the Law** — marinho `#071445` (neutros com matiz marinho), violeta `#784BFD` (ação),
-  orquídea `#B549D5` e magenta `#CC3366` (acentos), gradiente-assinatura orquídea→violeta só decorativo
+- Identidade **oficial** (Brandbook Draw the Law): Roxo `#BD48D0`, Roxo escuro `#724AFF` (ação), Azul escuro
+  `#071445` (marca/splash/painel), Azul ciano `#28ADEF`, Cinza `#DFDFDF`, Preto `#252525` (texto). Gradiente
+  principal roxo→ciano (`bg-brand-signature`) e secundário roxo→roxo escuro (`bg-brand-gradient`), só decorativos
 
 ## Comandos
 
@@ -91,12 +92,16 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 - **Cor de ação tem dois papéis:** `bg-accent-solid` (+ `hover:bg-accent-solid-hover`) para FUNDOS com texto
   branco; `text-accent` / `border-accent` / `bg-accent-subtle` para texto, borda e tinta. Nunca `bg-accent`
   como fundo de botão (o contraste do texto quebra no tema escuro).
-- **Marca:** `BrandMark`/`BrandLogo` do kit; gradiente via `bg-brand-gradient` **somente** em formas decorativas
-  (círculos, logo) — nunca atrás de texto pequeno (branco sobre orquídea reprova AA). Botões são pílula
+- **Marca:** só a arte OFICIAL — `BrandSymbol` (W + caneta), `BrandLogo` ("draw the LAW") e `BrandMark` (símbolo
+  em ladrilho) do kit, gerados dos SVGs do pacote em `src/design/brand-art.ts` (nunca redesenhar, distorcer ou
+  recolorir; partes sólidas herdam `currentColor`: marinho no claro, branco no escuro/sobre Azul escuro). Logo
+  sobre Azul escuro, branco ou cinza claro (brandbook). Ícones PWA/favicon gerados do símbolo sobre Azul escuro.
+  Splash pós-login: `showSplash()` (+ `SplashHost` nos Providers). Gradientes **somente** em formas decorativas
+  (círculos, splash) — nunca atrás de texto pequeno (branco sobre roxo reprova AA). Botões são pílula
   sólida, sem brilho. Rail lateral pelos tokens `bg-rail`/`text-rail-fg*` (claro no tema claro, violeta
   profundo no escuro).
-- **Temas partem do violeta da marca:** claro = superfícies brancas com neutros levemente lavanda (limpo,
-  sem peso); escuro = violeta profundo/berinjela (nunca preto neutro), texto lavanda, destaque violeta.
+- **Temas partem da marca:** claro = superfícies brancas com neutros do Cinza/Preto oficiais (limpo, sem peso);
+  escuro = azul-violeta profundo derivado do Azul escuro (nunca preto neutro), destaque Roxo escuro.
   Profissional e sóbrio: saturação só no destaque, nunca em grandes áreas.
 - **Datas:** sempre `DateField`/`DateInput`/`DatePicker` do kit (dd/mm/aaaa no desktop, nativo no celular);
   nunca `<input type="date">`.

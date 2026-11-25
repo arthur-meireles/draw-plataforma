@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
-import { Button, Icon, PasswordField, TextField } from "@/components/ui";
+import { Button, Icon, PasswordField, TextField, showSplash } from "@/components/ui";
 import { ApiError, authApi } from "@/data/services";
 
 /** Atalhos de demonstração: visíveis em desenvolvimento ou com NEXT_PUBLIC_DEMO_LOGIN=1. */
@@ -33,6 +33,7 @@ function LoginForm() {
 
   const finish = () => {
     qc.clear();
+    showSplash();
     router.replace(params.get("next") || "/");
   };
 

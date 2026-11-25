@@ -7,7 +7,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useMe } from "@/data/hooks";
-import { Spinner } from "@/components/ui";
+import { BrandSymbol } from "@/components/ui";
 import { OfflineIndicator, UpdateBanner } from "@/components/pwa/pwa-ui";
 import { LayoutContext } from "./layout-context";
 import { SessionProvider } from "./session";
@@ -60,8 +60,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!me.data) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-canvas">
-        <Spinner className="size-5" />
+      <div role="status" aria-label="Carregando" className="flex h-dvh items-center justify-center bg-canvas">
+        <BrandSymbol className="h-12 animate-pulse" />
       </div>
     );
   }

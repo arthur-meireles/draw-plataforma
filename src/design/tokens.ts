@@ -8,6 +8,7 @@ export const t = {
     accentSolid: "var(--accent-solid)",
     navy: "var(--navy)",
     orchid: "var(--orchid)",
+    cyan: "var(--cyan)",
     magenta: "var(--magenta)",
     success: "var(--success)",
     warning: "var(--warning)",

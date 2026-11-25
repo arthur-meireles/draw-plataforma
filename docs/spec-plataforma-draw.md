@@ -476,7 +476,7 @@ Fora do escopo do M11 na V1: **ler a caixa de entrada** dentro do sistema (clien
 
 ### 10.1 Direção visual
 
-> **Atualizado na 0.4:** identidade Draw the Law. Tema claro em branco com neutros lavanda e violeta `#784BFD` nas ações. Tema escuro em violeta profundo (`#0D0A1C` → `#141026` superfícies), com texto lavanda e destaque violeta, sem preto neutro. Tipografia Roboto + Manrope; botões em pílula, sem brilho; gradiente orquídea→violeta só decorativo. Tokens em `src/app/globals.css`.
+> **Atualizado na 0.4 (marca oficial):** identidade conforme o Brandbook Draw the Law — Roxo `#BD48D0`, Roxo escuro `#724AFF` (ações), Azul escuro `#071445` (marca, painel de login, splash, ícone do app), Azul ciano `#28ADEF`, Cinza `#DFDFDF`, Preto `#252525` (texto). Fonte única **Manrope**. Logotipo e símbolo oficiais em SVG (sem redesenho), cor sólida herdada do tema. Tema claro branco e limpo; tema escuro azul-violeta profundo (sem preto neutro). Botões em pílula sem brilho; gradientes roxo→ciano e roxo→roxo escuro apenas decorativos. Ao entrar, splash animada da marca (assinatura "escrita" pela caneta, ~1,7 s; estática com movimento reduzido). Tokens em `src/app/globals.css`.
 
 - Estilo **shadcn/ui** neutro (zinc), raio 8–10px, sombras mínimas, Inter/Geist.
 - Cor só com significado: status (âmbar aguardando, vermelho atraso, verde concluído, azul ativo) e tipo de projeto (ícone no cartão).

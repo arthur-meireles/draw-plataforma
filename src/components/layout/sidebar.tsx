@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Avatar, BrandMark, Button, DropdownMenu, Icon, IconButton, Kbd, Tooltip, type MenuItem } from "@/components/ui";
+import { Avatar, BrandLogo, BrandSymbol, Button, DropdownMenu, Icon, IconButton, Kbd, Tooltip, type MenuItem } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUnreadCount } from "@/data/hooks";
 import { authApi } from "@/data/services";
@@ -61,8 +61,8 @@ export function Rail() {
   };
   return (
     <nav aria-label="Seções" className="flex w-rail shrink-0 flex-col items-center gap-1.5 border-r border-rail-line bg-rail py-3 max-md:hidden">
-      <Link href="/" aria-label="Draw — início" className="mb-2 rounded-lg">
-        <BrandMark size="md" />
+      <Link href="/" aria-label="Draw — início" className="mb-2 flex size-10 items-center justify-center rounded-lg transition-transform hover:scale-105">
+        <BrandSymbol className="h-8" />
       </Link>
       {sections.filter((s) => !s.bottom).map(renderItem)}
       <span className="flex-1" />
@@ -203,8 +203,7 @@ export function SidebarContent({ onNavigate, mode = "section" }: { onNavigate?: 
       <div className="flex h-header shrink-0 items-center gap-2 px-3">
         {mode === "all" ? (
           <>
-            <BrandMark size="sm" />
-            <span className="flex-1 truncate font-display text-sm font-bold text-fg">Draw the Law</span>
+            <BrandLogo size="sm" className="mr-auto" />
           </>
         ) : (
           <>
