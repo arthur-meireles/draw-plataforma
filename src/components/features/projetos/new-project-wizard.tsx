@@ -1,7 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
-import { Button, EmptyState, PageBody, PageHeader, Stepper } from "@/components/ui";
+import { Button, EmptyState, PageBody, PageHeader, Reveal, Stepper, useSuccessFlash } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
@@ -62,9 +62,10 @@ export function NewProjectWizard() {
     if (Object.keys(errors).length) setErrors({});
   };
 
+  const created = useSuccessFlash(2000);
   const create = useApiMutation((s: WizardState) => (s.origin === "direto" ? projectsApi.createDirect(directPayload(s)) : projectsApi.createQuote(quotePayload(s))), {
     success: (p) => (p.origin === "direto" ? `Projeto ${p.code} criado e ativo.` : `Cotação ${p.code} criada no Comercial.`),
-    onSuccess: (p) => router.push(`/projetos/${p.code}`),
+    onSuccess: (p) => created.flash(() => router.push(`/projetos/${p.code}`), 550),
     onError: (err: ApiError) => {
       if (!err.fieldErrors) return;
       setErrors(err.fieldErrors);
@@ -122,16 +123,18 @@ export function NewProjectWizard() {
         <PageBody width="narrow" className="flex-1">
           <Stepper steps={steps} current={index} onSelect={go} className="mb-6" />
           <h2 className="mb-4 text-md font-semibold text-fg">{steps[index].label === "Revisão" ? "Confira antes de criar" : steps[index].label}</h2>
-          {step === "origem" && <ProjectOriginStep value={state.origin} onChange={onOrigin} canQuote={canQuote} canDirect={canDirect} />}
-          {step === "dados" && <ProjectDataStep state={state} patch={patch} errors={errors} />}
-          {step === "financeiro" && <ProjectFinancialStep state={state} patch={patch} errors={errors} />}
-          {step === "revisao" && <ProjectReviewStep state={state} />}
+          <Reveal key={step}>
+            {step === "origem" && <ProjectOriginStep value={state.origin} onChange={onOrigin} canQuote={canQuote} canDirect={canDirect} />}
+            {step === "dados" && <ProjectDataStep state={state} patch={patch} errors={errors} />}
+            {step === "financeiro" && <ProjectFinancialStep state={state} patch={patch} errors={errors} />}
+            {step === "revisao" && <ProjectReviewStep state={state} />}
+          </Reveal>
         </PageBody>
         <footer className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-2 border-t border-line bg-surface px-3 py-3 max-md:pb-[calc(0.75rem+var(--spacing-bottomnav)+env(safe-area-inset-bottom))] md:px-6">
           <Button variant="ghost" onClick={() => (index === 0 ? router.push("/projetos") : go(index - 1))} icon={index === 0 ? undefined : "arrowLeft"} disabled={create.isPending}>
             {index === 0 ? "Cancelar" : "Voltar"}
           </Button>
-          <Button variant="primary" onClick={next} loading={create.isPending} iconRight={last ? undefined : "arrowRight"} icon={last ? "check" : undefined}>
+          <Button variant="primary" onClick={next} loading={create.isPending} success={created.success} successLabel={state.origin === "direto" ? "Projeto criado" : "Cotação criada"} iconRight={last ? undefined : "arrowRight"} icon={last ? "check" : undefined}>
             {last ? (state.origin === "direto" ? "Criar projeto" : "Criar cotação") : "Continuar"}
           </Button>
         </footer>

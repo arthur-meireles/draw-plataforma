@@ -1,0 +1,358 @@
+@reference "./globals.css";
+
+/*
+ * Movimento — micro-interações da plataforma (CLAUDE.md › Movimento).
+ * Regras: rápido (120–320 ms), discreto, com propósito; só transform/opacity/filter (GPU);
+ * nunca propriedades de layout, nunca `transition: all`. Sem confete nem quique.
+ * Componentes usam estas classes via o kit (`src/components/ui/motion.tsx`), nunca direto nas telas.
+ * `prefers-reduced-motion`: globals.css zera durações; aqui as animações decorativas são desligadas.
+ */
+
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  /* saída suave (padrão) e "mola" contida (assentar cartão, pop de status) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --motion-ring: color-mix(in oklab, var(--accent-solid) 45%, transparent);
+  --motion-glow: color-mix(in oklab, var(--accent-solid) 22%, transparent);
+  --motion-shimmer: color-mix(in oklab, var(--accent-solid) 10%, transparent);
+}
+
+/* ───────── Pop de mudança de valor (useChangePulse) ─────────
+   Duas classes idênticas com keyframes de nomes diferentes: alternar entre elas reinicia a animação
+   sem remontar o elemento (preserva foco do gatilho do dropdown). */
+.motion-pop-a,
+.motion-pop-b {
+  position: relative;
+  animation: var(--motion-pop-name) 260ms var(--ease-spring);
+}
+.motion-pop-a { --motion-pop-name: motion-pop-a; }
+.motion-pop-b { --motion-pop-name: motion-pop-b; }
+.motion-pop-a::after,
+.motion-pop-b::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--motion-ring);
+  pointer-events: none;
+  opacity: 0;
+  animation: motion-ring-fade 520ms var(--ease-out);
+}
+@keyframes motion-pop-a {
+  from { transform: scale(0.92); }
+  to { transform: scale(1); }
+}
+@keyframes motion-pop-b {
+  from { transform: scale(0.92); }
+  to { transform: scale(1); }
+}
+@keyframes motion-ring-fade {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+
+/* ───────── Entrada de listas (useEntrance / motion-rise) ───────── */
+.motion-enter {
+  animation: motion-fade-up 240ms var(--ease-out) both;
+  animation-delay: calc(var(--motion-i, 0) * 30ms);
+}
+/* Escalonamento por posição (cartões de KPI, grades): até 10 itens */
+.motion-rise {
+  animation: motion-fade-up 260ms var(--ease-out) both;
+}
+.motion-rise:nth-child(2) { animation-delay: 30ms; }
+.motion-rise:nth-child(3) { animation-delay: 60ms; }
+.motion-rise:nth-child(4) { animation-delay: 90ms; }
+.motion-rise:nth-child(5) { animation-delay: 120ms; }
+.motion-rise:nth-child(6) { animation-delay: 150ms; }
+.motion-rise:nth-child(7) { animation-delay: 180ms; }
+.motion-rise:nth-child(8) { animation-delay: 210ms; }
+.motion-rise:nth-child(9) { animation-delay: 240ms; }
+.motion-rise:nth-child(n + 10) { animation-delay: 270ms; }
+@keyframes motion-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ───────── Transição de página ───────── */
+.motion-route-a { animation: motion-route-a 180ms var(--ease-out); }
+.motion-route-b { animation: motion-route-b 180ms var(--ease-out); }
+@keyframes motion-route-a {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+@keyframes motion-route-b {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+.motion-page {
+  animation: motion-page 220ms var(--ease-out) both;
+}
+@keyframes motion-page {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ───────── Skeleton: brilho suave com matiz da marca ───────── */
+.motion-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.motion-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(90deg, transparent 0%, var(--motion-shimmer) 45%, var(--motion-shimmer) 55%, transparent 100%);
+  animation: motion-shimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes motion-shimmer {
+  to { transform: translateX(100%); }
+}
+
+/* ───────── Kanban ───────── */
+/* cartão erguido (DragOverlay): leve escala + inclinação; volta ao soltar */
+.motion-lift {
+  transform: scale(1.03) rotate(1.5deg);
+  transition: transform var(--motion-base) var(--ease-out);
+  animation: motion-lift 160ms var(--ease-out);
+}
+[data-dropping] .motion-lift {
+  transform: none;
+}
+@keyframes motion-lift {
+  from { transform: none; }
+  to { transform: scale(1.03) rotate(1.5deg); }
+}
+/* coluna-alvo: borda em gradiente da marca + brilho suave (opacidade) */
+.motion-drop-target {
+  position: relative;
+}
+.motion-drop-target::before,
+.motion-drop-target::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+.motion-drop-target::before {
+  inset: 0;
+  padding: 1.5px;
+  background-image: var(--brand-gradient);
+  -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(black 0 0) content-box exclude, linear-gradient(black 0 0);
+}
+.motion-drop-target::after {
+  inset: 0;
+  box-shadow: 0 0 0 4px var(--motion-glow), 0 8px 24px -8px var(--motion-glow);
+}
+.motion-drop-target[data-over]::before,
+.motion-drop-target[data-over]::after {
+  opacity: 1;
+}
+/* lugar onde o cartão vai cair */
+.motion-placeholder {
+  position: relative;
+}
+.motion-placeholder > * {
+  opacity: 0;
+}
+.motion-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  border: 1.5px dashed var(--accent);
+  background: color-mix(in oklab, var(--accent-solid) 6%, transparent);
+  animation: motion-fade 120ms var(--ease-out);
+}
+/* ao soltar: assenta e pisca um anel de destaque uma vez */
+.motion-settle {
+  position: relative;
+  animation: motion-settle 220ms var(--ease-spring);
+}
+.motion-settle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 2px var(--motion-ring);
+  pointer-events: none;
+  opacity: 0;
+  animation: motion-flash 640ms var(--ease-out);
+}
+@keyframes motion-settle {
+  from { transform: scale(1.03); }
+  to { transform: none; }
+}
+@keyframes motion-flash {
+  0%, 30% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes motion-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ───────── Concluir tarefa (TaskCheck) ───────── */
+.motion-check-circle {
+  transform-origin: center;
+  transform-box: fill-box;
+  transition: transform 260ms var(--ease-spring), opacity var(--motion-base) var(--ease-out);
+}
+.motion-check-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 220ms var(--ease-out) 90ms;
+}
+[data-done] > svg .motion-check-path {
+  stroke-dashoffset: 0;
+}
+[data-done] > svg .motion-check-circle {
+  transform: scale(1);
+}
+:not([data-done]) > svg .motion-check-circle {
+  transform: scale(0.2);
+  opacity: 0;
+  transition-duration: var(--motion-fast);
+}
+:not([data-done]) > svg .motion-check-path {
+  transition: stroke-dashoffset var(--motion-fast) linear;
+}
+.motion-burst {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  background-image: var(--brand-gradient);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), black calc(100% - 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), black calc(100% - 1px));
+  animation: motion-burst 520ms var(--ease-out) forwards;
+}
+@keyframes motion-burst {
+  from { opacity: 0.9; transform: scale(0.6); }
+  to { opacity: 0; transform: scale(1.9); }
+}
+/* título riscado com traço que se desenha */
+.motion-strike {
+  position: relative;
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+.motion-strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 260ms var(--ease-out);
+}
+.motion-strike[data-done] {
+  opacity: 0.62;
+}
+.motion-strike[data-done]::after {
+  transform: scaleX(1);
+}
+
+/* ───────── Botão com sucesso (Button success) ───────── */
+.motion-success-icon path,
+.motion-success-icon polyline {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: motion-draw 260ms var(--ease-out) 60ms forwards;
+}
+@keyframes motion-draw {
+  to { stroke-dashoffset: 0; }
+}
+.motion-swap {
+  animation: motion-swap 200ms var(--ease-out);
+}
+@keyframes motion-swap {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ───────── Upload: barra indeterminada + item que entra deslizando ───────── */
+.motion-progress-indeterminate {
+  position: relative;
+  overflow: hidden;
+}
+.motion-progress-indeterminate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--accent-solid);
+  animation: motion-indeterminate 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes motion-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.motion-slide-in {
+  animation: motion-slide-in 260ms var(--ease-out) both;
+}
+@keyframes motion-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ───────── Contador: pulso único ao aumentar ───────── */
+.motion-bump-a { animation: motion-bump-a 420ms var(--ease-spring); }
+.motion-bump-b { animation: motion-bump-b 420ms var(--ease-spring); }
+@keyframes motion-bump-a {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes motion-bump-b {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-pop-a,
+  .motion-pop-b,
+  .motion-pop-a::after,
+  .motion-pop-b::after,
+  .motion-enter,
+  .motion-rise,
+  .motion-route-a,
+  .motion-route-b,
+  .motion-page,
+  .motion-lift,
+  .motion-settle,
+  .motion-settle::after,
+  .motion-burst,
+  .motion-swap,
+  .motion-slide-in,
+  .motion-bump-a,
+  .motion-bump-b,
+  .motion-shimmer::after,
+  .motion-placeholder::after {
+    animation: none !important;
+  }
+  .motion-lift {
+    transform: none;
+  }
+  .motion-burst {
+    display: none;
+  }
+  .motion-success-icon path,
+  .motion-success-icon polyline {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

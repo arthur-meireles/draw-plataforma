@@ -22,6 +22,9 @@ import {
   SegmentedControl,
   Sheet,
   Skeleton,
+  SuccessCheck,
+  useEntrance,
+  useSuccessFlash,
   Switch,
   ClearFiltersButton,
   Tooltip,
@@ -97,6 +100,7 @@ function UploadDialog({ files, onClose, target, askProject, defaultCategory }: {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string>();
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list(), { enabled: askProject, staleTime: 30_000 });
+  const sent = useSuccessFlash();
   const upload = useApiMutation(
     async () => {
       let done = 0;
@@ -110,7 +114,7 @@ function UploadDialog({ files, onClose, target, askProject, defaultCategory }: {
     },
     {
       success: (n) => `${plural(n, "arquivo enviado", "arquivos enviados")}`,
-      onSuccess: onClose,
+      onSuccess: () => sent.flash(onClose, 750),
       onError: (e) => {
         setProgress(null);
         setError(e.message);
@@ -136,6 +140,8 @@ function UploadDialog({ files, onClose, target, askProject, defaultCategory }: {
             variant="primary"
             icon="upload"
             loading={upload.isPending}
+            success={sent.success}
+            successLabel="Enviados"
             onClick={() => {
               if (askProject && !projectId) {
                 setError("Escolha o projeto que receberá os arquivos");
@@ -153,10 +159,18 @@ function UploadDialog({ files, onClose, target, askProject, defaultCategory }: {
       <div className="space-y-4">
         <ul className="max-h-40 divide-y divide-line overflow-y-auto rounded-lg border border-line scrollbar-thin">
           {files.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
+            <li key={`${f.name}-${i}`} className="relative flex items-center gap-2 px-3 py-2 text-sm">
               <Icon name={fileIcon(f.type, f.name)} size="sm" className="text-fg-subtle" />
               <span className="min-w-0 flex-1 truncate text-fg">{f.name}</span>
-              <span className="shrink-0 text-xs tabular-nums text-fg-subtle">{fileSize(f.size)}</span>
+              {progress && i < progress.done ? (
+                <span className="motion-slide-in flex shrink-0 items-center gap-1 text-xs text-success">
+                  <SuccessCheck size={12} />
+                  Enviado
+                </span>
+              ) : (
+                <span className="shrink-0 text-xs tabular-nums text-fg-subtle">{progress && upload.isPending && i === progress.done ? "Enviando…" : fileSize(f.size)}</span>
+              )}
+              {progress && upload.isPending && i === progress.done && <span aria-hidden className="motion-progress-indeterminate absolute inset-x-0 bottom-0 h-0.5 bg-accent-subtle" />}
             </li>
           ))}
         </ul>
@@ -353,10 +367,11 @@ function CategoryBadge({ category }: { category: FileCategory }) {
 }
 
 function FileGrid({ files, onOpen, menuFor }: { files: FileRow[]; onOpen: (f: FileRow) => void; menuFor: (f: FileRow) => MenuItem[] }) {
+  const enter = useEntrance();
   return (
     <ul className="grid grid-cols-1 gap-3 p-3 min-[480px]:grid-cols-2 md:grid-cols-3 md:p-4 xl:grid-cols-4">
       {files.map((f) => (
-        <li key={f.id} className="group relative flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2">
+        <li key={f.id} style={enter(f.id).style} className={cn(enter(f.id).className, "group relative flex flex-col gap-2 rounded-lg border border-line bg-surface p-3 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2")}>
           <button type="button" onClick={() => onOpen(f)} className="flex flex-col gap-2 text-left" aria-label={`Abrir ${f.name}`}>
             <span className="flex h-20 items-center justify-center rounded-md bg-layer text-fg-subtle">
               <Icon name={fileIcon(f.current?.mime, f.name)} size="lg" />
@@ -497,7 +512,13 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
     if (query.isLoading || !files)
       return view === "grade" ? (
         <div className="grid grid-cols-1 gap-3 p-4 min-[480px]:grid-cols-2 md:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-36" />)}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex h-36 flex-col gap-2 rounded-lg border border-line bg-surface p-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
         </div>
       ) : (
         <DataTable rows={undefined} isLoading columns={columns} getRowId={(f: FileRow) => f.id} />

@@ -20,6 +20,8 @@
 
 >
 > **Mudança da 0.5:** visualizações de tarefas em todos os lugares que listam tarefas — lista, kanban, calendário e Gantt (RF-X-06, RF-M4-17, RF-M6-06).
+>
+> **Mudança da 0.6:** qualidade percebida — micro-interações discretas (mudança de status, concluir tarefa, arrastar no kanban, confirmação de envio, entrada de listas, números e transição de página) e *skeletons* estruturais em todas as telas (seção 10.5). Sem impacto em modelo, regras ou contrato da API.
 ---
 
 ## 0. Como usar este documento
@@ -522,6 +524,25 @@ Cartão de projeto, cartão de tarefa, coluna de etapa, chips de status/prazo/pr
 ### 10.5 Qualidade
 
 Teclado e foco visível, contraste AA, listas virtualizadas acima de 100 itens, atualização otimista ao mover cartões, *code splitting* por rota, textos em pt-BR centralizados.
+
+**Carregamento sem frustração (0.6).** Nenhuma tela fica em branco nem depende de spinner: enquanto os dados chegam, um
+*skeleton* que imita o layout final (cabeçalho, filtros, linhas, colunas do kanban, KPIs, gráficos, abas e coluna de
+propriedades) com brilho suave na cor da marca. Presets únicos no kit: listagem, detalhe/prontuário, painel, quadro e
+formulário; o segmento autenticado tem `loading.tsx` para a troca de rota.
+
+**Micro-interações (0.6).** Movimento curto (120–320 ms), sóbrio e com propósito — nunca ornamental (brandbook: sem
+infantilização). Só `transform`/`opacity`/`filter`; respeita `prefers-reduced-motion` (CSS e JS).
+
+| Momento | Resposta visual |
+|---|---|
+| Status, prioridade ou etapa muda | Pílula/selo dá um "pop" (escala .92→1) com anel de destaque que se dissolve; contadores de filtro também |
+| Concluir tarefa | Círculo se preenche, ✓ se desenha, anel fino no gradiente da marca se expande e some; título se risca com traço desenhado (otimista — volta se a API recusar). Reabrir reverte rápido |
+| Arrastar no kanban | Cartão erguido (escala 1,03 + inclinação ≤ 1,5°, sombra profunda); coluna-alvo com borda em gradiente; lugar tracejado onde o cartão vai cair, inclusive entre colunas; ao soltar, assenta (220 ms) e pisca um anel uma vez |
+| Enviar/salvar | Botão mostra ✓ desenhado + "Enviado/Salvo" por ~1,2 s (comentário, e-mail do projeto, proposta salvar/enviar/aprovar, NF pública, upload, novo projeto, cliente, freelancer). Diálogos fecham logo após a confirmação |
+| Upload | Arquivo em envio com barra indeterminada; concluído desliza com ✓; novo arquivo entra na lista |
+| Listas e cartões | Entrada escalonada (6 px, 30 ms, máx. 10 itens) só na montagem ou para itens novos — *refetch* não reanima |
+| Números | KPIs numéricos contam até o valor; barras de progresso crescem a partir de 0; contador de não lidas pulsa uma vez ao aumentar |
+| Troca de rota | Conteúdo surge com *fade* + 4 px |
 
 ### 10.6 Responsivo e PWA
 

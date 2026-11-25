@@ -155,10 +155,35 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 
 ### Lei 9 — Todos os estados
 
-Toda tela/lista tem: carregando (`Skeleton` que imita o layout), vazio (`EmptyState` com
+Toda tela/lista tem: carregando (`Skeleton` que imita o layout — presets de `ui/skeletons.tsx`), vazio (`EmptyState` com
 próximo passo), erro (`ErrorState` com "Tentar novamente"), sucesso (toast). Ações destrutivas
 com `ConfirmDialog`. Botões em requisição usam `loading` (mantém rótulo). Atualização otimista
 no kanban.
+
+### Movimento (complementa a Lei 9)
+
+Micro-interações aumentam a qualidade percebida — **com sobriedade** (brandbook: profissional, sem ornamento nem
+infantilização). Na dúvida, menos.
+
+- **Durações:** 120–320 ms (`--motion-fast` 120 · `--motion-base` 200 · `--motion-slow` 320). Exceções: brilho do
+  skeleton (loop) e contagem de números (~600 ms).
+- **Easing:** `--ease-out` (padrão) e `--ease-spring` (mola contida: pop de status, assentar cartão). Sem quique.
+- **Só GPU:** anime `transform`/`opacity`/`filter`. Nunca `width`/`height`/`top`/margens, nunca `transition: all`.
+- **`prefers-reduced-motion`:** CSS desliga as animações decorativas; JS usa `useReducedMotion()` e pula o que dirige.
+- **Onde vive:** keyframes/classes em `src/app/motion.css` (importado em `(app)/layout.tsx`, `nf/[token]/layout.tsx`
+  e no convite); hooks/peças em `src/components/ui/motion.tsx`. Telas **nunca** usam classes `motion-*` direto: usam o kit.
+- **Quando animar:** resposta a uma ação do usuário (mudou, concluiu, enviou, soltou) ou chegada de conteúdo. Nunca em
+  loop chamando atenção, nunca a cada *refetch*.
+
+| Precisa de… | Use |
+|---|---|
+| "Pop" quando um valor muda | `pulseKey={valor}` em `Pill`/`Badge` (já em `TaskStatusPill`, `PriorityPill`, selos de status, etapa) ou `useChangePulse(valor)` |
+| Confirmação após mutação | `const ok = useSuccessFlash()` → `onSuccess: () => ok.flash(fecharOuNavegar)` + `<Button success={ok.success} successLabel="Enviado">` (`ConfirmDialog` aceita `success`) |
+| Concluir tarefa | `TaskCheck` + `DoneTitle` (domain) com estado otimista no pai |
+| Entrada de lista | `const enter = useEntrance()` → `{...enter(id)}` no item (DataTable, TaskList, Kanban já fazem) |
+| Números / contador | `CountUp` (Stat numérico já usa), `CountBadge` (pulsa ao aumentar) |
+| Bloco que surge (passo de assistente) | `<Reveal key={passo}>` |
+| Carregando | Presets de `ui/skeletons.tsx`: `ListPageSkeleton`, `DetailPageSkeleton` (`DetailBodySkeleton`), `DashboardSkeleton`, `KanbanSkeleton`/`BoardPageSkeleton`, `FormSkeleton`/`FormPageSkeleton`, `TableRowsSkeleton`, `StatGridSkeleton`, `CardGridSkeleton`, `AppShellSkeleton`. Nunca spinner nem tela em branco; `Suspense` sempre com `fallback` de preset |
 
 ### Lei 10 — Texto e acessibilidade
 

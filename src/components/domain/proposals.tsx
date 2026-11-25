@@ -4,7 +4,7 @@
  * datas registradas pelo sistema e arquivo anexo; nova versão, envio, aprovação (ativa o projeto) e recusa.
  */
 import { useRef, useState } from "react";
-import { Button, ConfirmDialog, DateInput, Dialog, EmptyState, ErrorState, Field, Icon, IconButton, MoneyField, MoneyInput, Section, SelectField, Skeleton, TextareaField, type Option } from "@/components/ui";
+import { Button, ConfirmDialog, DateInput, Dialog, EmptyState, ErrorState, Field, Icon, IconButton, MoneyField, MoneyInput, Section, SelectField, Skeleton, TextareaField, useSuccessFlash, type Option } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { proposalsApi, proposalsExtraApi, type InstallmentInput } from "@/data/services";
 import { usePermissions } from "@/components/layout/session";
@@ -46,11 +46,12 @@ function ProposalDialog({ projectId, proposal, onClose }: { projectId: ID; propo
   const sum = rows.reduce((a, r) => a + r.amount, 0);
   const diff = amount - sum;
 
+  const saved = useSuccessFlash();
   const save = useApiMutation(
     (body: Parameters<typeof proposalsExtraApi.save>[1]) => proposalsExtraApi.save(projectId, body),
     {
       success: (p) => `Proposta v${p.version} salva como rascunho`,
-      onSuccess: onClose,
+      onSuccess: () => saved.flash(onClose),
       onError: (e) => e.fieldErrors && setErrors(e.fieldErrors),
     },
   );
@@ -90,7 +91,7 @@ function ProposalDialog({ projectId, proposal, onClose }: { projectId: ID; propo
           <Button variant="ghost" onClick={onClose} disabled={save.isPending}>
             Cancelar
           </Button>
-          <Button variant="primary" loading={save.isPending} onClick={submit}>
+          <Button variant="primary" loading={save.isPending} success={saved.success} onClick={submit}>
             Salvar rascunho
           </Button>
         </>
@@ -193,10 +194,12 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
   const [rejecting, setRejecting] = useState<ProposalRow | null>(null);
   const canAct = canWriteAll("commercial") && projectStatus === "cotacao";
 
-  const send = useApiMutation((id: ID) => proposalsApi.send(id), { success: (p) => `Proposta v${p.version} enviada` });
+  const sent = useSuccessFlash();
+  const approved = useSuccessFlash();
+  const send = useApiMutation((id: ID) => proposalsApi.send(id), { success: (p) => `Proposta v${p.version} enviada`, onSuccess: () => sent.flash() });
   const approve = useApiMutation((id: ID) => proposalsApi.approve(id), {
     success: "Proposta aprovada: o projeto está ativo, com recebíveis e tarefas criados",
-    onSuccess: () => setApproving(null),
+    onSuccess: () => approved.flash(() => setApproving(null)),
   });
   const reject = useApiMutation((id: ID) => proposalsApi.reject(id), { success: "Recusa registrada", onSuccess: () => setRejecting(null) });
 
@@ -248,17 +251,19 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
                   </Button>
                 )}
                 <span className="flex-1" />
-                {canAct && p.status === "rascunho" && (
+                {canAct && (p.status === "rascunho" || (sent.success && send.variables === p.id)) && (
                   <>
-                    <Button size="sm" icon="edit" onClick={() => setEditing(p)}>
-                      Editar rascunho
-                    </Button>
-                    <Button size="sm" variant="primary" icon="send" loading={send.isPending && send.variables === p.id} onClick={() => send.mutate(p.id)}>
+                    {p.status === "rascunho" && (
+                      <Button size="sm" icon="edit" onClick={() => setEditing(p)}>
+                        Editar rascunho
+                      </Button>
+                    )}
+                    <Button size="sm" variant="primary" icon="send" loading={send.isPending && send.variables === p.id} success={sent.success && send.variables === p.id} successLabel="Enviada" onClick={() => send.mutate(p.id)}>
                       Enviar proposta
                     </Button>
                   </>
                 )}
-                {canAct && p.status === "enviada" && (
+                {canAct && p.status === "enviada" && !(sent.success && send.variables === p.id) && (
                   <>
                     <Button size="sm" variant="destructive-ghost" onClick={() => setRejecting(p)}>
                       Registrar recusa…
@@ -293,6 +298,8 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
         }
         confirmLabel="Aprovar proposta"
         loading={approve.isPending}
+        success={approved.success}
+        successLabel="Aprovada"
         onConfirm={() => approving && approve.mutate(approving.id)}
       />
       <ConfirmDialog

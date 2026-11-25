@@ -8,7 +8,9 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Icon } from "./icon";
 import { Checkbox } from "./select";
-import { EmptyState, ErrorState, Skeleton } from "./display";
+import { EmptyState, ErrorState } from "./display";
+import { useEntrance } from "./motion";
+import { TableRowsSkeleton } from "./skeletons";
 import { IconButton } from "./button";
 
 export interface Column<T> {
@@ -56,6 +58,7 @@ export function DataTable<T>({ rows, columns, getRowId, isLoading, error, onRetr
   const router = useRouter();
   const [sort, setSort] = useState(initialSort ?? null);
   const [page, setPage] = useState(0);
+  const enter = useEntrance();
 
   const sorted = useMemo(() => {
     if (!rows) return [];
@@ -82,15 +85,8 @@ export function DataTable<T>({ rows, columns, getRowId, isLoading, error, onRetr
 
   if (isLoading || !rows) {
     return (
-      <div className={cn("divide-y divide-line", className)} aria-busy>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-4 py-3">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 flex-1" />
-            <Skeleton className="h-4 w-24 max-md:hidden" />
-            <Skeleton className="h-4 w-16" />
-          </div>
-        ))}
+      <div className={className} aria-busy>
+        <TableRowsSkeleton rows={6} />
       </div>
     );
   }
@@ -148,13 +144,15 @@ export function DataTable<T>({ rows, columns, getRowId, isLoading, error, onRetr
           <tbody>
             {visible.map((row) => {
               const id = getRowId(row);
+              const anim = enter(id);
               return (
                 <tr
                   key={id}
+                  style={anim.style}
                   onClick={clickable ? () => activate(row) : undefined}
                   onKeyDown={clickable ? (e) => e.key === "Enter" && activate(row) : undefined}
                   tabIndex={clickable ? 0 : undefined}
-                  className={cn("border-b border-line last:border-0 transition-colors", clickable && "cursor-pointer hover:bg-layer-hover/60 focus-visible:bg-layer-hover", selected.includes(id) && "bg-accent-subtle/60", rowClassName?.(row))}
+                  className={cn(anim.className, "border-b border-line last:border-0 transition-colors", clickable && "cursor-pointer hover:bg-layer-hover/60 focus-visible:bg-layer-hover", selected.includes(id) && "bg-accent-subtle/60", rowClassName?.(row))}
                 >
                   {selectable && (
                     <td className="w-10 px-4" onClick={(e) => e.stopPropagation()}>
@@ -178,8 +176,9 @@ export function DataTable<T>({ rows, columns, getRowId, isLoading, error, onRetr
       <ul className="divide-y divide-line md:hidden">
         {visible.map((row) => {
           const id = getRowId(row);
+          const anim = enter(id);
           return (
-            <li key={id}>
+            <li key={id} className={anim.className} style={anim.style}>
               <div
                 role={clickable ? "button" : undefined}
                 tabIndex={clickable ? 0 : undefined}

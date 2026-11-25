@@ -2,9 +2,8 @@
 /** Cartão compacto de tarefa para quadros (kanban): título, status opcional, prioridade, prazo, subtarefas, comentários e responsável. */
 import { Icon, ProgressRing } from "@/components/ui";
 import type { TaskView } from "@/data/services";
-import { cn } from "@/lib/cn";
 import { AssigneePill, type PersonRef } from "./pickers";
-import { DueChip, PriorityPill, TaskStatusPill } from "./badges";
+import { DoneTitle, DueChip, PriorityPill, TaskStatusPill } from "./badges";
 
 const personOf = (t: TaskView): PersonRef | null => (t.assigneeUserId ? { kind: "user", id: t.assigneeUserId } : t.assigneeFreelancerId ? { kind: "freelancer", id: t.assigneeFreelancerId } : null);
 
@@ -20,7 +19,9 @@ export function TaskCard({ task: t, onOpen, showStatus, showProject }: { task: T
       className="cursor-pointer space-y-2.5 rounded-lg border border-line bg-surface p-3 shadow-raised transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised-2 focus-visible:border-accent focus-visible:outline-none"
     >
       {showProject && t.projectCode && <p className="truncate font-display text-xs font-medium text-fg-subtle">{t.projectCode}{t.projectTitle ? ` · ${t.projectTitle}` : ""}</p>}
-      <p className={cn("text-sm font-medium leading-snug text-fg", done && "text-fg-subtle line-through")}>{t.title}</p>
+      <p className="text-sm font-medium leading-snug text-fg">
+        <DoneTitle done={done} multiline>{t.title}</DoneTitle>
+      </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {showStatus && <TaskStatusPill value={t.statusKey} size="sm" />}
         <PriorityPill value={t.priorityKey} size="sm" />

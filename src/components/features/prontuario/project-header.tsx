@@ -78,7 +78,7 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
   const done = project.status === "concluido" || project.status === "arquivado";
 
   const stagePill = (
-    <Pill static={!editable} className="gap-1.5">
+    <Pill static={!editable} className="gap-1.5" pulseKey={project.status === "cotacao" ? project.quoteStageKey : project.projectStageKey}>
       {project.status === "cotacao" ? <QuoteStageLabel stageKey={project.quoteStageKey} /> : <ProjectStageLabel stageKey={project.projectStageKey} />}
     </Pill>
   );

@@ -2,7 +2,7 @@
 import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import { ClientDetailScreen } from "@/components/features/clientes/client-detail-screen";
-import { PageBody, PageHeader, Skeleton } from "@/components/ui";
+import { DetailPageSkeleton, PageHeader } from "@/components/ui";
 
 export default function ClienteDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -11,9 +11,7 @@ export default function ClienteDetalhePage() {
       fallback={
         <>
           <PageHeader crumbs={[{ label: "Clientes", href: "/clientes", icon: "clients" }, { label: "Carregando…" }]} />
-          <PageBody>
-            <Skeleton className="h-24" />
-          </PageBody>
+          <DetailPageSkeleton header={false} />
         </>
       }
     >

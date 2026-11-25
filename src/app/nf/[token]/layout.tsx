@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "../../motion.css";
 
 export const metadata: Metadata = {
   title: "Enviar nota fiscal",

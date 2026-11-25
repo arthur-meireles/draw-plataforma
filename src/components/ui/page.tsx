@@ -103,11 +103,11 @@ export function ClearFiltersButton({ onClick, show }: { onClick: () => void; sho
   );
 }
 
-/** Corpo rolável da página. `padded` para páginas de conteúdo; sem padding para kanban/tabelas full-bleed. */
+/** Corpo rolável da página. `padded` para páginas de conteúdo; sem padding para kanban/tabelas full-bleed. Entra com fade + 4px na montagem. */
 export function PageBody({ children, className, padded = true, width = "full" }: { children: React.ReactNode; className?: string; padded?: boolean; width?: "full" | "content" | "narrow" }) {
   return (
     <div className={cn("min-h-0 flex-1 overflow-y-auto scrollbar-thin", className)}>
-      <div className={cn(padded && "p-3 md:p-6", width === "content" && "mx-auto max-w-6xl", width === "narrow" && "mx-auto max-w-3xl", "max-md:pb-24")}>{children}</div>
+      <div className={cn("motion-page", padded && "p-3 md:p-6", width === "content" && "mx-auto max-w-6xl", width === "narrow" && "mx-auto max-w-3xl", "max-md:pb-24")}>{children}</div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
-import { Badge, Button, DescriptionList, EmptyState, ErrorState, FileDropzone, Icon, MoneyField, Skeleton, TextField, type IconName } from "@/components/ui";
+import { Badge, Button, DescriptionList, EmptyState, ErrorState, FileDropzone, Icon, MoneyField, Skeleton, TextField, useSuccessFlash, type IconName } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { PAYABLE_STATUS_LABEL } from "@/data/reference";
 import { INVOICE_MAX_BYTES, publicInvoiceApi, publicInvoiceExtraApi } from "@/data/services";
@@ -66,9 +66,10 @@ export function PublicInvoiceForm({ token }: { token: string }) {
   const info = q.data;
   const values = { legalName: legalName ?? info?.freelancer.legalName ?? info?.freelancer.name ?? "", document: document ?? info?.freelancer.document ?? "", pixKey: pixKey ?? info?.freelancer.pixKey ?? "" };
 
+  const sent = useSuccessFlash();
   const submit = useApiMutation(() => publicInvoiceExtraApi.submitWithFile(token, { ...values, invoiceNumber, amountCents: amount, file }), {
     success: false,
-    onSuccess: setResult,
+    onSuccess: (r) => sent.flash(() => setResult(r), 700),
     onError: (e) => e.fieldErrors && setErrors({ ...e.fieldErrors, amount: e.fieldErrors.amountCents ?? "" }),
   });
 
@@ -93,11 +94,22 @@ export function PublicInvoiceForm({ token }: { token: string }) {
   if (q.isLoading)
     return (
       <AuthLayout width="lg">
-        <div className="space-y-4" aria-busy>
-          <Skeleton className="h-7 w-2/3" />
-          <Skeleton className="h-36 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
+        <div className="space-y-5" aria-busy role="status" aria-label="Carregando">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-2/3" />
+            <Skeleton className="h-4 w-5/6" />
+          </div>
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className={i === 0 ? "space-y-1.5 sm:col-span-2" : "space-y-1.5"}>
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-9 w-full" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-full" />
         </div>
       </AuthLayout>
     );
@@ -193,7 +205,7 @@ export function PublicInvoiceForm({ token }: { token: string }) {
             validate={(f) => (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf" ? "Envie a nota fiscal em PDF" : f.size > INVOICE_MAX_BYTES ? `O arquivo tem ${fileSize(f.size)}; o limite é 10 MB` : null)}
           />
         </div>
-        <Button type="submit" variant="primary" size="lg" icon="send" loading={submit.isPending} className="w-full">
+        <Button type="submit" variant="primary" size="lg" icon="send" loading={submit.isPending} success={sent.success} successLabel="Nota enviada" className="w-full">
           Enviar nota fiscal
         </Button>
       </form>
