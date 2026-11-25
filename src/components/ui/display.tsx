@@ -7,6 +7,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/format";
 import { Button } from "./button";
+import { Copyable } from "./copy-button";
 import { Icon, type IconName } from "./icon";
 import { Tooltip } from "./overlay";
 import { CountUp, useChangePulse, useReducedMotion } from "./motion";
@@ -211,13 +212,14 @@ export function PropertyRow({ label, icon, children, className }: { label: strin
 }
 
 /** Lista descritiva simples (chave: valor). */
-export function DescriptionList({ items, columns = 2 }: { items: { label: string; value: React.ReactNode; hidden?: boolean }[]; columns?: 1 | 2 | 3 }) {
+/** Lista rótulo → valor. `copy`: texto a copiar com um clique (e-mail, PIX, CNPJ…) — mostra o botão de copiar ao lado do valor. */
+export function DescriptionList({ items, columns = 2 }: { items: { label: string; value: React.ReactNode; hidden?: boolean; copy?: string | null }[]; columns?: 1 | 2 | 3 }) {
   return (
     <dl className={cn("grid gap-x-6 gap-y-3", columns === 2 && "sm:grid-cols-2", columns === 3 && "sm:grid-cols-2 lg:grid-cols-3")}>
       {items.filter((i) => !i.hidden).map((i) => (
         <div key={i.label} className="min-w-0">
           <dt className="text-xs text-fg-subtle">{i.label}</dt>
-          <dd className="mt-0.5 break-words text-sm text-fg">{i.value ?? "—"}</dd>
+          <dd className="mt-0.5 break-words text-sm text-fg">{i.copy ? <Copyable value={i.copy} label={i.label}>{i.value}</Copyable> : (i.value ?? "—")}</dd>
         </div>
       ))}
     </dl>

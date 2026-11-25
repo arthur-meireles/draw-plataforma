@@ -152,6 +152,9 @@ Invioláveis. `npm run check:rules` verifica parte delas automaticamente.
 - Matriz única em `src/lib/permissions.ts` (seção 9). Telas usam `usePermissions()` para
   **esconder** ações; o serviço é quem **garante** (e removerá campos de valor — RF-M1-05).
 - Valores monetários na tela sempre via `<Money cents>` (mostra cadeado sem permissão).
+- Dado de cadastro que alguém precisa colar em outro lugar (e-mail, telefone, CNPJ/CPF, chave PIX, banco/agência/conta,
+  nº de NF) é sempre copiável com um clique: `<Copyable value label>` ou `copy` no item do `DescriptionList`. Dado
+  protegido sem permissão não oferece cópia.
 
 ### Lei 9 — Todos os estados
 

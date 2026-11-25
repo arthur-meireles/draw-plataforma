@@ -157,10 +157,10 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
                 <DescriptionList
                   columns={1}
                   items={[
-                    { label: "Razão social / nome", value: req.declaredLegalName },
-                    { label: "CPF / CNPJ", value: req.declaredDocument },
-                    { label: "Chave PIX", value: req.declaredPixKey },
-                    { label: "Nº da NF", value: req.declaredInvoiceNumber },
+                    { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
+                    { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
+                    { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
+                    { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
                     { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
                   ]}
                 />

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Avatar, Badge, Button, ConfirmDialog, DataTable, Dialog, MoneyField, RowActions, SelectField, type Column, type Option } from "@/components/ui";
+import { Avatar, Badge, Button, ConfirmDialog, DataTable, Dialog, MoneyField, RowActions, SelectField, type Column, type Option, Copyable } from "@/components/ui";
 import { Money, usePeopleOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
@@ -83,7 +83,7 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
           <Avatar name={m.name} color={m.color} size="lg" />
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{m.name}</span>
-            <span className="block truncate text-xs text-fg-subtle">{m.email}</span>
+            <Copyable value={m.email} label="E-mail" className="text-xs text-fg-subtle" />
           </span>
         </span>
       ),

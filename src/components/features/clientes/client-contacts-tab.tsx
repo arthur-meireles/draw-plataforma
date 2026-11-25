@@ -1,7 +1,7 @@
 "use client";
 /** Aba "Contatos": tabela com marcas de cobrança/decisor e CRUD (RF-M2-02). */
 import { useState } from "react";
-import { Badge, Button, ConfirmDialog, DataTable, RowActions, type Column } from "@/components/ui";
+import { Badge, Button, ConfirmDialog, DataTable, RowActions, type Column, Copyable } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { clientsApi } from "@/data/services";
 import type { ClientContact } from "@/data/types";
@@ -26,8 +26,8 @@ export function ClientContactsTab({ client: c, canWrite }: { client: ClientDetai
         </span>
       ),
     },
-    { id: "email", header: "E-mail", mobile: "subtitle", cell: (x) => <a href={`mailto:${x.email}`} onClick={(e) => e.stopPropagation()} className="text-accent hover:underline">{x.email}</a> },
-    { id: "phone", header: "Telefone", hideBelow: "md", mobile: "meta", cell: (x) => <span className="text-fg-muted">{x.phone ?? "—"}</span> },
+    { id: "email", header: "E-mail", mobile: "subtitle", cell: (x) => <Copyable value={x.email} label="E-mail"><a href={`mailto:${x.email}`} onClick={(e) => e.stopPropagation()} className="text-accent hover:underline">{x.email}</a></Copyable> },
+    { id: "phone", header: "Telefone", hideBelow: "md", mobile: "meta", cell: (x) => <span className="text-fg-muted"><Copyable value={x.phone} label="Telefone" /></span> },
     {
       id: "flags",
       header: "Papéis",

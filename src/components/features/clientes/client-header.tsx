@@ -1,7 +1,7 @@
 "use client";
 /** Cabeçalho da ficha do cliente (RF-M2-02): nome, CNPJ, segmento, status, grupo com links para as irmãs. */
 import Link from "next/link";
-import { Badge, Icon } from "@/components/ui";
+import { Badge, Icon, Copyable } from "@/components/ui";
 import { formatCnpj } from "@/lib/format";
 import { ClientStatusBadge } from "./client-status-badge";
 import type { ClientDetail } from "./use-clients";
@@ -18,7 +18,7 @@ export function ClientHeader({ client: c }: { client: ClientDetail }) {
           <p className="truncate text-xs text-fg-subtle">{c.legalName}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-fg-subtle">
             <ClientStatusBadge status={c.status} />
-            <span className="font-mono">{formatCnpj(c.cnpj)}</span>
+            <Copyable value={c.cnpj} label="CNPJ" className="font-mono">{formatCnpj(c.cnpj)}</Copyable>
             <Badge icon="tag">{c.segment}</Badge>
             {c.group && (
               <span className="inline-flex flex-wrap items-center gap-1.5">

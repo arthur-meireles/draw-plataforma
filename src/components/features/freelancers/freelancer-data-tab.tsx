@@ -12,8 +12,8 @@ export function FreelancerDataTab({ freelancer: f }: { freelancer: FreelancerDet
           columns={1}
           items={[
             { label: "Nome", value: f.name },
-            { label: "E-mail", value: f.email },
-            { label: "Telefone", value: f.phone ?? "Não informado" },
+            { label: "E-mail", value: f.email, copy: f.email },
+            { label: "Telefone", value: f.phone ?? "Não informado", copy: f.phone },
             { label: "Observações", value: f.notes ?? "Sem observações" },
           ]}
         />
@@ -22,12 +22,12 @@ export function FreelancerDataTab({ freelancer: f }: { freelancer: FreelancerDet
         <DescriptionList
           columns={2}
           items={[
-            { label: "Razão social / nome na NF", value: protectedValue(f.legalName) },
-            { label: "CPF ou CNPJ", value: protectedValue(f.document) },
-            { label: "Chave PIX", value: protectedValue(f.pixKey) },
-            { label: "Banco", value: protectedValue(f.bankName) },
-            { label: "Agência", value: protectedValue(f.bankAgency) },
-            { label: "Conta", value: protectedValue(f.bankAccount) },
+            { label: "Razão social / nome na NF", value: protectedValue(f.legalName), copy: f.canSeeBank ? f.legalName : null },
+            { label: "CPF ou CNPJ", value: protectedValue(f.document), copy: f.canSeeBank ? f.document : null },
+            { label: "Chave PIX", value: protectedValue(f.pixKey), copy: f.canSeeBank ? f.pixKey : null },
+            { label: "Banco", value: protectedValue(f.bankName), copy: f.canSeeBank ? f.bankName : null },
+            { label: "Agência", value: protectedValue(f.bankAgency), copy: f.canSeeBank ? f.bankAgency : null },
+            { label: "Conta", value: protectedValue(f.bankAccount), copy: f.canSeeBank ? f.bankAccount : null },
           ]}
         />
       </Section>

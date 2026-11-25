@@ -1,6 +1,6 @@
 "use client";
 /** Cabeçalho da ficha do freelancer (RF-M2-04): avatar, especialidades, contato e carga atual. */
-import { Avatar, Badge, Icon } from "@/components/ui";
+import { Avatar, Badge, Icon, Copyable } from "@/components/ui";
 import { SpecialtyBadges } from "./specialty-badges";
 import type { FreelancerDetail } from "./use-freelancers";
 
@@ -24,14 +24,16 @@ export function FreelancerHeader({ freelancer: f }: { freelancer: FreelancerDeta
           </div>
           <SpecialtyBadges specialties={f.specialties} />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-subtle">
-            <a href={`mailto:${f.email}`} className="inline-flex items-center gap-1.5 hover:text-fg">
+            <span className="inline-flex items-center gap-1.5">
               <Icon name="email" size="xs" />
-              {f.email}
-            </a>
+              <Copyable value={f.email} label="E-mail">
+                <a href={`mailto:${f.email}`} className="hover:text-fg">{f.email}</a>
+              </Copyable>
+            </span>
             {f.phone && (
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="user" size="xs" />
-                {f.phone}
+                <Copyable value={f.phone} label="Telefone" />
               </span>
             )}
             <span className="inline-flex items-center gap-1.5">

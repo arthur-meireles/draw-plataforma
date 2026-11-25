@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Avatar, Combobox, DateInput, Icon, Pill, PropertyRow, Section, IconButton, type Option } from "@/components/ui";
+import { Avatar, Combobox, DateInput, Icon, Pill, PropertyRow, Section, IconButton, type Option, Copyable } from "@/components/ui";
 import { PausedBadge, Money, PriorityPill, ProjectStageLabel, ProjectStatusBadge, ProjectTypeIcon, QuoteStageLabel, usePeopleOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
@@ -58,12 +58,12 @@ export function ProjectProperties({ project, className }: { project: ProjectDeta
             contentClassName="w-64"
           />
         ) : project.billingContact ? (
-          <span className="block truncate text-sm" title={project.billingContact.email}>{project.billingContact.name}</span>
+          <span className="block min-w-0 text-sm"><span className="block truncate">{project.billingContact.name}</span><Copyable value={project.billingContact.email} label="E-mail" className="text-xs text-fg-subtle" /></span>
         ) : (
           <span className="text-fg-subtle">Sem contato de faturamento</span>
         )}
       </PropertyRow>}
-      {!isFreelancer && <PropertyRow label="CNPJ" icon="tag"><span className="tabular-nums text-fg-muted">{formatCnpj(project.client.cnpj)}</span></PropertyRow>}
+      {!isFreelancer && <PropertyRow label="CNPJ" icon="tag"><Copyable value={project.client.cnpj} label="CNPJ" className="tabular-nums text-fg-muted">{formatCnpj(project.client.cnpj)}</Copyable></PropertyRow>}
       <PropertyRow label="Tipo" icon="project"><span className="inline-flex items-center gap-1.5"><ProjectTypeIcon icon={project.typeIcon} size="xs" />{project.typeName}</span></PropertyRow>
       {!isFreelancer && <PropertyRow label="Origem" icon="commercial"><span className="text-fg-muted">{ORIGIN_LABEL[project.origin]}</span></PropertyRow>}
       <PropertyRow label="Responsável" icon="user">
