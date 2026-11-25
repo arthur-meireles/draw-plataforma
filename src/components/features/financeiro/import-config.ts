@@ -18,9 +18,9 @@ export const IMPORT_KINDS: { value: WizardKind; label: string; description: stri
     label: "Freelancers",
     description: "Cadastra freelancers novos; quem já tem o mesmo e-mail é ignorado.",
     icon: "freelancers",
-    columns: ["nome", "email", "telefone", "especialidade", "pix"],
+    columns: ["nome", "email", "telefone", "cargo", "especialidade", "pix"],
     required: ["nome", "email"],
-    example: ["Ana Souza", "ana.souza@email.com", "(11) 91234-5678", "design", "ana.souza@email.com"],
+    example: ["Ana Souza", "ana.souza@email.com", "(11) 91234-5678", "Designer gráfico", "design", "ana.souza@email.com"],
     file: "modelo-freelancers.csv",
   },
   {

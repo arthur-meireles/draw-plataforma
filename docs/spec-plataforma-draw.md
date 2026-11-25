@@ -23,7 +23,7 @@
 >
 > **Mudança da 0.6:** qualidade percebida — micro-interações discretas (mudança de status, concluir tarefa, arrastar no kanban, confirmação de envio, entrada de listas, números e transição de página) e *skeletons* estruturais em todas as telas (seção 10.5). Sem impacto em modelo, regras ou contrato da API.
 
-> **Mudança da 0.7:** **não há e-mail interno.** Saem do escopo: conectar a caixa do usuário (Gmail/SMTP), assinatura, aba **E-mails** do projeto e envio de e-mail pelo projeto (antigos RF-M11-02 a 07, RNF-14, ADR-009, tabelas `mail_accounts`, `mail_signatures`, `project_emails`) e notificações por e-mail/resumo diário (RF-M10-02/03). A **Caixa de entrada** é só dentro do sistema: menções (sempre entregues), comentários e eventos ligados a você, e o que interessa ao administrador. Ficam apenas os e-mails **transacionais** para pessoas de fora: convite, recuperação de senha e pedido de NF ao freelancer (RF-M11-01). Também: dados de cadastro (e-mail, telefone, CNPJ/CPF, chave PIX, dados bancários, nº de NF) copiáveis com um clique onde aparecem (RF-X-07).
+> **Mudança da 0.7:** **não há e-mail interno.** Saem do escopo: conectar a caixa do usuário (Gmail/SMTP), assinatura, aba **E-mails** do projeto e envio de e-mail pelo projeto (antigos RF-M11-02 a 07, RNF-14, ADR-009, tabelas `mail_accounts`, `mail_signatures`, `project_emails`) e notificações por e-mail/resumo diário (RF-M10-02/03). A **Caixa de entrada** é só dentro do sistema: menções (sempre entregues), comentários e eventos ligados a você, e o que interessa ao administrador. Ficam apenas os e-mails **transacionais** para pessoas de fora: convite, recuperação de senha e pedido de NF ao freelancer (RF-M11-01). Também: dados de cadastro (e-mail, telefone, CNPJ/CPF, chave PIX, dados bancários, nº de NF) copiáveis com um clique onde aparecem (RF-X-07). Freelancer ganha **cargo** (`job_title`, obrigatório no cadastro, com sugestões) exibido na lista, na ficha, na equipe do projeto e no seletor de pessoas; busca por cargo; coluna `cargo` na importação de freelancers.
 ---
 
 ## 0. Como usar este documento
@@ -192,7 +192,7 @@ erDiagram
 | `client_groups` | `name` |
 | `clients` | `group_id` (nulo), `legal_name`, `trade_name`, `cnpj` (único por organização, validado), `address` (colunas próprias), `segment`, `status`, `notes`, `payment_terms_note` (texto, ex.: "20 dias após emissão da NF"), `payment_term_days` (int, nulo) |
 | `client_contacts` | `client_id`, `name`, `email`, `phone`, `job_title`, `is_billing_contact`, `is_decision_maker` |
-| `freelancers` | `user_id` (nulo até ter login), `name`, `email`, `phone`, `legal_name`, `document` (CPF/CNPJ, cifrado), `pix_key` (cifrado), `bank_*` (cifrados), `status`, `notes` |
+| `freelancers` | `user_id` (nulo até ter login), `name`, `email`, `phone`, `job_title` (cargo/área de atuação, obrigatório no cadastro — ex.: Designer gráfico, Advogado revisor), `legal_name`, `document` (CPF/CNPJ, cifrado), `pix_key` (cifrado), `bank_*` (cifrados), `status`, `notes` |
 | `freelancer_specialties` | `freelancer_id`, `specialty` (enum: `design`/`roteiro`/`juridico`/`outro`) |
 | `project_types` | `name`, `code_prefix` (único), `description`, `active`. **Catálogo mantido pelo admin.** |
 | `project_type_task_templates` | `project_type_id`, `stage_key`, `title`, `order`, `default_duration_days` |

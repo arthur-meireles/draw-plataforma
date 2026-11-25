@@ -29,6 +29,7 @@ export interface FreelancerInput {
   bankName?: string | null;
   bankAgency?: string | null;
   bankAccount?: string | null;
+  jobTitle?: string | null;
   specialties: Specialty[];
   status: Freelancer["status"];
   notes?: string | null;
@@ -190,7 +191,7 @@ export const freelancersApi = {
         .filter((x) => me.role !== "freelancer" || x.id === myFl)
         .filter((x) => !f.specialty || x.specialties.includes(f.specialty))
         .filter((x) => !f.status || x.status === f.status)
-        .filter((x) => !q || `${x.name} ${x.email}`.toLowerCase().includes(q))
+        .filter((x) => !q || `${x.name} ${x.email} ${x.jobTitle ?? ""}`.toLowerCase().includes(q))
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((x) => {
           const members = db.projectMembers.filter((m) => m.freelancerId === x.id && !m.deletedAt);
@@ -255,6 +256,7 @@ export const freelancersApi = {
         bankName: input.bankName ?? null,
         bankAgency: input.bankAgency ?? null,
         bankAccount: input.bankAccount ?? null,
+        jobTitle: input.jobTitle?.trim() || null,
         specialties: input.specialties,
         status: input.status,
         notes: input.notes ?? null,
@@ -273,7 +275,7 @@ export const freelancersApi = {
       if (!f) throw new ApiError(404, "Freelancer não encontrado.");
       validateFreelancer(input);
       const canBank = access(me, "freelancerBank") === "T" || id === myFl;
-      const patch = { ...input };
+      const patch = { ...input, jobTitle: input.jobTitle?.trim() || null };
       if (!canBank) {
         delete patch.document;
         delete patch.pixKey;
@@ -306,6 +308,7 @@ function validateFreelancer(input: FreelancerInput) {
   if (!input.name.trim()) errors.name = "Informe o nome";
   if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) errors.email = "Informe um e-mail válido, ex.: nome@gmail.com";
   if (!input.specialties.length) errors.specialties = "Escolha ao menos uma especialidade";
+  if (!input.jobTitle?.trim()) errors.jobTitle = "Informe o cargo, ex.: Designer gráfico";
   if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
 }
 

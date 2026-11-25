@@ -22,6 +22,7 @@ export function FreelancerHeader({ freelancer: f }: { freelancer: FreelancerDeta
               </Badge>
             )}
           </div>
+          {f.jobTitle && <p className="text-sm font-medium text-fg-muted">{f.jobTitle}</p>}
           <SpecialtyBadges specialties={f.specialties} />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-subtle">
             <span className="inline-flex items-center gap-1.5">

@@ -124,6 +124,8 @@ export interface Freelancer extends BaseEntity {
   bankName: string | null;
   bankAgency: string | null;
   bankAccount: string | null;
+  /** Cargo / área de atuação (ex.: "Designer gráfico", "Advogada revisora") — mostra rápido o que a pessoa faz. */
+  jobTitle: string | null;
   specialties: Specialty[];
   status: FreelancerStatus;
   notes: string | null;

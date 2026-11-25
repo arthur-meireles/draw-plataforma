@@ -122,6 +122,21 @@ export const SPECIALTY_LABEL: Record<Specialty, string> = {
   outro: "Outro",
 };
 
+/** Sugestões de cargo para freelancers (o campo aceita texto livre). */
+export const FREELANCER_JOB_TITLES = [
+  "Designer gráfico",
+  "Designer de informação",
+  "Ilustrador",
+  "Diagramador",
+  "Motion designer",
+  "UX writer",
+  "Roteirista",
+  "Redator jurídico",
+  "Advogado revisor",
+  "Revisor de texto",
+  "Pesquisador",
+] as const;
+
 export const FILE_CATEGORY_LABEL: Record<FileCategory, string> = {
   entrega: "Entrega",
   briefing: "Briefing",

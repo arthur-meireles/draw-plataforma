@@ -505,6 +505,7 @@ export const projectsApi = {
             agreedAmountCents: money ? m.agreedAmountCents : null,
             name: u?.name ?? f?.name ?? "—",
             email: u?.email ?? f?.email ?? "",
+            jobTitle: u?.jobTitle ?? f?.jobTitle ?? null,
             color: u?.avatarColor ?? f?.avatarColor ?? "#888",
             kind: (u ? "interno" : "freelancer") as "interno" | "freelancer",
             openTasks: db.tasks.filter((t) => t.projectId === p.id && t.statusKey !== "concluida" && !t.deletedAt && ((u && t.assigneeUserId === u.id) || (f && t.assigneeFreelancerId === f.id))).length,

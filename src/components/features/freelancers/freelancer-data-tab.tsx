@@ -12,6 +12,7 @@ export function FreelancerDataTab({ freelancer: f }: { freelancer: FreelancerDet
           columns={1}
           items={[
             { label: "Nome", value: f.name },
+            { label: "Cargo", value: f.jobTitle ?? "Não informado" },
             { label: "E-mail", value: f.email, copy: f.email },
             { label: "Telefone", value: f.phone ?? "Não informado", copy: f.phone },
             { label: "Observações", value: f.notes ?? "Sem observações" },

@@ -5,12 +5,12 @@ import { Button, Dialog, Icon, MultiSelectField, SelectField, TextField, Textare
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { freelancersApi, type FreelancerInput } from "@/data/services";
-import { SPECIALTY_LABEL } from "@/data/reference";
+import { FREELANCER_JOB_TITLES, SPECIALTY_LABEL } from "@/data/reference";
 import type { Freelancer, Specialty } from "@/data/types";
 import { formatPhone, onlyDigits } from "@/lib/format";
 import { formatCpfCnpj } from "@/lib/format-document";
 
-const EMPTY: FreelancerInput = { name: "", email: "", phone: "", legalName: "", document: "", pixKey: "", bankName: "", bankAgency: "", bankAccount: "", specialties: [], status: "ativo", notes: "" };
+const EMPTY: FreelancerInput = { name: "", email: "", phone: "", legalName: "", document: "", pixKey: "", bankName: "", bankAgency: "", bankAccount: "", jobTitle: "", specialties: [], status: "ativo", notes: "" };
 const SPECIALTY_OPTIONS = (Object.keys(SPECIALTY_LABEL) as Specialty[]).map((s) => ({ value: s, label: SPECIALTY_LABEL[s] }));
 
 export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open: boolean; onOpenChange: (o: boolean) => void; freelancer?: Freelancer | null }) {
@@ -35,6 +35,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
             bankName: freelancer.bankName ?? "",
             bankAgency: freelancer.bankAgency ?? "",
             bankAccount: freelancer.bankAccount ?? "",
+            jobTitle: freelancer.jobTitle ?? "",
             specialties: freelancer.specialties,
             status: freelancer.status,
             notes: freelancer.notes ?? "",
@@ -47,7 +48,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
   const saved = useSuccessFlash();
   const save = useApiMutation(
     (input: FreelancerInput) => {
-      const clean: FreelancerInput = { ...input, name: input.name.trim(), email: input.email.trim(), phone: input.phone || null, legalName: input.legalName?.trim() || null, document: input.document || null, pixKey: input.pixKey?.trim() || null, bankName: input.bankName?.trim() || null, bankAgency: input.bankAgency?.trim() || null, bankAccount: input.bankAccount?.trim() || null, notes: input.notes?.trim() || null };
+      const clean: FreelancerInput = { ...input, name: input.name.trim(), email: input.email.trim(), phone: input.phone || null, legalName: input.legalName?.trim() || null, document: input.document || null, pixKey: input.pixKey?.trim() || null, bankName: input.bankName?.trim() || null, bankAgency: input.bankAgency?.trim() || null, bankAccount: input.bankAccount?.trim() || null, jobTitle: input.jobTitle?.trim() || null, notes: input.notes?.trim() || null };
       return freelancer ? freelancersApi.update(freelancer.id, clean) : freelancersApi.create(clean);
     },
     {
@@ -71,6 +72,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
     if (!form.name.trim()) errs.name = "Informe o nome";
     if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) errs.email = "Informe um e-mail válido, ex.: nome@gmail.com";
     if (!form.specialties.length) errs.specialties = "Escolha ao menos uma especialidade";
+    if (!form.jobTitle?.trim()) errs.jobTitle = "Informe o cargo, ex.: Designer gráfico";
     const digits = onlyDigits(form.document ?? "");
     if (canBank && digits && digits.length !== 11 && digits.length !== 14) errs.document = "CPF tem 11 dígitos e CNPJ tem 14";
     setErrors(errs);
@@ -108,7 +110,8 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
         <TextField id="fl-name" label="Nome" required autoFocus containerClassName="sm:col-span-2" value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} autoComplete="off" />
         <TextField id="fl-email" label="E-mail" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} error={errors.email} autoComplete="off" />
         <TextField id="fl-phone" label="Telefone" inputMode="tel" placeholder="(11) 99999-0000" value={form.phone ?? ""} onChange={(e) => set("phone", formatPhone(e.target.value))} />
-        <MultiSelectField label="Especialidades" required containerClassName="sm:col-span-2" options={SPECIALTY_OPTIONS} value={form.specialties} onChange={(v) => set("specialties", v)} placeholder="Escolha uma ou mais" error={errors.specialties} />
+        <TextField id="fl-jobTitle" label="Cargo" required hint="O que a pessoa faz. Ajuda a encontrar quem chamar para cada projeto." placeholder="Ex.: Designer gráfico" suggestions={FREELANCER_JOB_TITLES} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} error={errors.jobTitle} autoComplete="off" />
+        <MultiSelectField label="Especialidades" required options={SPECIALTY_OPTIONS} value={form.specialties} onChange={(v) => set("specialties", v)} placeholder="Escolha uma ou mais" error={errors.specialties} />
         {canManage && freelancer && (
           <SelectField label="Status" options={[{ value: "ativo", label: "Ativo" }, { value: "inativo", label: "Inativo" }]} value={form.status} onChange={(v) => v && set("status", v as Freelancer["status"])} />
         )}

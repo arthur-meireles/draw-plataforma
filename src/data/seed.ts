@@ -51,7 +51,7 @@ import type {
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
 
-export const SEED_VERSION = 8;
+export const SEED_VERSION = 9;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -217,6 +217,13 @@ export function createSeed(): Database {
       bankName: pick(["Nubank", "Itaú", "Inter", "Banco do Brasil", "Bradesco"]),
       bankAgency: `${int(1000, 9999)}`,
       bankAccount: `${int(10000, 99999)}-${int(0, 9)}`,
+      jobTitle: specialties.includes("juridico")
+        ? pick(["Advogado revisor", "Redator jurídico"])
+        : specialties.includes("design")
+          ? pick(["Designer gráfico", "Designer de informação", "Ilustrador", "Diagramador"])
+          : specialties.includes("roteiro")
+            ? pick(["Roteirista", "UX writer"])
+            : pick(["Revisor de texto", "Pesquisador"]),
       specialties,
       status: i === 13 ? "inativo" : "ativo",
       notes: i === 2 ? "Excelente com infográficos e ilustração." : null,

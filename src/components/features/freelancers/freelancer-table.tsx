@@ -36,7 +36,7 @@ export function FreelancerTable({ rows, isLoading, error, onRetry, hasFilters, o
           <Avatar name={f.name} color={f.avatarColor} size="md" />
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{f.name}</span>
-            <span className="block truncate text-xs text-fg-subtle md:hidden">{f.email}</span>
+            <span className="block truncate text-xs text-fg-subtle">{f.jobTitle ?? "Cargo não informado"}</span>
           </span>
         </span>
       ),

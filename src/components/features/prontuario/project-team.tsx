@@ -83,6 +83,7 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
           <Avatar name={m.name} color={m.color} size="lg" />
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{m.name}</span>
+            {m.jobTitle && <span className="block truncate text-xs text-fg-muted">{m.jobTitle}</span>}
             <Copyable value={m.email} label="E-mail" className="text-xs text-fg-subtle" />
           </span>
         </span>

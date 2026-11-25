@@ -391,7 +391,7 @@ export const importsApi = {
           if (existing) Object.assign(existing, { legalName: r.razao_social, tradeName: r.nome_fantasia || existing.tradeName, segment: r.segmento || existing.segment });
           else db.clients.push({ ...baseFields(me.id), groupId: null, legalName: r.razao_social, tradeName: r.nome_fantasia || r.razao_social, cnpj: r.cnpj, address: { street: "", number: "", complement: null, district: "", city: r.cidade ?? "", state: r.uf ?? "", zip: "" }, segment: r.segmento || "Outros", status: "ativo", notes: "Importado por planilha", paymentTermsNote: null, paymentTermDays: null });
         } else if (kind === "freelancers") {
-          if (!db.freelancers.some((f) => f.email === r.email.toLowerCase())) db.freelancers.push({ ...baseFields(me.id), userId: null, name: r.nome, email: r.email.toLowerCase(), phone: r.telefone ?? null, legalName: null, document: null, pixKey: r.pix ?? null, bankName: null, bankAgency: null, bankAccount: null, specialties: [(r.especialidade as "design") || "outro"], status: "ativo", notes: "Importado por planilha", avatarColor: "#0891b2" });
+          if (!db.freelancers.some((f) => f.email === r.email.toLowerCase())) db.freelancers.push({ ...baseFields(me.id), userId: null, name: r.nome, email: r.email.toLowerCase(), phone: r.telefone ?? null, jobTitle: r.cargo?.trim() || null, legalName: null, document: null, pixKey: r.pix ?? null, bankName: null, bankAgency: null, bankAccount: null, specialties: [(r.especialidade as "design") || "outro"], status: "ativo", notes: "Importado por planilha", avatarColor: "#0891b2" });
         } else if (kind === "recebiveis") {
           const p = db.projects.find((x) => x.code === r.codigo_projeto.trim().toUpperCase())!;
           db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents: Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100), taxCents: 0, expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "parcela", collectionNote: null });
@@ -428,7 +428,7 @@ export const peopleApi = {
   all: () =>
     read((db) => [
       ...db.users.filter((u) => u.status === "ativo" && u.userType === "internal").map((u) => ({ kind: "user" as const, id: u.id, name: u.name, color: u.avatarColor, sub: u.jobTitle ?? "" })),
-      ...db.freelancers.filter((f) => f.status === "ativo" && !f.deletedAt).map((f) => ({ kind: "freelancer" as const, id: f.id, name: f.name, color: f.avatarColor, sub: "Freelancer" })),
+      ...db.freelancers.filter((f) => f.status === "ativo" && !f.deletedAt).map((f) => ({ kind: "freelancer" as const, id: f.id, name: f.name, color: f.avatarColor, sub: f.jobTitle ? `${f.jobTitle} · freelancer` : "Freelancer" })),
     ], 60),
   current: () => read((_db, me) => me.id, 10),
 };

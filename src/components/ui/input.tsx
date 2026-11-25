@@ -85,11 +85,23 @@ export function Field({ label, hint, error, required, className, children, id: i
 }
 
 /** Campo de texto completo (atalho de Field + Input). */
-export const TextField = forwardRef<HTMLInputElement, InputProps & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string }>(
-  function TextField({ label, hint, error, required, containerClassName, ...props }, ref) {
+/** Campo de texto com rótulo. `suggestions`: sugestões nativas enquanto digita (o texto continua livre). */
+export const TextField = forwardRef<HTMLInputElement, InputProps & { label?: React.ReactNode; hint?: React.ReactNode; error?: string; containerClassName?: string; suggestions?: readonly string[] }>(
+  function TextField({ label, hint, error, required, containerClassName, suggestions, ...props }, ref) {
     return (
       <Field id={props.id} label={label} hint={hint} error={error} required={required} className={containerClassName}>
-        {({ id, describedBy, invalid }) => <Input ref={ref} aria-describedby={describedBy} invalid={invalid} required={required} {...props} id={id} />}
+        {({ id, describedBy, invalid }) => (
+          <>
+            <Input ref={ref} aria-describedby={describedBy} invalid={invalid} required={required} list={suggestions?.length ? `${id}-sugestoes` : undefined} {...props} className={cn(suggestions?.length && "[&::-webkit-calendar-picker-indicator]:hidden", props.className)} id={id} />
+            {suggestions?.length ? (
+              <datalist id={`${id}-sugestoes`}>
+                {suggestions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            ) : null}
+          </>
+        )}
       </Field>
     );
   },
