@@ -11,7 +11,9 @@ export function useApiQuery<T>(key: QueryKey, fn: () => Promise<T>, opts?: Omit<
   return useQuery<T, ApiError>({ queryKey: key, queryFn: fn, ...opts });
 }
 
-interface MutateOpts<T> {
+interface MutateOpts<T, A = unknown> {
+  /** Adia a revalidação (ms) para uma micro-interação terminar antes de a lista se reorganizar (ex.: concluir tarefa). */
+  invalidateDelay?: (args: A) => number;
   /** Mensagem de sucesso (toast). Passe `false` para não exibir. */
   success?: string | false | ((data: T) => string);
   onSuccess?: (data: T) => void;
@@ -22,12 +24,14 @@ interface MutateOpts<T> {
  * Mutação padrão: em sucesso invalida todas as queries (o banco local é pequeno),
  * mostra toast; em erro mostra a mensagem orientada à solução vinda da API.
  */
-export function useApiMutation<A, T>(fn: (args: A) => Promise<T>, opts: MutateOpts<T> = {}) {
+export function useApiMutation<A, T>(fn: (args: A) => Promise<T>, opts: MutateOpts<T, A> = {}) {
   const qc = useQueryClient();
   return useMutation<T, ApiError, A>({
     mutationFn: fn,
-    onSuccess: (data) => {
-      qc.invalidateQueries();
+    onSuccess: (data, args) => {
+      const delay = opts.invalidateDelay?.(args) ?? 0;
+      if (delay > 0) setTimeout(() => qc.invalidateQueries(), delay);
+      else qc.invalidateQueries();
       if (opts.success !== false && opts.success) toast.success(typeof opts.success === "function" ? opts.success(data) : opts.success);
       opts.onSuccess?.(data);
     },

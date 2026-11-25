@@ -536,7 +536,7 @@ infantilização). Só `transform`/`opacity`/`filter`; respeita `prefers-reduced
 | Momento | Resposta visual |
 |---|---|
 | Status, prioridade ou etapa muda | Pílula/selo dá um "pop" (escala .92→1) com anel de destaque que se dissolve; contadores de filtro também |
-| Concluir tarefa | Círculo se preenche, ✓ se desenha, anel fino no gradiente da marca se expande e some; título se risca com traço desenhado (otimista — volta se a API recusar). Reabrir reverte rápido |
+| Concluir tarefa | Círculo se preenche, ✓ se desenha, anel fino no gradiente da marca se expande e some; título se risca com traço desenhado (otimista — volta se a API recusar). Reabrir reverte rápido. A lista só se reorganiza ~0,9 s depois (a tarefa concluída sai de "Minhas tarefas" após a animação), sem atrasar a gravação |
 | Arrastar no kanban | Cartão erguido (escala 1,03 + inclinação ≤ 1,5°, sombra profunda); coluna-alvo com borda em gradiente; lugar tracejado onde o cartão vai cair, inclusive entre colunas; ao soltar, assenta (220 ms) e pisca um anel uma vez |
 | Enviar/salvar | Botão mostra ✓ desenhado + "Enviado/Salvo" por ~1,2 s (comentário, e-mail do projeto, proposta salvar/enviar/aprovar, NF pública, upload, novo projeto, cliente, freelancer). Diálogos fecham logo após a confirmação |
 | Upload | Arquivo em envio com barra indeterminada; concluído desliza com ✓; novo arquivo entra na lista |

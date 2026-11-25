@@ -23,8 +23,14 @@ const areaLabel = (area: AdmArea | null) => {
   return `${a.number}. ${a.label}`;
 };
 
+/** Tempo da micro-interação de conclusão (check + anel + risco) antes de a lista se reorganizar. */
+const COMPLETE_SETTLE_MS = 900;
+
 export function useTaskUpdate() {
-  return useApiMutation(({ id, patch }: { id: ID; patch: Parameters<typeof tasksApi.update>[1] }) => tasksApi.update(id, patch));
+  return useApiMutation(({ id, patch }: { id: ID; patch: Parameters<typeof tasksApi.update>[1] }) => tasksApi.update(id, patch), {
+    // concluir: deixa a animação terminar antes de a tarefa mudar de grupo/sumir da lista (ex.: Minhas tarefas)
+    invalidateDelay: ({ patch }) => (patch.statusKey === "concluida" ? COMPLETE_SETTLE_MS : 0),
+  });
 }
 
 /** Linha de tarefa estilo Plane: status clicável, título, propriedades à direita. */
