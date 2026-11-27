@@ -32,8 +32,20 @@ function InboxSkeleton() {
   );
 }
 
+/** Agrupa por projeto, com o grupo mais recente primeiro (a lista já vem do mais novo para o mais antigo). */
+function groupByProject(list: InboxNotification[]) {
+  const map = new Map<string, { key: string; code: string | null; items: InboxNotification[] }>();
+  for (const n of list) {
+    const key = n.projectId ?? "_";
+    if (!map.has(key)) map.set(key, { key, code: n.projectCode, items: [] });
+    map.get(key)!.items.push(n);
+  }
+  return [...map.values()];
+}
+
 export function InboxView() {
-  const [f, set] = useUrlState({ filtro: "todas", tipo: undefined as string | undefined, n: undefined as string | undefined });
+  const [f, set] = useUrlState({ filtro: "todas", tipo: undefined as string | undefined, n: undefined as string | undefined, agrupar: undefined as string | undefined });
+  const byProject = f.agrupar === "projeto";
   const filter: Filter = f.filtro === "nao-lidas" ? "nao-lidas" : "todas";
   const type = f.tipo && f.tipo in notificationMeta ? (f.tipo as NotificationType) : undefined;
 
@@ -44,6 +56,7 @@ export function InboxView() {
   const all = useMemo(() => q.data ?? [], [q.data]);
   const unread = all.filter((n) => !n.readAt).length;
   const list = useMemo(() => all.filter((n) => (filter === "todas" || !n.readAt) && (!type || n.type === type)), [all, filter, type]);
+  const groups = useMemo(() => groupByProject(list), [list]);
   const selected = f.n ? all.find((n) => n.id === f.n) ?? null : null;
 
   const select = (n: InboxNotification) => {
@@ -84,6 +97,7 @@ export function InboxView() {
               aria-label="Filtrar por tipo"
               trigger={<FilterChip label="Tipo" icon="filter" value={type ? notificationMeta[type].label : undefined} onClear={() => set({ tipo: undefined })} />}
             />
+            <FilterChip label="Por projeto" icon="project" active={byProject} aria-pressed={byProject} onClick={() => set({ agrupar: byProject ? undefined : "projeto" })} />
             <ClearFiltersButton show={filter !== "todas" || !!type} onClick={() => set({ filtro: undefined, tipo: undefined })} />
           </Toolbar>
           <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin max-md:pb-24">
@@ -95,14 +109,26 @@ export function InboxView() {
               <EmptyState
                 icon={all.length ? "search" : "success"}
                 title={all.length ? "Nada com esses filtros" : "Você está em dia"}
-                description={all.length ? "Remova os filtros para ver todas as notificações." : "Atribuições, menções e prazos novos aparecem aqui."}
+                description={all.length ? "Remova os filtros para ver todas as notificações." : "Movimentos dos seus projetos e tarefas, menções e respostas de clientes aparecem aqui."}
                 action={all.length ? { label: "Limpar filtros", onClick: () => set({ filtro: undefined, tipo: undefined }) } : undefined}
               />
             ) : (
               <ul>
-                {list.map((n) => (
-                  <InboxItem key={n.id} item={n} selected={n.id === selected?.id} onSelect={select} />
-                ))}
+                {byProject
+                  ? groups.map((g) => (
+                      <li key={g.key}>
+                        <p className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-1.5 text-2xs font-medium uppercase tracking-wide text-fg-subtle">
+                          <span className="font-mono normal-case">{g.code ?? "Sem projeto"}</span>
+                          <span className="tabular-nums">· {g.items.length}</span>
+                        </p>
+                        <ul>
+                          {g.items.map((n) => (
+                            <InboxItem key={n.id} item={n} selected={n.id === selected?.id} onSelect={select} />
+                          ))}
+                        </ul>
+                      </li>
+                    ))
+                  : list.map((n) => <InboxItem key={n.id} item={n} selected={n.id === selected?.id} onSelect={select} />)}
               </ul>
             )}
           </div>

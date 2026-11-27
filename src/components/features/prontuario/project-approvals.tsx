@@ -62,8 +62,8 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
-        <p className="text-xs text-fg-subtle">{q.data ? `${q.data.length} ${q.data.length === 1 ? "registro" : "registros"}` : ""}</p>
-        <div className="flex flex-wrap justify-end gap-2">
+        <p className="text-xs text-fg-subtle max-sm:hidden">{q.data ? `${q.data.length} ${q.data.length === 1 ? "registro" : "registros"}` : ""}</p>
+        <div className="flex flex-1 flex-wrap justify-end gap-2">
           {canRequest && <Button size="sm" variant="ghost" icon="add" onClick={() => setRequesting(true)}>Registrar pedido…</Button>}
           {canDeliver && <Button size="sm" icon="delivery" onClick={() => setSending({ kind: "entrega" })}>Enviar entrega ao cliente…</Button>}
           {canRequest && <Button size="sm" variant="primary" icon="send" onClick={() => setSending({ kind: "aprovacao" })}>Pedir aprovação ao cliente…</Button>}
