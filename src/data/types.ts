@@ -594,7 +594,11 @@ export type NotificationType =
   /** Resposta do cliente pelo link público (aprovou, pediu ajustes). */
   | "cliente"
   /** Tarefa enviada para revisão. */
-  | "revisao";
+  | "revisao"
+  /** Recebível vencido ou a vencer, NF de freelancer pendente perto do vencimento (Financeiro envolvido — RN-46). */
+  | "vencimento"
+  /** Andamento do seu pagamento (freelancer): NF divergente, aprovada, paga ou estornada (RN-46). */
+  | "pagamento";
 
 export interface Notification extends BaseEntity {
   userId: ID;

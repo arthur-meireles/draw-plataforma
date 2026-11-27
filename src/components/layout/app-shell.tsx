@@ -14,6 +14,7 @@ import { SessionProvider } from "./session";
 import { Rail, Sidebar } from "./sidebar";
 import { BottomNav, MobileDrawer } from "./mobile-nav";
 import { CommandPalette } from "./command-palette";
+import { RoutineRunner } from "./routine-runner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
@@ -69,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <LayoutContext.Provider value={{ openMobileNav: () => setDrawer(true), openCommand: () => setCommand(true), sidebarCollapsed, toggleSidebar }}>
         <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
           <OfflineIndicator />
+          <RoutineRunner />
           <div className="flex min-h-0 flex-1">
             <Rail />
             <Suspense fallback={<div className="w-sidebar shrink-0 border-r border-line bg-surface max-xl:hidden" />}>

@@ -1,10 +1,11 @@
 /** Financeiro (M5) — sempre por projeto. */
 import { baseFields, loadDb, nowIso, transaction } from "../db";
-import type { ID, Payable, PayableStatus, Receivable, ReceivableStatus } from "../types";
+import type { Database, ID, Payable, PayableStatus, Project, Receivable, ReceivableStatus, User } from "../types";
 import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, queueSystemEmail, read, touch, write } from "./_core";
 import { applyInvoiceAmount } from "./payables-extra";
 import { computeFinancials } from "./projects";
-import { clientTermDays, dueFromInvoice, effectiveReceivableStatus } from "./finance-rules";
+import { clientTermDays, dueFromInvoice, effectiveReceivableStatus, financeAudience } from "./finance-rules";
+import { notifyMany } from "./audience";
 import { access, canWriteAll } from "@/lib/permissions";
 
 export interface ReceivableFilters {
@@ -21,6 +22,18 @@ export interface PayableFilters {
   projectId?: ID;
   month?: string;
   q?: string;
+}
+
+/**
+ * RN-46 — avisa o freelancer do pagável: Caixa de entrada (se ele tiver login) e, quando indicado, e-mail
+ * transacional externo (divergência e pagamento — ele não acompanha o financeiro por dentro).
+ */
+export function tellFreelancer(db: Database, me: User, pay: Payable, project: Project | null, msg: { title: string; body?: string; subject?: string; template?: string }) {
+  if (pay.kind !== "freelancer" || !pay.freelancerId) return;
+  const fl = db.freelancers.find((f) => f.id === pay.freelancerId);
+  if (!fl) return;
+  notify(db, me, { userId: fl.userId, type: "pagamento", title: msg.title, body: msg.body, project, entityType: "payable", entityId: pay.id });
+  if (msg.template && fl.email) queueSystemEmail(db, { to: [fl.email], subject: `${msg.subject ?? msg.title}${project ? ` — ${project.code}` : ""}`, template: msg.template, projectId: pay.projectId });
 }
 
 const inMonth = (iso: string | null, month?: string) => !month || (!!iso && iso.slice(0, 7) === month);
@@ -215,7 +228,9 @@ export const financeApi = {
       if (!["em_conferencia", "divergente"].includes(p.status)) throw new ApiError(409, "Só NFs em conferência ou divergentes podem ser aprovadas.");
       p.status = "aprovado";
       touch(p);
-      emit(db, me, { type: "payable.approved", entityType: "payable", entityId: p.id, project: db.projects.find((x) => x.id === p.projectId), data: {} });
+      const proj = db.projects.find((x) => x.id === p.projectId) ?? null;
+      emit(db, me, { type: "payable.approved", entityType: "payable", entityId: p.id, project: proj, data: {} });
+      tellFreelancer(db, me, p, proj, { title: "Sua NF foi aprovada", body: `Pagamento previsto para ${new Date(p.dueAt).toLocaleDateString("pt-BR")}` });
       return p;
     }),
 
@@ -229,7 +244,9 @@ export const financeApi = {
       p.status = "divergente";
       p.divergenceNote = note.trim();
       touch(p);
-      emit(db, me, { type: "payable.divergent", entityType: "payable", entityId: p.id, project: db.projects.find((x) => x.id === p.projectId), data: { note } });
+      const proj = db.projects.find((x) => x.id === p.projectId) ?? null;
+      emit(db, me, { type: "payable.divergent", entityType: "payable", entityId: p.id, project: proj, data: { note } });
+      tellFreelancer(db, me, p, proj, { title: "Sua NF tem uma divergência", body: note.trim(), subject: "Sua nota fiscal tem uma divergência", template: "nf_freelancer_divergente" });
       return p;
     }),
 
@@ -242,7 +259,9 @@ export const financeApi = {
       p.status = "pago";
       p.paidAt = paidAt;
       touch(p);
-      emit(db, me, { type: "payable.paid", entityType: "payable", entityId: p.id, project: db.projects.find((x) => x.id === p.projectId), data: { amountCents: p.invoicedAmountCents ?? p.agreedAmountCents } });
+      const proj = db.projects.find((x) => x.id === p.projectId) ?? null;
+      emit(db, me, { type: "payable.paid", entityType: "payable", entityId: p.id, project: proj, data: { amountCents: p.invoicedAmountCents ?? p.agreedAmountCents } });
+      tellFreelancer(db, me, p, proj, { title: "Pagamento realizado", body: `${p.description} · pago em ${new Date(paidAt).toLocaleDateString("pt-BR")}`, subject: "Seu pagamento foi realizado", template: "pagamento_freelancer" });
       return p;
     }),
 
@@ -387,7 +406,8 @@ export const publicInvoiceApi = {
       Object.assign(req, { submittedAt: nowIso(), declaredLegalName: input.legalName, declaredDocument: input.document, declaredPixKey: input.pixKey, declaredInvoiceNumber: input.invoiceNumber, declaredAmountCents: input.amountCents, source: "formulario" });
       link.useCount += 1;
       emit(db, null, { type: "payable.invoice_submitted", entityType: "payable", entityId: pay.id, project: p, data: { amountCents: input.amountCents, divergent: status === "divergente" } });
-      db.users.filter((u) => u.role === "financeiro" || u.role === "admin").forEach((u) => notify(db, null, { userId: u.id, type: "nf_recebida", title: status === "divergente" ? "NF divergente recebida" : "NF recebida de freelancer", project: p, entityType: "payable", entityId: pay.id }));
+      // RN-46 — só o Financeiro envolvido (da equipe do projeto; senão, o perfil Financeiro; sem ninguém, a administração)
+      notifyMany(db, null, financeAudience(db, p), { type: "nf_recebida", title: status === "divergente" ? "NF divergente recebida" : "NF recebida de freelancer", project: p, entityType: "payable", entityId: pay.id });
       return { status };
     });
   },

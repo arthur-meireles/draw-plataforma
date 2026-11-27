@@ -1043,7 +1043,7 @@ export function createSeed(): Database {
   });
 
   const notificationPreferences: NotificationPreference[] = [];
-  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida", "etapa", "projeto", "comentario", "cliente", "revisao"];
+  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida", "etapa", "projeto", "comentario", "cliente", "revisao", "vencimento", "pagamento"];
   for (const u of users) {
     for (const t of nTypes) {
       notificationPreferences.push({ ...base("npf", -200), userId: u.id, type: t, enabled: true });

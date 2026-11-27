@@ -13,6 +13,8 @@ import { notificationMeta } from "./notification-meta";
 /** Para onde o botão principal leva, conforme o tipo e a entidade da notificação. */
 export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: string; label: string } | null {
   if (n.type === "nf_solicitada" && isFreelancer) return { href: "/", label: "Enviar nota fiscal" };
+  if (n.entityType === "receivable" && n.entityId) return { href: `/financeiro/receber?aberto=${n.entityId}`, label: "Abrir lançamento a receber" };
+  if (n.entityType === "payable" && n.entityId) return { href: `/financeiro/pagar?aberto=${n.entityId}`, label: "Abrir conta a pagar" };
   if (n.type === "nf_solicitada" || n.type === "nf_recebida") return { href: n.entityType === "payable" && n.entityId ? `/financeiro/pagar?aberto=${n.entityId}` : "/financeiro/pagar", label: "Abrir contas a pagar" };
   if (!n.projectCode) return null;
   if (n.entityType === "task" && n.entityId) return { href: `/projetos/${n.projectCode}?aba=tarefas&tarefa=${n.entityId}`, label: "Abrir tarefa" };
