@@ -16,3 +16,4 @@ export { financeExtraApi, publicInvoiceExtraApi, INVOICE_MAX_BYTES } from "./fin
 export { commercialApi, freelancersExtraApi, type QuoteFilters, type QuoteItem } from "./cadastros-extra";
 export { milestonesApi, deliverableMetricsApi, proposalsExtraApi, projectsExtraApi, type DeliverableMetrics } from "./prontuario-extra";
 export { admExtraApi } from "./adm-extra";
+export { payablesExtraApi, type CompletionDecision, type FreelancerPaymentInput, type ManualInvoiceInput } from "./payables-extra";

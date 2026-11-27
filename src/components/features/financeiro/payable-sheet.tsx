@@ -1,17 +1,18 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { toast } from "sonner";
 import { EventTimeline, PayableStatusBadge, ProjectCode } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Badge, Button, ConfirmDialog, DateField, DescriptionList, Dialog, Section, Sheet } from "@/components/ui";
-import { useApiMutation } from "@/data/hooks";
-import { financeApi } from "@/data/services";
+import { toast } from "sonner";
+import { Badge, Button, Callout, ConfirmDialog, DateField, DescriptionList, Dialog, Section, Sheet, copyText } from "@/components/ui";
+import { useApiMutation, useOrganization } from "@/data/hooks";
+import { financeApi, payablesExtraApi } from "@/data/services";
 import { dateFull, fromDateInput, money, toDateInput } from "@/lib/format";
 import { PAYABLE_KIND_LABEL, PayableAmount, payableDiff } from "./payable-bits";
+import { RegisterInvoiceDialog } from "./register-invoice-dialog";
 import type { PayableRow } from "./types";
 
-type Dlg = "pay" | "divergent" | "approve" | null;
+type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | null;
 
 const linkUrl = (token: string) => `${typeof window === "undefined" ? "" : window.location.origin}/nf/${token}`;
 
@@ -57,20 +58,20 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
   const approve = useApiMutation((id: string) => financeApi.approvePayable(id), { success: "NF aprovada. Já pode registrar o pagamento.", onSuccess: () => setDlg(null) });
   const divergent = useApiMutation((a: { id: string; note: string }) => financeApi.markDivergent(a.id, a.note), { success: "Marcada como divergente.", onSuccess: () => setDlg(null) });
   const resend = useApiMutation((id: string) => financeApi.resendInvoiceLink(id), { success: "Link reenviado ao freelancer por e-mail, válido por mais 30 dias." });
+  const reissue = useApiMutation((a: { id: string; reason: string }) => payablesExtraApi.requestNewInvoice(a.id, a.reason), { success: "Pedido de nova NF enviado ao freelancer, com o motivo.", onSuccess: () => setDlg(null) });
+  const org = useOrganization();
+  const payDay = org.data?.org.settings.freelancerPaymentDay ?? 20;
 
   const diff = row ? payableDiff(row) : null;
   const canReview = !!row && writable && (row.status === "em_conferencia" || row.status === "divergente");
   const canPay = !!row && writable && row.status === "aprovado";
+  const isFl = row?.kind === "freelancer";
+  // RN-41: NF chegou por outro canal · RN-42: NF em conferência/divergente volta ao freelancer
+  const canRegister = !!row && writable && isFl && (row.status === "aguardando_nf" || row.status === "divergente");
+  const canReissue = !!row && writable && isFl && (row.status === "em_conferencia" || row.status === "divergente");
   const req = row?.invoiceRequest;
 
-  const copy = async (token: string) => {
-    try {
-      await navigator.clipboard.writeText(linkUrl(token));
-      toast.success("Link copiado.");
-    } catch {
-      toast.error("Não foi possível copiar. Selecione o link e copie manualmente.");
-    }
-  };
+  const copy = async (token: string) => ((await copyText(linkUrl(token))) ? toast.success("Link copiado.") : toast.error("Não foi possível copiar. Selecione o link e copie manualmente."));
 
   return (
     <>
@@ -81,25 +82,37 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         ariaTitle="Detalhe da conta a pagar"
         title={row ? `${row.projectCode ?? "Administrativo"} · A pagar` : undefined}
         footer={
-          row && (canReview || canPay) ? (
+          row && (canReview || canPay || canRegister) ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              {canReview && row.status === "em_conferencia" ? (
-                <Button variant="ghost" className="text-danger" onClick={() => setDlg("divergent")}>
-                  Marcar divergente…
-                </Button>
-              ) : (
-                <span />
-              )}
-              {canReview && (
-                <Button variant="primary" icon="approval" loading={approve.isPending} onClick={() => (row.status === "divergente" ? setDlg("approve") : approve.mutate(row.id))}>
-                  Aprovar NF
-                </Button>
-              )}
-              {canPay && (
-                <Button variant="primary" icon="payment" onClick={() => setDlg("pay")}>
-                  Registrar pagamento
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {canReissue && (
+                  <Button variant="ghost" className="text-danger" onClick={() => setDlg("reissue")}>
+                    Recusar e pedir nova NF…
+                  </Button>
+                )}
+                {canReview && row.status === "em_conferencia" && (
+                  <Button variant="ghost" className="text-danger" onClick={() => setDlg("divergent")}>
+                    Marcar divergente…
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canRegister && (
+                  <Button variant={row.status === "aguardando_nf" ? "primary" : "secondary"} icon="invoice" onClick={() => setDlg("register")}>
+                    Registrar NF manualmente…
+                  </Button>
+                )}
+                {canReview && (
+                  <Button variant="primary" icon="approval" loading={approve.isPending} onClick={() => (row.status === "divergente" ? setDlg("approve") : approve.mutate(row.id))}>
+                    Aprovar NF
+                  </Button>
+                )}
+                {canPay && (
+                  <Button variant="primary" icon="payment" onClick={() => setDlg("pay")}>
+                    Registrar pagamento
+                  </Button>
+                )}
+              </div>
             </div>
           ) : undefined
         }
@@ -146,14 +159,20 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
               items={[
                 { label: "Projeto", hidden: !row.projectCode, value: <Link href={`/projetos/${row.projectCode}?aba=financeiro`} className="inline-flex items-center gap-2 hover:underline"><ProjectCode code={row.projectCode ?? ""} />{row.projectTitle}</Link> },
                 { label: "Valor", hidden: row.kind === "freelancer", value: <PayableAmount cents={row.agreedAmountCents} /> },
-                { label: "Vencimento", value: <span className={row.isOverdue ? "text-danger" : undefined}>{dateFull(row.dueAt)}{row.kind === "freelancer" ? " · dia 20 do mês seguinte à conclusão (RN-06)" : ""}</span> },
-                { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}` : "Ainda não enviada" },
+                { label: "Vencimento", value: <span className={row.isOverdue ? "text-danger" : undefined}>{dateFull(row.dueAt)}{row.kind === "freelancer" ? ` · dia ${payDay} do mês seguinte à conclusão (RN-06)` : ""}</span> },
+                { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.invoiceIssuedAt ? ` · emitida em ${dateFull(row.invoiceIssuedAt)}` : ""}` : "Ainda não enviada", copy: row.invoiceNumber },
                 { label: "Pagamento", hidden: !row.paidAt, value: dateFull(row.paidAt) },
               ]}
             />
 
+            {row.status === "aguardando_nf" && req?.reissueReason && (
+              <Callout tone="warning" title={`Nova NF pedida${req.reissueRequestedAt ? ` em ${dateFull(req.reissueRequestedAt)}` : ""}`}>
+                {req.reissueReason}
+              </Callout>
+            )}
+
             {req?.submittedAt && (
-              <Section title="Dados declarados pelo freelancer" description={`Enviados em ${dateFull(req.submittedAt)}`} icon="freelancers">
+              <Section title={req.source === "manual" ? "NF registrada pelo Financeiro" : "Dados declarados pelo freelancer"} description={`${req.source === "manual" ? "Registrada" : "Enviados"} em ${dateFull(req.submittedAt)}`} icon="freelancers">
                 <DescriptionList
                   columns={1}
                   items={[
@@ -207,11 +226,23 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         )}
       </Sheet>
       {row && dlg === "pay" && <PayDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
+      {row && dlg === "register" && <RegisterInvoiceDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
+      <ConfirmDialog
+        open={!!row && dlg === "reissue"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Recusar NF e pedir uma nova"
+        description="A conta volta para Aguardando NF, a nota enviada sai do lançamento (fica no histórico) e o freelancer recebe por e-mail — e na Caixa de entrada, se tiver login — o link renovado com o motivo abaixo."
+        confirmLabel="Pedir nova NF"
+        destructive
+        reason={{ label: "O que o freelancer precisa corrigir", placeholder: "Ex.: emita a NF com o valor acordado de R$ 2.000,00", required: true }}
+        loading={reissue.isPending}
+        onConfirm={(reason) => row && reissue.mutate({ id: row.id, reason: reason ?? "" })}
+      />
       <ConfirmDialog
         open={!!row && dlg === "divergent"}
         onOpenChange={(o) => !o && setDlg(null)}
         title="Marcar NF como divergente"
-        description="O freelancer não é notificado automaticamente; registre o que precisa ser corrigido."
+        description="Registra a divergência para a conferência interna; o freelancer não é avisado. Para devolver a nota ao freelancer, use “Recusar e pedir nova NF…”."
         confirmLabel="Marcar divergente"
         destructive
         reason={{ label: "Motivo da divergência", placeholder: "Ex.: valor da NF difere do combinado em reunião", required: true }}

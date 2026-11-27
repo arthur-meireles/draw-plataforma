@@ -181,7 +181,7 @@ erDiagram
 | `organizations` | `name`, `slug`, `settings jsonb` (somente parâmetros técnicos): `freelancer_payment_day` (20), `due_soon_days` (2), `tax_rate_pct` (6 — alíquota sobre faturamento usada na planilha) |
 | `users` | `email citext unique`, `name`, `user_type` (`internal`/`freelancer`/`client`), `role` (enum fixo), `password_hash` (argon2id), `mfa_secret` (cifrado), `status`, `last_login_at` |
 | `sessions` | sessões (cookie httpOnly) |
-| `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active` |
+| `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active`, `payment_waived` (bool, default `false`: freelancer marcado "sem pagamento" na conclusão — RN-40) |
 | `feature_flags` | `organization_id`, `key`, `enabled` |
 | `access_logs` | login, falhas, revelações de segredo, acessos sensíveis |
 
@@ -239,8 +239,8 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | Tabela | Campos principais |
 |---|---|
 | `receivables` | `project_id` **NOT NULL**, `client_id`, `proposal_installment_id` (nulo em projeto direto ou adicional), `kind` (`parcela`/`adicional`), `description`, `amount_cents`, `tax_cents` (= `amount × tax_rate_pct`), `expected_at`, `invoice_number`, `invoice_file_id`, `issued_at`, `received_at`, `status` (`previsto`/`faturado`/`recebido`/`vencido`/`cancelado`), `collection_note` (comentário de cobrança) |
-| `payables` | `project_id` (nulo só em despesa administrativa), `kind` (`freelancer`/`despesa_projeto`/`despesa_adm`), `freelancer_id`, `project_member_id`, `description`, `agreed_amount_cents`, `invoiced_amount_cents`, `invoice_file_id`, `due_at`, `paid_at`, `status` (`aguardando_nf`/`em_conferencia`/`divergente`/`aprovado`/`pago`), `divergence_note` |
-| `freelancer_invoice_requests` | `payable_id`, `share_link_id`, `sent_at`, `submitted_at`, dados declarados (colunas) |
+| `payables` | `project_id` (nulo só em despesa administrativa), `kind` (`freelancer`/`despesa_projeto`/`despesa_adm`), `freelancer_id`, `project_member_id`, `description`, `agreed_amount_cents`, `invoiced_amount_cents`, `invoice_file_id`, `due_at`, `paid_at`, `status` (`aguardando_nf`/`em_conferencia`/`divergente`/`aprovado`/`pago`), `divergence_note`, `invoice_issued_at` (data de emissão da NF quando registrada manualmente — RN-41). Freelancer pode ter mais de um pagável no mesmo projeto só como pagamento adicional explícito (RN-43) |
+| `freelancer_invoice_requests` | `payable_id`, `share_link_id`, `sent_at`, `submitted_at`, dados declarados (colunas), `source` (`formulario`/`manual`, nulo enquanto aguarda), `reissue_reason` + `reissue_requested_at` (último pedido de nova NF — RN-42; o histórico completo fica em `events`) |
 | `v_project_financials` (view) | por projeto: contratado, previsto, faturado, recebido, a receber, custo com freelancers, outras despesas, **margem** e **margem %** |
 
 ### 6.7 Administrativo
@@ -345,6 +345,9 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M5-06 | **Financeiro do projeto:** contratado, faturado, recebido, custos e margem (`v_project_financials`). | R1 |
 | RF-M5-07 | Visões consolidadas: a receber, a pagar, por mês, por cliente, por tipo de projeto. | R1 |
 | RF-M5-08 | Importação e exportação de planilha (XLSX/CSV) com pré-visualização e relatório de erros. | R1 |
+| RF-M5-09 | **NF recebida fora do formulário:** em `aguardando_nf` ou `divergente`, o Financeiro registra nº, valor, data de emissão e PDF (opcional, recomendado); segue a conferência pela RN-04 (RN-41). | R1 |
+| RF-M5-10 | **Pedir nova NF:** NF em conferência ou divergente é recusada com motivo; o pagável volta a `aguardando_nf`, o link é renovado e o freelancer é avisado por e-mail e na Caixa de entrada; o formulário público aceita o novo envio e mostra o motivo (RN-42). | R1 |
+| RF-M5-11 | **Pagamento a freelancer sem depender da conclusão:** "Novo pagamento a freelancer…" (A pagar) e "Gerar pagamento / pedido de NF…" (prontuário › Equipe) criam o pagável `aguardando_nf` + link + e-mail, idempotente por membro (RN-43). Na conclusão, freelancer sem valor ou removido da equipe é decidido no diálogo (RN-40). | R1 |
 
 ### M6 — Administrativo
 
@@ -439,6 +442,10 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-15 | **Imposto** de recebível = `amount_cents × organizations.settings.tax_rate_pct / 100` (padrão 6%, como na planilha). |
 | RN-16 | **Pastas**: raízes do sistema não são renomeadas/excluídas; pasta só é excluída vazia; arquivos de projeto não são movidos para fora do projeto; `allowed_roles` da pasta-mãe é herdado ao criar subpasta. |
 | RN-17 | Drive (detalhe da RN-16): pastas-raiz da estrutura da Draw não são renomeadas nem excluídas; nome único por pasta-mãe; pasta só é excluída vazia; arquivo de projeto não é movido (fica na pasta do projeto); arquivos de mesmo nome em pastas diferentes são arquivos distintos (só viram versão dentro da mesma pasta ou projeto). |
+| RN-40 | **Conclusão não pula freelancer.** Todo membro freelancer sem pagável — ativo, ou removido da equipe com valor acordado — precisa de decisão: com valor acordado e ativo, gera o pagável (RN-03); sem valor ou removido, o diálogo de conclusão pede o valor (vira `agreed_amount_cents`, evento antes/depois — RN-09) ou "sem pagamento" (`project_members.payment_waived = true`, evento `project.member_payment_waived`). Faltando decisão, `complete` responde 422 e nada é gravado. |
+| RN-41 | **NF registrada manualmente** (recebida por e-mail/WhatsApp): só em `aguardando_nf` ou `divergente`, por quem tem `payables = T`; exige nº, valor e data de emissão; PDF opcional. Aplica a RN-04 (valor ≠ acordado → `divergente` com nota; igual → `em_conferencia`), marca o pedido com `source = manual` e o formulário público deixa de aceitar envio. Evento `payable.invoice_registered` com os valores anteriores. |
+| RN-42 | **Pedir nova NF** (recusar): só em `em_conferencia` ou `divergente`, motivo obrigatório. O pagável volta a `aguardando_nf` e perde nº/valor/arquivo/nota de divergência (o anterior fica no evento `payable.invoice_rejected`); o link é renovado (30 dias, `use_count = 0`, `revoked_at = null`); o pedido guarda `reissue_reason`; e-mail transacional `nf_freelancer_nova` ao freelancer e `nf_solicitada` na Caixa de entrada se ele tiver login. O formulário público só aceita envio com o pagável em `aguardando_nf` (o servidor recusa reenvio fora disso com 409). "Reenviar link" também zera `use_count` de link esgotado. NF aprovada ou paga não volta. |
+| RN-43 | **Pagamento avulso a freelancer** (sem concluir ou depois dela): por quem tem `payables = T`, para membro freelancer da equipe (ativo ou não) de projeto que não seja cotação/perdido; cria pagável `aguardando_nf` + `share_link` + pedido + e-mail, como na RN-03 (vencimento padrão RN-06, editável). Idempotente por membro: se já houver pagável, responde 409, salvo `additional = true` (não altera o valor acordado); sem adicional, o valor informado vira `agreed_amount_cents` (RN-09). |
 
 ---
 
@@ -843,6 +850,10 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | `tasksApi.list / get / create / update / remove / sprints / createSprint / setSprintStatus` | `/tasks`, `/sprints` |
 | `clientsApi.*`, `freelancersApi.*`, `projectTypesApi.*` | `/clients`, `/client-groups`, `/client-contacts`, `/freelancers`, `/project-types` |
 | `financeApi.receivables / issueInvoice / receive / updateReceivable / addAdditionalCharge / setCollectionNote / cancelReceivable / payables / createExpense / approvePayable / markDivergent / pay / resendInvoiceLink / overview` | `/receivables…`, `/payables…`, `GET /finance/overview` |
+| `payablesExtraApi.registerInvoice` (+ `financeExtraApi.registerFreelancerInvoiceWithFile`) | `POST /payables/:id/invoice` (upload do PDF em duas etapas antes; RN-41) |
+| `payablesExtraApi.requestNewInvoice` | `POST /payables/:id/request-new-invoice` `{ reason }` (RN-42) |
+| `payablesExtraApi.createFreelancerPayment` | `POST /projects/:id/members/:memberId/payables` `{ amount_cents, due_at?, description?, additional? }` (RN-43; `Idempotency-Key`) |
+| `projectsApi.complete(id, decisions)` · `projectsExtraApi.completionPreview` | `POST /projects/:id/complete` `{ decisions: [{ member_id, action: pagar\|sem_pagamento, amount_cents? }] }` · `GET /projects/:id/completion-preview` (RN-40) |
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
 | `commentsApi`, `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `/approvals`, `/events`, `/notifications` |

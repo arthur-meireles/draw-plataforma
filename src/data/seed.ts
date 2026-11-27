@@ -845,6 +845,9 @@ export function createSeed(): Database {
             declaredPixKey: invoiced ? fl.pixKey : null,
             declaredInvoiceNumber: pay.invoiceNumber,
             declaredAmountCents: invoiced,
+            source: invoiced ? "formulario" : null,
+            reissueReason: null,
+            reissueRequestedAt: null,
           });
           ev("payable.created", "payable", pay.id, p, null, { agreedAmountCents: pay.agreedAmountCents }, p.completedAt!);
         });

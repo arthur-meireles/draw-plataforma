@@ -174,7 +174,15 @@ export function PublicInvoiceForm({ token }: { token: string }) {
           if (validate()) submit.mutate(undefined);
         }}
       >
-        <AuthHeading title={`Olá, ${info.freelancer.name.split(" ")[0]}! Envie sua nota fiscal`} description="Confirme seus dados de pagamento e anexe a NF em PDF. Leva menos de um minuto." />
+        <AuthHeading
+          title={info.reissueReason ? `Olá, ${info.freelancer.name.split(" ")[0]}! Envie uma nova nota fiscal` : `Olá, ${info.freelancer.name.split(" ")[0]}! Envie sua nota fiscal`}
+          description="Confirme seus dados de pagamento e anexe a NF em PDF. Leva menos de um minuto."
+        />
+        {info.reissueReason && (
+          <Notice tone="warning" icon="warning" title={`A Draw pediu uma nova NF${info.reissueRequestedAt ? ` em ${dateLong(info.reissueRequestedAt)}` : ""}`}>
+            {info.reissueReason}
+          </Notice>
+        )}
         <Summary info={info} />
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField containerClassName="sm:col-span-2" data-field="legalName" label="Razão social ou nome completo" required autoComplete="organization" value={values.legalName} onChange={(e) => setLegalName(e.target.value)} error={errors.legalName} />

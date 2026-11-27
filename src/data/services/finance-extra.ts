@@ -2,6 +2,7 @@
 import { ApiError } from "./_core";
 import { filesApi } from "./collab";
 import { financeApi, publicInvoiceApi } from "./finance";
+import { payablesExtraApi } from "./payables-extra";
 import type { ID } from "../types";
 
 export const INVOICE_MAX_BYTES = 10 * 1024 * 1024;
@@ -31,6 +32,21 @@ export const financeExtraApi = {
       invoiceFileId = (await filesApi.upload({ projectId, category: "nf", file: input.file })).fileId;
     }
     return financeApi.issueInvoice(receivableId, { invoiceNumber: input.invoiceNumber, issuedAt: input.issuedAt, taxCents: input.taxCents, invoiceFileId });
+  },
+
+  /** RN-41 — registra a NF do freelancer recebida fora do formulário, com PDF opcional (recomendado). */
+  registerFreelancerInvoiceWithFile: async (payableId: ID, projectId: ID | null, input: { invoiceNumber: string; amountCents: number; issuedAt: string; note?: string | null; file?: File | null }) => {
+    const errors: Record<string, string> = {};
+    if (!input.invoiceNumber.trim()) errors.invoiceNumber = "Informe o número da NF";
+    if (!(input.amountCents > 0)) errors.amountCents = "Informe o valor da NF";
+    if (!input.issuedAt) errors.issuedAt = "Informe a data de emissão";
+    if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+    let invoiceFileId: ID | null = null;
+    if (input.file) {
+      assertPdf(input.file);
+      invoiceFileId = (await filesApi.upload({ projectId, category: "nf", file: input.file, note: "NF do freelancer registrada pelo Financeiro" })).fileId;
+    }
+    return payablesExtraApi.registerInvoice(payableId, { invoiceNumber: input.invoiceNumber, amountCents: input.amountCents, issuedAt: input.issuedAt, note: input.note, invoiceFileId });
   },
 };
 

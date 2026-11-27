@@ -2,53 +2,11 @@
 import { useState } from "react";
 import { Button, ConfirmDialog, DropdownMenu, IconButton, type MenuItem } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
-import { Money } from "@/components/domain";
-import { useApiMutation, useApiQuery } from "@/data/hooks";
-import { projectsApi, projectsExtraApi } from "@/data/services";
-import { plural } from "@/lib/format";
+import { useApiMutation } from "@/data/hooks";
+import { projectsApi } from "@/data/services";
 import { toast } from "sonner";
+import { CompleteProjectDialog } from "./complete-project-dialog";
 import type { ProjectDetail } from "./use-project";
-
-/** Prévia do que a conclusão gera (RN-03), mostrada antes de confirmar. */
-function CompleteProjectDialog({ project, open, onOpenChange }: { project: ProjectDetail; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const preview = useApiQuery(["completion-preview", project.id], () => projectsExtraApi.completionPreview(project.id), { enabled: open });
-  const complete = useApiMutation(() => projectsApi.complete(project.id), {
-    success: (r) => (r.payablesCreated ? `${plural(r.payablesCreated, "pedido de NF enviado", "pedidos de NF enviados")}` : "Projeto concluído"),
-    onSuccess: () => onOpenChange(false),
-  });
-  const p = preview.data;
-  return (
-    <ConfirmDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={`Concluir ${project.code}?`}
-      confirmLabel="Concluir projeto"
-      loading={complete.isPending}
-      onConfirm={() => complete.mutate(undefined)}
-      description={
-        <div className="space-y-3">
-          <p>Ao concluir, o sistema faz o fechamento de uma vez (RN-03). Para cada freelancer com valor combinado ele:</p>
-          <ul className="list-disc space-y-1 pl-5">
-            <li>cria a conta a pagar com o valor combinado, vencendo no dia de pagamento do mês seguinte;</li>
-            <li>gera o link seguro para o envio da nota fiscal;</li>
-            <li>envia o e-mail de pedido de NF ao freelancer.</li>
-          </ul>
-          {preview.isLoading && <p className="text-xs text-fg-subtle">Calculando o que será gerado…</p>}
-          {p && (
-            <div className="space-y-1 rounded-lg border border-line bg-layer p-3 text-xs">
-              <p className="font-medium text-fg">{p.freelancersWithAmount ? `${plural(p.freelancersWithAmount, "pedido de NF será enviado", "pedidos de NF serão enviados")}` : "Nenhum pedido de NF será enviado"}</p>
-              {p.freelancersWithoutAmount.length > 0 && <p className="text-warning">Sem valor combinado, não geram pagamento: {p.freelancersWithoutAmount.join(", ")}. Informe o valor na aba Equipe antes de concluir.</p>}
-              {p.openTasks > 0 && <p className="text-fg-muted">{plural(p.openTasks, "tarefa ainda está aberta", "tarefas ainda estão abertas")}.</p>}
-            </div>
-          )}
-          {project.contractedAmountCents != null && (
-            <p className="text-xs text-fg-subtle">Valor contratado: <Money cents={project.contractedAmountCents} className="text-fg-muted" /></p>
-          )}
-        </div>
-      }
-    />
-  );
-}
 
 type Pending = "lost" | "cancel" | "complete" | "archive" | "pause" | null;
 

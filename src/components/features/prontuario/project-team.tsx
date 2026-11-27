@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Avatar, Badge, Button, ConfirmDialog, DataTable, Dialog, MoneyField, RowActions, SelectField, type Column, type Option, Copyable } from "@/components/ui";
-import { Money, usePeopleOptions } from "@/components/domain";
+import { FreelancerPaymentDialog, Money, usePeopleOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
@@ -67,8 +67,11 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
   const q = useProjectMembers(project.id);
   const [dialog, setDialog] = useState<{ member: ProjectMemberRow | null } | null>(null);
   const [removing, setRemoving] = useState<ProjectMemberRow | null>(null);
+  const [paying, setPaying] = useState<ProjectMemberRow | null>(null);
   const remove = useApiMutation((id: string) => projectsApi.removeMember(id), { success: "Pessoa removida da equipe", onSuccess: () => setRemoving(null) });
   const manage = canWriteAll("projects") && !["arquivado", "cancelado"].includes(project.status);
+  // RN-43: quem cuida de contas a pagar gera o pagamento/pedido de NF de um freelancer sem esperar a conclusão
+  const canPay = canWriteAll("payables") && !["cotacao", "perdido"].includes(project.status);
   const rows = q.data?.filter((m) => m.active);
   const taken = new Set((rows ?? []).map((m) => (m.userId ? `user:${m.userId}` : `freelancer:${m.freelancerId}`)));
 
@@ -93,7 +96,26 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
     { id: "role", header: "Função", mobile: "subtitle", sortValue: (m) => MEMBER_ROLE_LABEL[m.memberRole], cell: (m) => <span className="text-fg-muted">{MEMBER_ROLE_LABEL[m.memberRole]}</span> },
     ...(money ? [{ id: "amount", header: "Valor combinado", align: "right" as const, mobile: "meta" as const, sortValue: (m: ProjectMemberRow) => m.agreedAmountCents, cell: (m: ProjectMemberRow) => (m.kind === "freelancer" ? (m.agreedAmountCents ? <Money cents={m.agreedAmountCents} className="font-medium" /> : <span className="text-xs text-warning">A combinar</span>) : <span className="text-fg-placeholder">—</span>) }] : []),
     { id: "tasks", header: "Tarefas abertas", align: "right", mobile: "meta", sortValue: (m) => m.openTasks, cell: (m) => <span className="tabular-nums text-fg-muted">{m.openTasks}</span> },
-    ...(manage ? [{ id: "actions", header: <span className="sr-only">Ações</span>, align: "right" as const, width: "48px", mobile: "trailing" as const, cell: (m: ProjectMemberRow) => <RowActions items={[{ label: "Editar função e valor", icon: "edit", onSelect: () => setDialog({ member: m }) }, { label: "Remover da equipe…", icon: "delete", destructive: true, onSelect: () => setRemoving(m) }]} /> }] : []),
+    ...(manage || canPay
+      ? [
+          {
+            id: "actions",
+            header: <span className="sr-only">Ações</span>,
+            align: "right" as const,
+            width: "48px",
+            mobile: "trailing" as const,
+            cell: (m: ProjectMemberRow) => (
+              <RowActions
+                items={[
+                  { label: "Editar função e valor", icon: "edit", hidden: !manage, onSelect: () => setDialog({ member: m }) },
+                  { label: "Gerar pagamento / pedido de NF…", icon: "payable", hidden: !(canPay && m.kind === "freelancer"), onSelect: () => setPaying(m) },
+                  { label: "Remover da equipe…", icon: "delete", destructive: true, hidden: !manage, onSelect: () => setRemoving(m) },
+                ]}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -111,6 +133,7 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
         onRetry={() => q.refetch()}
         empty={{ icon: "team", title: "Ninguém na equipe", description: "Adicione quem vai trabalhar no projeto.", action: manage ? { label: "Adicionar pessoa", icon: "invite", onClick: () => setDialog({ member: null }) } : undefined }}
       />
+      {canPay && <FreelancerPaymentDialog open={!!paying} onOpenChange={(o) => !o && setPaying(null)} projectId={project.id} memberId={paying?.id} />}
       {dialog && <MemberDialog project={project} member={dialog.member} taken={taken} onClose={() => setDialog(null)} />}
       <ConfirmDialog
         open={!!removing}
