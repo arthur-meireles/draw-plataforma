@@ -26,7 +26,8 @@ export interface Organization extends Omit<BaseEntity, "organizationId"> {
   name: string;
   slug: string;
   /** taxRatePct: alíquota padrão sobre faturamento (planilha atual: 6%). */
-  settings: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct: number };
+  /** requireMfaForAdmins (RN-37): administradores só entram depois de cadastrar o 2FA. Ausente = true. */
+  settings: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct: number; requireMfaForAdmins?: boolean };
 }
 
 export interface User extends BaseEntity {
@@ -78,7 +79,20 @@ export type AccessLogAction =
   | "password_reset_done"
   | "invite_accepted"
   | "impersonate"
-  | "demo_reset";
+  | "demo_reset"
+  /* RN-60 — trilha de segurança: alterações de conta e de acesso também entram no log de acessos */
+  | "invite_sent"
+  | "invite_cancelled"
+  | "role_changed"
+  | "user_deactivated"
+  | "user_reactivated"
+  | "password_changed"
+  | "profile_updated"
+  | "mfa_enabled"
+  | "mfa_disabled"
+  | "mfa_recovery_used"
+  | "mfa_recovery_regenerated"
+  | "bank_data_changed";
 
 export interface AccessLog extends BaseEntity {
   userId: ID | null;

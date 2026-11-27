@@ -5,11 +5,12 @@ import { usePermissions } from "@/components/layout/session";
 import { Avatar, Badge, Button, Callout, ClearFiltersButton, ConfirmDialog, DataTable, Dialog, Fab, FilterSelect, Icon, PageBody, PageHeader, RowActions, SearchInput, Tabs, Toolbar, type Column } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { ROLE_LABEL } from "@/data/reference";
-import { usersApi } from "@/data/services";
+import { usersApi, usersExtraApi } from "@/data/services";
 import type { Role, UserStatus } from "@/data/types";
 import { relative } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
 import { AccessLogTable } from "./access-log-table";
+import { DeactivateUserDialog } from "./deactivate-user-dialog";
 import { EditRoleDialog } from "./edit-role-dialog";
 import { InviteLinkBox, InviteUserDialog } from "./invite-user-dialog";
 import { PermissionMatrix } from "./permission-matrix";
@@ -31,12 +32,20 @@ function Content() {
   const users = useApiQuery(["users", "list"], () => usersApi.list());
   const [invite, setInvite] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [toggling, setToggling] = useState<Row | null>(null);
+  /** RN-36: inativar abre o diálogo de pendências/reatribuição; reativar é confirmação simples. */
+  const [deactivating, setDeactivating] = useState<Row | null>(null);
+  const [reactivating, setReactivating] = useState<Row | null>(null);
+  const [cancelling, setCancelling] = useState<Row | null>(null);
 
-  const setStatus = useApiMutation((v: { id: string; status: "ativo" | "inativo" }) => usersApi.setStatus(v.id, v.status), {
-    success: (_d) => (toggling?.status === "inativo" ? "Usuário reativado" : "Usuário inativado"),
-    onSuccess: () => setToggling(null),
-    onError: () => setToggling(null),
+  const reactivate = useApiMutation((id: string) => usersExtraApi.reactivate(id), {
+    success: "Usuário reativado",
+    onSuccess: () => setReactivating(null),
+    onError: () => setReactivating(null),
+  });
+  const cancelInvite = useApiMutation((id: string) => usersExtraApi.cancelInvite(id), {
+    success: "Convite cancelado. O link deixou de valer.",
+    onSuccess: () => setCancelling(null),
+    onError: () => setCancelling(null),
   });
   const resend = useApiMutation(usersApi.resendInvite, { success: "Convite reenviado por e-mail. O link anterior deixou de valer." });
   /** RN-32: o link só existe na hora em que é gerado (o banco guarda o hash). */
@@ -93,15 +102,15 @@ function Content() {
               { label: "Alterar perfil", icon: "user", onSelect: () => setEditing(u), hidden: u.status === "inativo" },
               { label: "Gerar link do convite…", icon: "link", hidden: u.status !== "convidado", onSelect: () => genLink.mutate(u) },
               { label: "Reenviar convite", icon: "send", hidden: u.status !== "convidado", onSelect: () => resend.mutate(u.id) },
-              { label: "Inativar…", icon: "lock", destructive: true, separatorBefore: true, hidden: u.status === "inativo" || u.status === "convidado" || u.id === p.user.id, onSelect: () => setToggling(u) },
-              { label: "Reativar…", icon: "restore", hidden: u.status !== "inativo", separatorBefore: true, onSelect: () => setToggling(u) },
+              { label: "Cancelar convite…", icon: "close", destructive: true, separatorBefore: true, hidden: u.status !== "convidado", onSelect: () => setCancelling(u) },
+              { label: "Inativar…", icon: "lock", destructive: true, separatorBefore: true, hidden: u.status === "inativo" || u.status === "convidado" || u.id === p.user.id, onSelect: () => setDeactivating(u) },
+              { label: "Reativar…", icon: "restore", hidden: u.status !== "inativo", separatorBefore: true, onSelect: () => setReactivating(u) },
             ]}
           />
         ) : null,
     },
   ];
 
-  const inactivating = toggling?.status !== "inativo";
   return (
     <>
       <PageHeader crumbs={[{ label: "Configurações", icon: "settings", href: "/configuracoes/usuarios" }, { label: "Usuários" }]} count={users.data?.length} actions={canEdit && <Button size="sm" variant="primary" icon="invite" onClick={() => setInvite(true)} className="max-md:hidden">Convidar usuário</Button>} />
@@ -160,15 +169,25 @@ function Content() {
           </div>
         )}
       </Dialog>
+      <DeactivateUserDialog user={deactivating} onClose={() => setDeactivating(null)} />
       <ConfirmDialog
-        open={!!toggling}
-        onOpenChange={(o) => !o && setToggling(null)}
-        title={inactivating ? `Inativar ${toggling?.name ?? ""}?` : `Reativar ${toggling?.name ?? ""}?`}
-        description={inactivating ? "A pessoa perde o acesso na hora. O histórico dela é mantido e você pode reativá-la depois." : "A pessoa volta a entrar com o mesmo perfil de antes."}
-        confirmLabel={inactivating ? "Inativar usuário" : "Reativar usuário"}
-        destructive={inactivating}
-        loading={setStatus.isPending}
-        onConfirm={() => toggling && setStatus.mutate({ id: toggling.id, status: inactivating ? "inativo" : "ativo" })}
+        open={!!reactivating}
+        onOpenChange={(o) => !o && setReactivating(null)}
+        title={`Reativar ${reactivating?.name ?? ""}?`}
+        description="A pessoa volta a entrar com o mesmo perfil de antes. Projetos e tarefas reatribuídos na inativação continuam com quem assumiu."
+        confirmLabel="Reativar usuário"
+        loading={reactivate.isPending}
+        onConfirm={() => reactivating && reactivate.mutate(reactivating.id)}
+      />
+      <ConfirmDialog
+        open={!!cancelling}
+        onOpenChange={(o) => !o && setCancelling(null)}
+        title={`Cancelar o convite de ${cancelling?.name ?? ""}?`}
+        description="O link enviado deixa de funcionar na hora e a pessoa sai da lista. Você pode convidar o mesmo e-mail de novo depois."
+        confirmLabel="Cancelar convite"
+        destructive
+        loading={cancelInvite.isPending}
+        onConfirm={() => cancelling && cancelInvite.mutate(cancelling.id)}
       />
     </>
   );

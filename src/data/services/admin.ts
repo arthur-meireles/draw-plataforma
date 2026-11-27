@@ -7,6 +7,7 @@ import { visibleTasks } from "./tasks";
 import { access, canRead, canWriteAll } from "@/lib/permissions";
 import { isDemoMode } from "@/lib/demo";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
+import { ensureFreelancerRecord, roleChangeDetail, securityLog, userTypeOf, usersExtraApi } from "./users-extra";
 
 /* ───────── Autenticação (mock) ───────── */
 const failures = new Map<string, number>();
@@ -275,11 +276,14 @@ export const usersApi = {
       const errors: Record<string, string> = {};
       if (!input.name.trim()) errors.name = "Informe o nome";
       if (!/^\S+@\S+\.\S+$/.test(email)) errors.email = "Informe um e-mail válido";
-      if (db.users.some((u) => u.email.toLowerCase() === email)) errors.email = "Já existe um usuário com este e-mail";
+      if (db.users.some((u) => !u.deletedAt && u.email.toLowerCase() === email)) errors.email = "Já existe um usuário com este e-mail";
       if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
-      const u: User = { ...baseFields(me.id), email, name: input.name.trim(), userType: input.role === "freelancer" ? "freelancer" : "internal", role: input.role, status: "convidado", avatarColor: ["#3f76ff", "#0fa37f", "#d97706", "#db2777", "#7c3aed"][db.users.length % 5], jobTitle: null, phone: null, mfaEnabled: false, lastLoginAt: null, passwordMock: "" };
+      const u: User = { ...baseFields(me.id), email, name: input.name.trim(), userType: userTypeOf(input.role), role: input.role, status: "convidado", avatarColor: ["#3f76ff", "#0fa37f", "#d97706", "#db2777", "#7c3aed"][db.users.length % 5], jobTitle: null, phone: null, mfaEnabled: false, lastLoginAt: null, passwordMock: "" };
       db.users.push(u);
+      // RN-35 — perfil Freelancer sempre ligado a um cadastro de freelancer (aproveita o do mesmo e-mail)
+      if (input.role === "freelancer") ensureFreelancerRecord(db, me, u);
       emit(db, me, { type: "user.invited", entityType: "user", entityId: u.id, data: { email, role: input.role } });
+      securityLog(db, me.id, "invite_sent", `${u.name} <${email}> · ${ROLE_LABEL[input.role]}`);
       return u.id;
     });
     return issueUserInvite(created, { email: true });
@@ -288,30 +292,41 @@ export const usersApi = {
   /** RN-32 — "Copiar link do convite" (só admin): gera um link novo e invalida o anterior. Não reenvia e-mail. */
   inviteLink: (id: ID) => issueUserInvite(id, { email: false, event: "user.invite_link_created" }),
 
-  update: (id: ID, patch: { name?: string; role?: Role; jobTitle?: string | null; phone?: string | null }) =>
+  /**
+   * Edita nome, cargo, telefone e cor do avatar (a própria pessoa ou admin) e o perfil (só admin).
+   * RN-35 — o tipo do usuário segue o perfil; virar Freelancer cria/liga o cadastro de freelancer e deixar de ser
+   * Freelancer inativa esse cadastro (o histórico de pagamentos fica). RN-37 — virar admin sem 2FA derruba a sessão
+   * para o cadastro do 2FA ser exigido no próximo login. RN-60 — tudo vai para o log de acessos.
+   */
+  update: (id: ID, patch: { name?: string; role?: Role; jobTitle?: string | null; phone?: string | null; avatarColor?: string }) =>
     write((db, me) => {
       if (!canWriteAll(me, "users") && id !== me.id) throw new ApiError(403, "Você só pode editar o seu próprio perfil. Peça a um administrador para alterar outras pessoas.");
-      const u = db.users.find((x) => x.id === id);
+      const u = db.users.find((x) => x.id === id && !x.deletedAt);
       if (!u) throw new ApiError(404, "Usuário não encontrado.");
+      if (patch.name !== undefined && !patch.name.trim()) throw new ApiError(422, "Informe o nome.", { name: "Informe o nome" });
+      if (patch.phone && onlyDigits(patch.phone).length < 10) throw new ApiError(422, "Telefone com DDD, ex.: (11) 91234-5678.", { phone: "Use DDD + número" });
+      if (patch.avatarColor !== undefined && !/^#[0-9a-f]{6}$/i.test(patch.avatarColor)) throw new ApiError(422, "Escolha uma das cores da lista.", { avatarColor: "Escolha uma cor" });
       if (patch.role && id === me.id && patch.role !== "admin" && me.role === "admin" && db.users.filter((x) => x.role === "admin" && x.status === "ativo").length === 1) throw new ApiError(409, "Você é o único administrador. Promova outra pessoa antes.");
       if (patch.role && !canWriteAll(me, "users")) delete patch.role;
       const before = u.role;
-      Object.assign(u, patch);
+      const clean = { ...patch, ...(patch.name !== undefined ? { name: patch.name.trim() } : {}), ...(patch.jobTitle !== undefined ? { jobTitle: patch.jobTitle?.trim() || null } : {}), ...(patch.phone !== undefined ? { phone: patch.phone?.trim() || null } : {}) };
+      Object.assign(u, clean);
       touch(u);
-      if (patch.role && patch.role !== before) emit(db, me, { type: "user.role_changed", entityType: "user", entityId: u.id, data: { from: before, to: patch.role } });
+      if (patch.role && patch.role !== before) {
+        u.userType = userTypeOf(patch.role);
+        if (patch.role === "freelancer") ensureFreelancerRecord(db, me, u);
+        else if (before === "freelancer") db.freelancers.filter((f) => f.userId === u.id && !f.deletedAt).forEach((f) => ((f.status = "inativo"), touch(f)));
+        if (patch.role === "admin" && !u.mfaEnabled && (db.organizations[0]?.settings.requireMfaForAdmins ?? true)) u.sessionVersion = (u.sessionVersion ?? 0) + 1;
+        emit(db, me, { type: "user.role_changed", entityType: "user", entityId: u.id, data: { from: before, to: patch.role } });
+        securityLog(db, me.id, "role_changed", roleChangeDetail(u, before, patch.role));
+      }
+      if (id === me.id && (patch.name !== undefined || patch.jobTitle !== undefined || patch.phone !== undefined || patch.avatarColor !== undefined)) securityLog(db, me.id, "profile_updated", u.name);
+      if (id === me.id && getSessionUserId() === me.id) setSessionUserId(me.id); // mantém a própria sessão válida
       return u.id;
     }),
 
-  setStatus: (id: ID, status: "ativo" | "inativo") =>
-    write((db, me) => {
-      requireAccess(me, "users", "all", "Só administradores inativam ou reativam usuários.");
-      if (id === me.id) throw new ApiError(409, "Você não pode inativar a si mesmo.");
-      const u = db.users.find((x) => x.id === id);
-      if (!u) throw new ApiError(404, "Usuário não encontrado.");
-      u.status = status;
-      touch(u);
-      emit(db, me, { type: status === "inativo" ? "user.deactivated" : "user.reactivated", entityType: "user", entityId: u.id, data: {} });
-    }),
+  /** Inativar/reativar (RN-36): inativar sem reatribuição só passa quando a pessoa não é responsável por projetos. */
+  setStatus: (id: ID, status: "ativo" | "inativo") => (status === "inativo" ? usersExtraApi.deactivate(id).then(() => undefined) : usersExtraApi.reactivate(id)),
 
   /** RN-32 — reenviar gera token novo (o link anterior deixa de valer) e registra o e-mail. */
   resendInvite: async (id: ID) => {
@@ -332,7 +347,10 @@ export const usersApi = {
       if (u.passwordMock !== current) throw new ApiError(422, "Senha atual incorreta.", { current: "Senha atual incorreta" });
       if (next.length < 8) throw new ApiError(422, "Use pelo menos 8 caracteres.", { next: "Use pelo menos 8 caracteres" });
       u.passwordMock = next;
+      u.sessionVersion = (u.sessionVersion ?? 0) + 1; // outras sessões abertas caem (RN-31)
       touch(u);
+      setSessionUserId(u.id); // esta continua
+      securityLog(db, me.id, "password_changed");
     }),
 
   accessLogs: () =>

@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Button, Dialog, RadioGroup } from "@/components/ui";
+import { Button, Callout, Dialog, RadioGroup } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { ROLE_LABEL } from "@/data/reference";
 import { usersApi } from "@/data/services";
 import type { Role } from "@/data/types";
-import { INVITABLE_ROLES, ROLE_DESCRIPTION } from "./roles";
+import { INVITABLE_ROLES, ROLE_DESCRIPTION, roleChangeNote } from "./roles";
 
 /** Troca o perfil de um usuário (RF-M1-03). */
 export function EditRoleDialog({ user, onClose }: { user: { id: string; name: string; role: Role } | null; onClose: () => void }) {
@@ -41,6 +41,11 @@ export function EditRoleDialog({ user, onClose }: { user: { id: string; name: st
       }
     >
       <RadioGroup value={role} onChange={setRole} options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r], description: ROLE_DESCRIPTION[r] }))} className="sm:grid-cols-2" />
+      {user && role !== user.role && roleChangeNote(role, user.role) && (
+        <Callout tone="info" className="mt-3">
+          {roleChangeNote(role, user.role)}
+        </Callout>
+      )}
       {error && (
         <p role="alert" className="mt-3 text-xs text-danger">
           {error}

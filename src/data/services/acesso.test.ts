@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { getSessionUserId, setSessionUserId } from "./_core";
-import { authApi, projectsApi, usersApi } from "./index";
+import { authApi, projectsApi, usersApi, usersExtraApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 const lastLog = () => loadDb().accessLogs.at(-1)!;
@@ -103,7 +103,7 @@ describe("RN-31 — recuperação de senha", () => {
 
   it("desconhecido, convidado e inativo recebem a mesma resposta, sem token nem e-mail", async () => {
     as("usr_paula");
-    await usersApi.setStatus("usr_marina", "inativo");
+    await usersExtraApi.deactivate("usr_marina", { reassignTo: "usr_beatriz" }); // RN-36: projetos dela passam a outra pessoa
     as(null);
     const emails = loadDb().emailLogs.length;
     for (const email of ["ninguem@draw.com.br", "thiago@draw.com.br", "marina@draw.com.br"]) {

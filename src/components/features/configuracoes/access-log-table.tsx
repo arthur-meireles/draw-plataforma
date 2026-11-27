@@ -18,10 +18,22 @@ const ACTION: Record<Row["action"], { label: string; tone: "success" | "danger" 
   invite_accepted: { label: "Aceitou o convite", tone: "success" },
   impersonate: { label: "Trocou de perfil (demonstração)", tone: "warning" },
   demo_reset: { label: "Restaurou dados de demonstração", tone: "warning" },
+  invite_sent: { label: "Convite enviado", tone: "neutral" },
+  invite_cancelled: { label: "Convite cancelado", tone: "warning" },
+  role_changed: { label: "Perfil alterado", tone: "warning" },
+  user_deactivated: { label: "Usuário inativado", tone: "warning" },
+  user_reactivated: { label: "Usuário reativado", tone: "neutral" },
+  password_changed: { label: "Trocou a senha", tone: "neutral" },
+  profile_updated: { label: "Atualizou o perfil", tone: "neutral" },
+  mfa_enabled: { label: "Ligou o 2FA", tone: "success" },
+  mfa_disabled: { label: "Desligou o 2FA", tone: "warning" },
+  mfa_recovery_used: { label: "Entrou com código de recuperação", tone: "warning" },
+  mfa_recovery_regenerated: { label: "Gerou novos códigos de recuperação", tone: "neutral" },
+  bank_data_changed: { label: "Alterou dados bancários", tone: "warning" },
 };
 
 /** Ações cujo detalhe ajuda na auditoria (e-mail tentado, item do cofre, perfil assumido). */
-const SHOW_DETAIL = new Set<Row["action"]>(["login_failed", "secret_revealed", "password_reset_requested", "impersonate"]);
+const SHOW_DETAIL = new Set<Row["action"]>(["login_failed", "secret_revealed", "password_reset_requested", "impersonate", "invite_sent", "invite_cancelled", "role_changed", "user_deactivated", "user_reactivated", "bank_data_changed", "profile_updated"]);
 
 /** Log de acessos (login, falhas, leitura de segredos) — RNF-01. */
 export function AccessLogTable() {
@@ -40,7 +52,7 @@ export function AccessLogTable() {
       isLoading={q.isLoading}
       error={q.error}
       onRetry={() => q.refetch()}
-      empty={{ icon: "history", title: "Nenhum acesso registrado ainda", description: "Logins, tentativas falhas, redefinições de senha, convites aceitos e leituras de segredos aparecem aqui assim que acontecerem." }}
+      empty={{ icon: "history", title: "Nenhum acesso registrado ainda", description: "Logins, tentativas falhas, senhas, 2FA, convites, mudanças de perfil, inativações e leituras de segredos aparecem aqui assim que acontecerem." }}
     />
   );
 }

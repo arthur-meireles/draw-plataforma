@@ -6,7 +6,7 @@ import { ROLE_LABEL } from "@/data/reference";
 import { usersApi } from "@/data/services";
 import type { Role } from "@/data/types";
 import { focusFirstInvalid } from "@/lib/focus";
-import { INVITABLE_ROLES, ROLE_DESCRIPTION } from "./roles";
+import { INVITABLE_ROLES, ROLE_DESCRIPTION, roleChangeNote } from "./roles";
 
 export const inviteLink = (token: string) => `${typeof window === "undefined" ? "" : window.location.origin}/convite/${token}`;
 
@@ -96,6 +96,7 @@ export function InviteUserDialog({ open, onOpenChange }: { open: boolean; onOpen
           <legend className="text-xs font-medium text-fg-muted">Perfil</legend>
           <RadioGroup value={role} onChange={setRole} options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r], description: ROLE_DESCRIPTION[r] }))} className="sm:grid-cols-2" />
         </fieldset>
+        {roleChangeNote(role) && <Callout tone="info">{roleChangeNote(role)}</Callout>}
         <button type="submit" hidden />
       </form>
     </Dialog>
