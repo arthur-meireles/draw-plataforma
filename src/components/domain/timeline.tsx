@@ -111,6 +111,16 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "payment", text: <>registrou pagamento de {b(money(d.amountCents as number))}</> };
     case "payable.divergent":
       return { icon: "warning", text: <>marcou NF como divergente</> };
+    case "payable.invoice_registered":
+      return { icon: "invoice", text: <>registrou manualmente a NF {b(String(d.invoiceNumber ?? ""))} de {b(money(d.amountCents as number))}{d.divergent ? <span className="text-danger"> — divergente</span> : null}{d.note ? <> — {String(d.note)}</> : null}</> };
+    case "payable.invoice_rejected":
+      return { icon: "warning", text: <>recusou a NF{(d.previous as { invoiceNumber?: string } | undefined)?.invoiceNumber ? <> {b(String((d.previous as { invoiceNumber?: string }).invoiceNumber))}</> : null} e pediu uma nova: {b(String(d.reason ?? ""))}</> };
+    case "project.member_payment_waived":
+      return { icon: "team", text: <>marcou um freelancer como {b("sem pagamento")} na conclusão</> };
+    case "project.imported":
+      return { icon: "upload", text: <>importou o projeto da planilha master ({b(String(d.legacyCode ?? ""))})</> };
+    case "project.import_updated":
+      return { icon: "upload", text: <>atualizou o projeto pela planilha master ({b(String(d.legacyCode ?? ""))})</> };
     default:
       return { icon: "history", text: <>{e.type}</> };
   }
