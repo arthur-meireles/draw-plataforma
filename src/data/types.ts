@@ -223,6 +223,8 @@ export interface Project extends BaseEntity {
   legacyCode: string | null;
   /** Condição de pagamento combinada (planilha: 50/50, À vista). */
   paymentCondition: PaymentCondition | null;
+  /** Status em que o projeto estava ao ser arquivado — o desarquivar volta exatamente a ele (RN-50). */
+  statusBeforeArchive: Exclude<ProjectStatus, "arquivado"> | null;
 }
 
 export type ProposalStatus = "rascunho" | "enviada" | "aprovada" | "recusada";
@@ -312,6 +314,9 @@ export interface Comment extends BaseEntity {
 
 export type ApprovalDecision = "pendente" | "aprovado" | "ajustes" | "negado";
 
+/** Por onde a decisão chegou: registrada por alguém da Draw ou dada pelo próprio cliente no link público (RN-52). */
+export type ApprovalDecidedVia = "interno" | "link_cliente";
+
 export interface Approval extends BaseEntity {
   projectId: ID;
   stageKey: ProjectStageKey;
@@ -320,6 +325,13 @@ export interface Approval extends BaseEntity {
   reason: string | null;
   decidedBy: ID | null;
   decidedAt: ISODate | null;
+  /** Quem pediu a aprovação (recebe a decisão na Caixa de entrada). Null = criada pela mudança de etapa. */
+  requestedBy: ID | null;
+  /** Link público enviado ao cliente para decidir (purpose `aprovacao`), se houver. */
+  shareLinkId: ID | null;
+  decidedVia: ApprovalDecidedVia | null;
+  /** Nome informado pelo cliente quando decide pelo link (decidedBy fica null). */
+  decidedByName: string | null;
 }
 
 export type FileCategory =
@@ -367,7 +379,14 @@ export interface FileVersion extends BaseEntity {
   dataUrl: string | null;
 }
 
-export type ShareLinkPurpose = "nf_freelancer" | "entrega";
+/**
+ * nf_freelancer: formulário de NF (targetId = payable). Envio ao cliente (RN-51/52): proposta (targetId = proposal),
+ * aprovacao (targetId = approval) e entrega (targetId = project), com os arquivos escolhidos em `fileVersionIds`.
+ */
+export type ShareLinkPurpose = "nf_freelancer" | "proposta" | "aprovacao" | "entrega";
+
+/** Resposta do cliente no link público. */
+export type ShareLinkResponse = "aprovado" | "ajustes";
 
 export interface ShareLink extends BaseEntity {
   token: string;
@@ -379,6 +398,19 @@ export interface ShareLink extends BaseEntity {
   maxUses: number | null;
   useCount: number;
   revokedAt: ISODate | null;
+  /** Versões de arquivo liberadas no link (entrega/aprovação; proposta usa o PDF da versão). */
+  fileVersionIds: ID[];
+  /** E-mails de contatos do cliente que receberam o link (e-mail transacional). */
+  recipients: string[];
+  /** Recado opcional de quem enviou, mostrado na página pública. */
+  message: string | null;
+  lastSentAt: ISODate | null;
+  /** Primeira abertura da página pública. */
+  viewedAt: ISODate | null;
+  respondedAt: ISODate | null;
+  response: ShareLinkResponse | null;
+  responseComment: string | null;
+  respondentName: string | null;
 }
 
 /* ───────────── 6.6 Financeiro ───────────── */
@@ -503,7 +535,17 @@ export type NotificationType =
   | "atraso"
   | "aprovacao"
   | "nf_solicitada"
-  | "nf_recebida";
+  | "nf_recebida"
+  /** Mudança de etapa do seu projeto. */
+  | "etapa"
+  /** Pausa, retomada, conclusão ou cancelamento do seu projeto. */
+  | "projeto"
+  /** Comentário no seu projeto ou na sua tarefa (sem menção). */
+  | "comentario"
+  /** Resposta do cliente pelo link público (aprovou, pediu ajustes). */
+  | "cliente"
+  /** Tarefa enviada para revisão. */
+  | "revisao";
 
 export interface Notification extends BaseEntity {
   userId: ID;

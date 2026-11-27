@@ -17,7 +17,8 @@ export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: s
   if (!n.projectCode) return null;
   if (n.entityType === "task" && n.entityId) return { href: `/projetos/${n.projectCode}?aba=tarefas&tarefa=${n.entityId}`, label: "Abrir tarefa" };
   if (n.entityType === "comment") return { href: `/projetos/${n.projectCode}?aba=comentarios`, label: "Abrir conversa" };
-  if (n.type === "aprovacao") return { href: `/projetos/${n.projectCode}?aba=aprovacoes`, label: "Ver aprovações" };
+  if (n.entityType === "approval" || n.type === "aprovacao") return { href: `/projetos/${n.projectCode}?aba=aprovacoes`, label: "Ver aprovações" };
+  if (n.entityType === "proposal") return { href: `/projetos/${n.projectCode}?aba=visao-geral`, label: "Ver propostas" };
   return { href: `/projetos/${n.projectCode}`, label: "Abrir projeto" };
 }
 

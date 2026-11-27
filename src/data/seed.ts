@@ -50,6 +50,7 @@ import type {
   FileCategory,
 } from "./types";
 import { PROJECT_STAGES } from "./reference";
+import { CLIENT_LINK_DEFAULTS } from "./defaults";
 
 export const SEED_VERSION = 9;
 const ORG = "org_draw";
@@ -518,6 +519,7 @@ export function createSeed(): Database {
       pausedReason: plan.status === "ativo" && idx % 9 === 4 ? "Aguardando material do cliente" : null,
       legacyCode: isDone ? `P${String(idx + 1).padStart(3, "0")}` : null,
       paymentCondition: isQuote ? null : contracted > 3_000_000 ? "50_50" : "a_vista",
+      statusBeforeArchive: plan.status === "arquivado" ? "concluido" : null,
     };
     projects.push(p);
     ev("project.created", "project", p.id, p, ownerId, { origin: p.origin, status: isQuote ? "cotacao" : "ativo" }, p.enteredAt);
@@ -735,6 +737,10 @@ export function createSeed(): Database {
           reason: decided && chance(0.3) ? "Ajustar tom do segundo capítulo" : null,
           decidedBy: decided ? "usr_beatriz" : null,
           decidedAt: decided ? d((approvedOffset ?? 0) + 12) : null,
+          requestedBy: p.ownerId,
+          shareLinkId: null,
+          decidedVia: decided ? "interno" : null,
+          decidedByName: null,
         });
       }
       if (currentOrder >= 5) {
@@ -748,6 +754,10 @@ export function createSeed(): Database {
           reason: null,
           decidedBy: decided ? "usr_paula" : null,
           decidedAt: decided ? (p.completedAt ?? d(-1)) : null,
+          requestedBy: null,
+          shareLinkId: null,
+          decidedVia: decided ? "interno" : null,
+          decidedByName: null,
         });
       }
 
@@ -831,6 +841,9 @@ export function createSeed(): Database {
             maxUses: 3,
             useCount: invoiced ? 1 : 0,
             revokedAt: null,
+            ...CLIENT_LINK_DEFAULTS,
+            recipients: [freelancers.find((f) => f.id === m.freelancerId)!.email],
+            lastSentAt: d(completedOffset!),
           };
           shareLinks.push(link);
           const fl = freelancers.find((f) => f.id === m.freelancerId)!;
@@ -1027,7 +1040,7 @@ export function createSeed(): Database {
   });
 
   const notificationPreferences: NotificationPreference[] = [];
-  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida"];
+  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida", "etapa", "projeto", "comentario", "cliente", "revisao"];
   for (const u of users) {
     for (const t of nTypes) {
       notificationPreferences.push({ ...base("npf", -200), userId: u.id, type: t, enabled: true });

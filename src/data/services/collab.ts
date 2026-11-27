@@ -1,8 +1,45 @@
 /** Arquivos (M7), comentários, aprovações, histórico (RF-X-02) e notificações (M10). */
 import { baseFields, nowIso } from "../db";
-import type { Approval, ApprovalDecision, FileCategory, FileEntity, ID, NotificationType } from "../types";
+import { PROJECT_STAGES } from "../reference";
+import type { Approval, ApprovalDecidedVia, ApprovalDecision, Database, FileCategory, FileEntity, ID, NotificationType, User } from "../types";
 import { ApiError, assertProjectVisible, emit, notify, read, touch, visibleProjects, write } from "./_core";
-import { canSeeMoney, canWriteAll } from "@/lib/permissions";
+import { freelancerUserId, mentionableUserIds, notifyMany, projectAudience } from "./audience";
+import { canSeeMoney, canWrite, canWriteAll } from "@/lib/permissions";
+
+const DECISION_LABEL: Record<Exclude<ApprovalDecision, "pendente">, string> = { aprovado: "aprovado", ajustes: "ajustes pedidos", negado: "negado" };
+
+/**
+ * RF-M4-10 / RN-52 — registra a decisão (interna ou do cliente pelo link) e avisa quem pediu, o responsável e a
+ * equipe do projeto, inclusive freelancers com acesso (são eles que executam os ajustes).
+ */
+export function decideApprovalTx(
+  db: Database,
+  me: User | null,
+  a: Approval,
+  decision: Exclude<ApprovalDecision, "pendente">,
+  reason: string | null | undefined,
+  via: { via: ApprovalDecidedVia; name?: string | null },
+) {
+  if (a.decision !== "pendente") throw new ApiError(409, "Esta aprovação já foi decidida.");
+  if (decision !== "aprovado" && !reason?.trim()) throw new ApiError(422, "Explique o motivo.", { reason: "Explique o que precisa mudar" });
+  const p = db.projects.find((x) => x.id === a.projectId)!;
+  a.decision = decision;
+  a.reason = reason?.trim() || null;
+  a.decidedBy = me?.id ?? null;
+  a.decidedAt = nowIso();
+  a.decidedVia = via.via;
+  a.decidedByName = via.via === "link_cliente" ? (via.name ?? null) : null;
+  touch(a);
+  emit(db, me, { type: "approval.decided", entityType: "approval", entityId: a.id, project: p, data: { stageKey: a.stageKey, decision, reason: a.reason, via: via.via, respondentName: a.decidedByName } });
+  const stage = PROJECT_STAGES.find((s) => s.key === a.stageKey)?.label ?? a.stageKey;
+  const byClient = via.via === "link_cliente";
+  const title = byClient
+    ? decision === "aprovado" ? `Cliente aprovou — ${stage}` : `Cliente pediu ajustes — ${stage}`
+    : `Aprovação ${DECISION_LABEL[decision]} — ${stage}`;
+  const body = [byClient ? `${a.decidedByName ?? "Cliente"} respondeu pelo link` : null, a.reason ? `"${a.reason}"` : null].filter(Boolean).join(": ") || undefined;
+  notifyMany(db, me, [a.requestedBy, ...projectAudience(db, p)], { type: byClient ? "cliente" : "aprovacao", title, body, project: p, entityType: "approval", entityId: a.id });
+  return a;
+}
 
 const MAX_FILE_BYTES = 200 * 1024 * 1024; // [A VALIDAR] limite por arquivo
 const DATAURL_LIMIT = 1.5 * 1024 * 1024; // guarda conteúdo só de arquivos pequenos no mock
@@ -100,9 +137,11 @@ export const filesApi = {
     }),
 
   setCategory: (fileId: ID, category: FileCategory) =>
-    write((db) => {
+    write((db, me) => {
       const f = db.files.find((x) => x.id === fileId);
       if (!f) throw new ApiError(404, "Arquivo não encontrado.");
+      if (f.projectId) assertProjectVisible(db, me, f.projectId);
+      if (!canWriteAll(me, "files")) throw new ApiError(403, "Seu perfil não pode mudar a categoria de arquivos.");
       f.category = category;
       touch(f);
     }),
@@ -111,6 +150,9 @@ export const filesApi = {
     write((db, me) => {
       const f = db.files.find((x) => x.id === fileId);
       if (!f) throw new ApiError(404, "Arquivo não encontrado.");
+      if (f.projectId) assertProjectVisible(db, me, f.projectId);
+      if (!canWriteAll(me, "files")) throw new ApiError(403, "Seu perfil não pode restaurar versões de arquivos.");
+      if (!db.fileVersions.some((v) => v.id === versionId && v.fileId === f.id && !v.deletedAt)) throw new ApiError(404, "Versão não encontrada.");
       f.currentVersionId = versionId;
       touch(f);
       emit(db, me, { type: "file.version_restored", entityType: "file", entityId: f.id, project: db.projects.find((p) => p.id === f.projectId), data: { name: f.name } });
@@ -152,10 +194,22 @@ export const commentsApi = {
     write((db, me) => {
       const p = assertProjectVisible(db, me, input.projectId);
       if (!input.body.trim()) throw new ApiError(422, "Escreva um comentário.", { body: "Escreva um comentário" });
-      const c = { ...baseFields(me.id), projectId: p.id, taskId: input.taskId ?? null, authorId: me.id, body: input.body.trim(), mentions: input.mentions };
+      const task = input.taskId ? db.tasks.find((t) => t.id === input.taskId && t.projectId === p.id && !t.deletedAt) : null;
+      if (input.taskId && !task) throw new ApiError(404, "Tarefa não encontrada neste projeto.");
+      // RN-54 — menções por id (escolhidas na lista de sugestões); só quem enxerga o projeto, inclusive freelancers da equipe.
+      const allowed = mentionableUserIds(db, p);
+      const mentions = [...new Set(input.mentions)].filter((uid) => allowed.has(uid));
+      const c = { ...baseFields(me.id), projectId: p.id, taskId: task?.id ?? null, authorId: me.id, body: input.body.trim(), mentions };
       db.comments.push(c);
-      emit(db, me, { type: "comment.created", entityType: "comment", entityId: c.id, project: p, data: { taskId: c.taskId, excerpt: c.body.slice(0, 80) } });
-      input.mentions.forEach((uid) => notify(db, me, { userId: uid, type: "mencao", title: `${me.name} mencionou você`, body: `"${c.body.slice(0, 80)}"`, project: p, entityType: "comment", entityId: c.id }));
+      emit(db, me, { type: "comment.created", entityType: "comment", entityId: c.id, project: p, data: { taskId: c.taskId, excerpt: c.body.slice(0, 80), mentions } });
+      const excerpt = `"${c.body.slice(0, 80)}"`;
+      // comentário de tarefa abre a tarefa na Caixa de entrada
+      const target = task ? { entityType: "task", entityId: task.id } : { entityType: "comment", entityId: c.id };
+      mentions.forEach((uid) => notify(db, me, { userId: uid, type: "mencao", title: `${me.name} mencionou você`, body: excerpt, project: p, ...target }));
+      // RN-53 — comentário sem menção avisa o responsável do projeto e quem está na tarefa comentada.
+      const mentioned = new Set(mentions);
+      const others = [p.ownerId, task?.assigneeUserId, freelancerUserId(db, task?.assigneeFreelancerId), task?.createdBy].filter((id): id is ID => !!id && !mentioned.has(id) && allowed.has(id));
+      notifyMany(db, me, others, { type: "comentario", title: task ? `${me.name} comentou em "${task.title}"` : `${me.name} comentou no projeto`, body: excerpt, project: p, ...target });
       return c;
     }),
 
@@ -189,10 +243,13 @@ export const approvalsApi = {
   request: (projectId: ID, input: { stageKey: Approval["stageKey"]; requestedFrom: string }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
+      if (me.role === "freelancer" || !canWrite(me, "projects")) throw new ApiError(403, "Seu perfil não pode registrar pedidos de aprovação. Peça ao responsável pelo projeto.");
+      if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos pedem aprovação.");
       if (!input.requestedFrom.trim()) throw new ApiError(422, "Informe de quem é a aprovação.", { requestedFrom: "Informe de quem é a aprovação" });
-      const a: Approval = { ...baseFields(me.id), projectId: p.id, stageKey: input.stageKey, requestedFrom: input.requestedFrom.trim(), decision: "pendente", reason: null, decidedBy: null, decidedAt: null };
+      const a: Approval = { ...baseFields(me.id), projectId: p.id, stageKey: input.stageKey, requestedFrom: input.requestedFrom.trim(), decision: "pendente", reason: null, decidedBy: null, decidedAt: null, requestedBy: me.id, shareLinkId: null, decidedVia: null, decidedByName: null };
       db.approvals.push(a);
       emit(db, me, { type: "approval.requested", entityType: "approval", entityId: a.id, project: p, data: { stageKey: a.stageKey, requestedFrom: a.requestedFrom } });
+      notify(db, me, { userId: p.ownerId, type: "aprovacao", title: "Novo pedido de aprovação no seu projeto", body: `${me.name} registrou um pedido para ${a.requestedFrom}`, project: p, entityType: "approval", entityId: a.id });
       return a;
     }),
 
@@ -201,17 +258,9 @@ export const approvalsApi = {
     write((db, me) => {
       const a = db.approvals.find((x) => x.id === id);
       if (!a) throw new ApiError(404, "Aprovação não encontrada.");
-      const p = assertProjectVisible(db, me, a.projectId);
-      if (me.role === "freelancer") throw new ApiError(403, "Sem permissão.");
-      if (decision !== "aprovado" && !reason?.trim()) throw new ApiError(422, "Explique o motivo.", { reason: "Explique o que precisa mudar" });
-      a.decision = decision;
-      a.reason = reason?.trim() || null;
-      a.decidedBy = me.id;
-      a.decidedAt = nowIso();
-      touch(a);
-      emit(db, me, { type: "approval.decided", entityType: "approval", entityId: a.id, project: p, data: { stageKey: a.stageKey, decision, reason: a.reason } });
-      db.projectMembers.filter((m) => m.projectId === p.id && m.active && m.userId).forEach((m) => notify(db, me, { userId: m.userId, type: "aprovacao", title: `Aprovação: ${decision === "aprovado" ? "aprovado" : decision === "ajustes" ? "ajustes pedidos" : "negado"}`, project: p }));
-      return a;
+      assertProjectVisible(db, me, a.projectId);
+      if (me.role === "freelancer" || !canWrite(me, "projects")) throw new ApiError(403, "Seu perfil não pode registrar decisões de aprovação. Peça ao responsável pelo projeto.");
+      return decideApprovalTx(db, me, a, decision, reason, { via: "interno" });
     }),
 };
 

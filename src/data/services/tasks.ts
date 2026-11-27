@@ -1,6 +1,7 @@
 import { baseFields, nowIso } from "../db";
 import type { AdmArea, Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
 import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, touch, visibleProjects, write } from "./_core";
+import { notifyMany } from "./audience";
 import { canRead, canWriteAll } from "@/lib/permissions";
 
 export interface TaskFilters {
@@ -167,7 +168,11 @@ export const tasksApi = {
       if (patch.assigneeUserId) t.assigneeFreelancerId = null;
       if (patch.assigneeFreelancerId) t.assigneeUserId = null;
       touch(t);
-      if (patch.statusKey && patch.statusKey !== before.statusKey) emit(db, me, { type: "task.status_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.statusKey, to: patch.statusKey, title: t.title } });
+      if (patch.statusKey && patch.statusKey !== before.statusKey) {
+        emit(db, me, { type: "task.status_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.statusKey, to: patch.statusKey, title: t.title } });
+        // RN-53 — tarefa em revisão avisa o responsável do projeto e quem pediu a tarefa.
+        if (patch.statusKey === "em_revisao") notifyMany(db, me, [p?.ownerId, t.createdBy], { type: "revisao", title: `Tarefa para revisar: ${t.title}`, body: `${me.name} enviou para revisão`, project: p, entityType: "task", entityId: t.id });
+      }
       if ((patch.assigneeUserId && patch.assigneeUserId !== before.assigneeUserId) || (patch.assigneeFreelancerId && patch.assigneeFreelancerId !== before.assigneeFreelancerId)) {
         const flUser = t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null;
         notify(db, me, { userId: t.assigneeUserId ?? flUser, type: "atribuicao", title: `Tarefa atribuída: ${t.title}`, project: p, entityType: "task", entityId: t.id });

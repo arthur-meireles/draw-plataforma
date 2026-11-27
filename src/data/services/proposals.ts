@@ -1,9 +1,104 @@
 import { FIRST_PROJECT_STAGE } from "../reference";
 import { baseFields, nowIso } from "../db";
-import type { ID, Proposal } from "../types";
-import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, notify, read, touch, write } from "./_core";
+import type { Database, ID, Project, Proposal, User } from "../types";
+import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, touch, write } from "./_core";
+import { notifyMany, projectAudience } from "./audience";
+import { createClientLink, resolveRecipients } from "./client-links";
 import { generateTasksFromTemplate } from "./projects";
-import { canSeeMoney } from "@/lib/permissions";
+import { canSeeMoney, canWriteAll } from "@/lib/permissions";
+
+/** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
+function assertCommercial(me: User) {
+  if (!canWriteAll(me, "commercial") || !canSeeMoney(me)) throw new ApiError(403, "Seu perfil não pode alterar propostas. Peça a alguém do Comercial ou da Gestão.");
+}
+
+function validateProposal(input: { amountCents: number; installments: InstallmentInput[] }) {
+  const errors: Record<string, string> = {};
+  if (!(input.amountCents > 0)) errors.amountCents = "Informe o valor da proposta";
+  if (!input.installments.length) errors.installments = "Informe ao menos uma parcela";
+  const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
+  if (input.installments.length && sum !== input.amountCents) errors.installments = "A soma das parcelas deve ser igual ao valor da proposta";
+  if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+}
+
+/**
+ * RN-01 — aprovação em uma transação: proposta aprovada, projeto ativo, recebíveis e tarefas.
+ * Mesmo caminho para a aprovação interna e para a do cliente pelo link público (RN-51), `me = null`.
+ */
+export function approveProposalTx(db: Database, me: User | null, prop: Proposal, via: { kind: "interno" | "link_cliente"; respondentName?: string | null; shareLinkId?: ID | null }) {
+  const p = db.projects.find((x) => x.id === prop.projectId && !x.deletedAt);
+  if (!p) throw new ApiError(404, "Projeto não encontrado.");
+  if (p.status !== "cotacao") throw new ApiError(409, "Este projeto não está em cotação.");
+  if (prop.status !== "enviada") throw new ApiError(409, "Envie a proposta antes de aprová-la.");
+  const now = nowIso();
+  prop.status = "aprovada";
+  prop.approvedAt = now;
+  touch(prop);
+  db.proposals.filter((x) => x.projectId === p.id && x.id !== prop.id && x.status !== "recusada").forEach((x) => (x.status = "recusada"));
+  p.status = "ativo";
+  p.quoteStageKey = null;
+  p.projectStageKey = FIRST_PROJECT_STAGE;
+  p.approvedAt = now;
+  p.startedAt = now;
+  p.contractedAmountCents = prop.amountCents;
+  touch(p);
+  const insts = db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt).sort((a, b) => a.number - b.number);
+  insts.forEach((i) => {
+    const expected = i.dueAt ?? (i.dueRule === "Na aprovação" ? new Date(Date.now() + 5 * 86_400_000).toISOString() : (p.dueAt ?? new Date(Date.now() + 45 * 86_400_000).toISOString()));
+    db.receivables.push({
+      ...baseFields(me?.id ?? null),
+      projectId: p.id,
+      clientId: p.clientId,
+      proposalInstallmentId: i.id,
+      description: insts.length > 1 ? `Parcela ${i.number}/${insts.length} — ${i.dueRule ?? "conforme proposta"}` : `Parcela única — ${i.dueRule ?? "conforme proposta"}`,
+      amountCents: i.amountCents,
+      taxCents: taxOf(db, i.amountCents),
+      kind: "parcela",
+      collectionNote: null,
+      expectedAt: expected,
+      invoiceNumber: null,
+      invoiceFileId: null,
+      issuedAt: null,
+      receivedAt: null,
+      status: "previsto",
+    });
+  });
+  generateTasksFromTemplate(db, me, p);
+  emit(db, me, {
+    type: "proposal.approved",
+    entityType: "proposal",
+    entityId: prop.id,
+    project: p,
+    data: { version: prop.version, amountCents: prop.amountCents, receivables: insts.length, via: via.kind, respondentName: via.respondentName ?? null, shareLinkId: via.shareLinkId ?? null },
+  });
+  const byClient = via.kind === "link_cliente";
+  const title = byClient ? "Cliente aprovou a proposta — projeto ativo" : "Proposta aprovada — projeto ativo";
+  const body = byClient ? `${via.respondentName ?? "Cliente"} aprovou a proposta v${prop.version} pelo link` : undefined;
+  // Responsável e equipe (RN-53); Financeiro e Gestão ativos para preparar o faturamento.
+  notifyMany(db, me, projectAudience(db, p), { type: byClient ? "cliente" : "projeto", title, body, project: p });
+  notifyMany(
+    db,
+    me,
+    db.users.filter((u) => ["financeiro", "gestao"].includes(u.role) && u.status === "ativo").map((u) => u.id),
+    { type: "aprovacao", title, body, project: p },
+  );
+  return p;
+}
+
+/** RN-11 — marca como enviada (data do sistema) e move o funil. */
+function markSent(db: Database, me: User, prop: Proposal, p: Project) {
+  const now = nowIso();
+  prop.status = "enviada";
+  prop.sentAt = now;
+  touch(prop);
+  if (!p.quoteSentAt) p.quoteSentAt = now;
+  if (p.quoteStageKey !== "negociacao") {
+    emit(db, me, { type: "project.quote_stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.quoteStageKey, to: "enviada" } });
+    p.quoteStageKey = "enviada";
+  }
+  touch(p);
+  db.proposals.filter((x) => x.projectId === p.id && x.id !== prop.id && x.status === "enviada").forEach((x) => (x.status = "recusada"));
+}
 
 export interface InstallmentInput {
   amountCents: number;
@@ -30,14 +125,9 @@ export const proposalsApi = {
   create: (projectId: ID, input: { amountCents: number; paymentTermsNote?: string; installments: InstallmentInput[]; fileId?: ID | null }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
-      if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão.");
+      assertCommercial(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível criar propostas para projetos em cotação.");
-      const errors: Record<string, string> = {};
-      if (input.amountCents <= 0) errors.amountCents = "Informe o valor da proposta";
-      if (!input.installments.length) errors.installments = "Informe ao menos uma parcela";
-      const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
-      if (input.installments.length && sum !== input.amountCents) errors.installments = "A soma das parcelas deve ser igual ao valor da proposta";
-      if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+      validateProposal(input);
       const version = Math.max(0, ...db.proposals.filter((x) => x.projectId === p.id).map((x) => x.version)) + 1;
       const prop: Proposal = { ...baseFields(me.id), projectId: p.id, version, amountCents: input.amountCents, paymentTermsNote: input.paymentTermsNote ?? null, status: "rascunho", sentAt: null, approvedAt: null, fileId: input.fileId ?? null };
       db.proposals.push(prop);
@@ -55,9 +145,10 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
+      assertCommercial(me);
+      if (p.status !== "cotacao") throw new ApiError(409, "Só é possível editar propostas de projetos em cotação.");
       if (prop.status !== "rascunho") throw new ApiError(409, "Só rascunhos podem ser editados. Crie uma nova versão.");
-      const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
-      if (sum !== input.amountCents) throw new ApiError(422, "A soma das parcelas deve ser igual ao valor da proposta", { installments: "A soma das parcelas deve ser igual ao valor da proposta" });
+      validateProposal(input);
       emitValueChange(db, me, "proposal", prop.id, p, "amountCents", prop.amountCents, input.amountCents);
       prop.amountCents = input.amountCents;
       prop.paymentTermsNote = input.paymentTermsNote ?? null;
@@ -68,73 +159,34 @@ export const proposalsApi = {
       return prop;
     }),
 
-  /** RN-11 — data de envio registrada pelo sistema. */
-  send: (proposalId: ID) =>
+  /**
+   * RN-11 / RN-51 — envia a proposta ao cliente: marca como enviada, cria o link público (30 dias, revogável) e
+   * enfileira o e-mail transacional aos contatos escolhidos (padrão: contato de cobrança / decisor do cliente).
+   */
+  send: (proposalId: ID, opts: { contactIds?: ID[]; message?: string | null } = {}) =>
     write((db, me) => {
-      const prop = db.proposals.find((x) => x.id === proposalId);
+      const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
-      if (prop.status !== "rascunho") throw new ApiError(409, "Esta proposta já foi enviada.");
-      const now = nowIso();
-      prop.status = "enviada";
-      prop.sentAt = now;
-      touch(prop);
-      if (!p.quoteSentAt) p.quoteSentAt = now;
-      if (p.quoteStageKey !== "negociacao") {
-        emit(db, me, { type: "project.quote_stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.quoteStageKey, to: "enviada" } });
-        p.quoteStageKey = "enviada";
-      }
-      db.proposals.filter((x) => x.projectId === p.id && x.id !== prop.id && x.status === "enviada").forEach((x) => (x.status = "recusada"));
-      emit(db, me, { type: "proposal.sent", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, amountCents: prop.amountCents } });
+      assertCommercial(me);
+      if (p.status !== "cotacao") throw new ApiError(409, "Só é possível enviar propostas de projetos em cotação.");
+      if (prop.status !== "rascunho") throw new ApiError(409, "Esta proposta já foi enviada. Para reenviar o link, use \"Reenviar\" em Envios ao cliente.");
+      const recipients = resolveRecipients(db, p, opts.contactIds);
+      markSent(db, me, prop, p);
+      const link = createClientLink(db, me, { purpose: "proposta", project: p, targetId: prop.id, recipients, message: opts.message ?? null, fileVersionIds: [] });
+      emit(db, me, { type: "proposal.sent", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, amountCents: prop.amountCents, recipients: link.recipients, shareLinkId: link.id } });
       return prop;
     }),
 
-  /** RN-01 — aprovação: uma transação, projeto vira ativo, recebíveis e tarefas criados. */
+  /** RN-01 — aprovação interna: uma transação, projeto vira ativo, recebíveis e tarefas criados. */
   approve: (proposalId: ID) =>
     write((db, me) => {
-      const prop = db.proposals.find((x) => x.id === proposalId);
+      const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
-      const p = assertProjectVisible(db, me, prop.projectId);
-      if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão para aprovar propostas.");
-      if (p.status !== "cotacao") throw new ApiError(409, "Este projeto não está em cotação.");
-      if (prop.status !== "enviada") throw new ApiError(409, "Envie a proposta antes de aprová-la.");
-      const now = nowIso();
-      prop.status = "aprovada";
-      prop.approvedAt = now;
-      touch(prop);
-      db.proposals.filter((x) => x.projectId === p.id && x.id !== prop.id && x.status !== "recusada").forEach((x) => (x.status = "recusada"));
-      p.status = "ativo";
-      p.quoteStageKey = null;
-      p.projectStageKey = FIRST_PROJECT_STAGE;
-      p.approvedAt = now;
-      p.startedAt = now;
-      p.contractedAmountCents = prop.amountCents;
-      touch(p);
-      const insts = db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt).sort((a, b) => a.number - b.number);
-      insts.forEach((i) => {
-        const expected = i.dueAt ?? (i.dueRule === "Na aprovação" ? new Date(Date.now() + 5 * 86_400_000).toISOString() : (p.dueAt ?? new Date(Date.now() + 45 * 86_400_000).toISOString()));
-        db.receivables.push({
-          ...baseFields(me.id),
-          projectId: p.id,
-          clientId: p.clientId,
-          proposalInstallmentId: i.id,
-          description: insts.length > 1 ? `Parcela ${i.number}/${insts.length} — ${i.dueRule ?? "conforme proposta"}` : `Parcela única — ${i.dueRule ?? "conforme proposta"}`,
-          amountCents: i.amountCents,
-          taxCents: taxOf(db, i.amountCents),
-          kind: "parcela",
-          collectionNote: null,
-          expectedAt: expected,
-          invoiceNumber: null,
-          invoiceFileId: null,
-          issuedAt: null,
-          receivedAt: null,
-          status: "previsto",
-        });
-      });
-      generateTasksFromTemplate(db, me, p);
-      emit(db, me, { type: "proposal.approved", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, amountCents: prop.amountCents, receivables: insts.length } });
-      db.users.filter((u) => ["financeiro", "gestao"].includes(u.role) && u.status === "ativo").forEach((u) => notify(db, me, { userId: u.id, type: "aprovacao", title: "Proposta aprovada — projeto ativo", project: p }));
-      return { proposal: prop, project: p };
+      assertProjectVisible(db, me, prop.projectId);
+      if (!canWriteAll(me, "commercial") || !canSeeMoney(me)) throw new ApiError(403, "Seu perfil não pode aprovar propostas. Peça a alguém do Comercial ou da Gestão.");
+      const project = approveProposalTx(db, me, prop, { kind: "interno" });
+      return { proposal: prop, project };
     }),
 
   reject: (proposalId: ID) =>
@@ -142,6 +194,8 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
+      assertCommercial(me);
+      if (prop.status !== "enviada" && prop.status !== "rascunho") throw new ApiError(409, "Só propostas em rascunho ou enviadas podem ser recusadas.");
       prop.status = "recusada";
       touch(prop);
       if (p.quoteStageKey === "enviada") p.quoteStageKey = "negociacao";

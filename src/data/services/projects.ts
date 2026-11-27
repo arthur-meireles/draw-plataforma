@@ -29,6 +29,8 @@ import {
   visibleProjects,
   write,
 } from "./_core";
+import { notifyMany, projectAudience } from "./audience";
+import { CLIENT_LINK_DEFAULTS } from "../defaults";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 export interface ProjectFilters {
@@ -193,6 +195,7 @@ export const projectsApi = {
         pausedReason: null,
         legacyCode: null,
         paymentCondition: null,
+        statusBeforeArchive: null,
       };
       db.projects.push(p);
       db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: input.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
@@ -259,6 +262,7 @@ export const projectsApi = {
         pausedReason: null,
         legacyCode: null,
         paymentCondition: input.paymentCondition ?? null,
+        statusBeforeArchive: null,
       };
       db.projects.push(p);
       const team = [{ userId: input.ownerId, memberRole: "responsavel" as MemberRole }, ...input.team.filter((t) => t.userId !== input.ownerId || t.freelancerId)];
@@ -322,6 +326,7 @@ export const projectsApi = {
   move: (id: ID, input: { stageKey: ProjectStageKey | QuoteStageKey; position: number }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (p.status === "cotacao" ? !canWriteAll(me, "commercial") : !(canWriteAll(me, "projects") || me.role === "operacao")) throw new ApiError(403, "Seu perfil não pode mudar a etapa deste projeto. Peça ao responsável.");
       if (p.status === "cotacao") {
         const to = input.stageKey as QuoteStageKey;
         if (to === "aprovada") throw new ApiError(422, "Para aprovar, aprove uma proposta do projeto.");
@@ -338,11 +343,10 @@ export const projectsApi = {
           p.projectStageKey = to;
           const stage = PROJECT_STAGES.find((s) => s.key === to);
           if (stage?.category === "waiting") {
-            db.approvals.push({ ...baseFields(me.id), projectId: p.id, stageKey: to, requestedFrom: db.clientContacts.find((c) => c.id === p.billingContactId)?.name ?? "Cliente", decision: "pendente", reason: null, decidedBy: null, decidedAt: null });
+            db.approvals.push({ ...baseFields(me.id), projectId: p.id, stageKey: to, requestedFrom: db.clientContacts.find((c) => c.id === p.billingContactId)?.name ?? "Cliente", decision: "pendente", reason: null, decidedBy: null, decidedAt: null, requestedBy: me.id, shareLinkId: null, decidedVia: null, decidedByName: null });
           }
-          db.projectMembers
-            .filter((m) => m.projectId === p.id && m.active && m.userId)
-            .forEach((m) => notify(db, me, { userId: m.userId, type: "aprovacao", title: `Projeto movido para ${stage?.label}`, project: p }));
+          // RN-53 — responsável e equipe (inclusive freelancers com acesso), nunca quem moveu.
+          notifyMany(db, me, projectAudience(db, p), { type: "etapa", title: `Projeto movido para ${stage?.label}`, body: `${me.name} mudou a etapa`, project: p });
         }
       } else {
         throw new ApiError(409, "Projetos concluídos ou arquivados não mudam de etapa.");
@@ -356,23 +360,27 @@ export const projectsApi = {
   pause: (id: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode pausar projetos. Peça a quem gerencia projetos.");
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser pausados.");
       if (!reason.trim()) throw new ApiError(422, "Informe por que o projeto está parado.", { reason: "Informe o motivo" });
       p.pausedAt = nowIso();
       p.pausedReason = reason.trim();
       touch(p);
       emit(db, me, { type: "project.paused", entityType: "project", entityId: p.id, project: p, data: { reason: p.pausedReason } });
+      notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto pausado", body: `Motivo: ${p.pausedReason}`, project: p });
       return p;
     }),
 
   resume: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode retomar projetos. Peça a quem gerencia projetos.");
       if (!p.pausedAt) throw new ApiError(409, "O projeto não está pausado.");
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
       emit(db, me, { type: "project.resumed", entityType: "project", entityId: p.id, project: p });
+      notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto retomado", body: `${me.name} retomou o projeto`, project: p });
       return p;
     }),
 
@@ -380,6 +388,7 @@ export const projectsApi = {
   markLost: (id: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (!canWriteAll(me, "commercial")) throw new ApiError(403, "Seu perfil não pode marcar cotações como perdidas. Peça a alguém do Comercial.");
       if (!reason.trim()) throw new ApiError(422, "Informe o motivo da perda.", { reason: "Informe o motivo da perda" });
       if (p.status !== "cotacao") throw new ApiError(409, "Só cotações podem ser marcadas como perdidas.");
       p.status = "perdido";
@@ -394,6 +403,7 @@ export const projectsApi = {
   reopenQuote: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (!canWriteAll(me, "commercial")) throw new ApiError(403, "Seu perfil não pode reabrir cotações. Peça a alguém do Comercial.");
       if (p.status !== "perdido") throw new ApiError(409, "Só cotações perdidas podem ser reabertas.");
       p.status = "cotacao";
       p.quoteStageKey = "negociacao";
@@ -414,6 +424,8 @@ export const projectsApi = {
       emit(db, me, { type: "project.stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.projectStageKey, to: "concluido" } });
       p.projectStageKey = "concluido";
       p.completedAt = now.toISOString();
+      p.pausedAt = null;
+      p.pausedReason = null;
       touch(p);
       const org = db.organizations[0];
       const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, org.settings.freelancerPaymentDay, 15)).toISOString();
@@ -442,7 +454,7 @@ export const projectsApi = {
           };
           db.payables.push(pay);
           const token = `nf-${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
-          const link = { ...baseFields(me.id), token, purpose: "nf_freelancer" as const, projectId: p.id, targetId: pay.id, expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), hasPassword: false, maxUses: 3, useCount: 0, revokedAt: null };
+          const link = { ...baseFields(me.id), token, purpose: "nf_freelancer" as const, projectId: p.id, targetId: pay.id, expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), hasPassword: false, maxUses: 3, useCount: 0, revokedAt: null, ...CLIENT_LINK_DEFAULTS, recipients: [fl.email], lastSentAt: nowIso() };
           db.shareLinks.push(link);
           db.freelancerInvoiceRequests.push({ ...baseFields(me.id), payableId: pay.id, shareLinkId: link.id, sentAt: nowIso(), submittedAt: null, declaredLegalName: null, declaredDocument: null, declaredPixKey: null, declaredInvoiceNumber: null, declaredAmountCents: null });
           queueSystemEmail(db, { to: [fl.email], subject: `Envie sua nota fiscal — ${p.code}`, template: "nf_freelancer", projectId: p.id });
@@ -451,6 +463,7 @@ export const projectsApi = {
           created.push(pay.id);
         });
       emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length } });
+      notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto concluído", body: `${me.name} concluiu o projeto`, project: p });
       return { project: p, payablesCreated: created.length };
     }),
 
@@ -458,7 +471,9 @@ export const projectsApi = {
   archive: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
-      if (!["concluido", "perdido", "cancelado"].includes(p.status)) throw new ApiError(409, "Só projetos concluídos, perdidos ou cancelados podem ser arquivados.");
+      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode arquivar projetos. Peça a quem gerencia projetos.");
+      if (p.status !== "concluido" && p.status !== "perdido" && p.status !== "cancelado") throw new ApiError(409, "Só projetos concluídos, perdidos ou cancelados podem ser arquivados.");
+      p.statusBeforeArchive = p.status;
       p.status = "arquivado";
       p.archivedAt = nowIso();
       touch(p);
@@ -469,24 +484,31 @@ export const projectsApi = {
   unarchive: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode desarquivar projetos. Peça a quem gerencia projetos.");
       if (p.status !== "arquivado") throw new ApiError(409, "Projeto não está arquivado.");
-      p.status = p.completedAt ? "concluido" : "perdido";
+      // RN-50 — volta exatamente ao status anterior (cancelado continua cancelado).
+      p.status = p.statusBeforeArchive ?? legacyStatusBeforeArchive(db, p);
+      p.statusBeforeArchive = null;
       p.archivedAt = null;
       touch(p);
-      emit(db, me, { type: "project.unarchived", entityType: "project", entityId: p.id, project: p });
+      emit(db, me, { type: "project.unarchived", entityType: "project", entityId: p.id, project: p, data: { restoredStatus: p.status } });
       return p;
     }),
 
   cancel: (id: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
-      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Sem permissão.");
+      if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode cancelar projetos. Peça a quem gerencia projetos.");
+      if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser cancelados. Para cotações, use \"Marcar como perdida\".");
       if (!reason.trim()) throw new ApiError(422, "Informe o motivo do cancelamento.", { reason: "Informe o motivo" });
       p.status = "cancelado";
-      p.lostReason = reason;
+      p.lostReason = reason.trim();
+      p.pausedAt = null;
+      p.pausedReason = null;
       touch(p);
       db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto").forEach((r) => (r.status = "cancelado"));
       emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason } });
+      notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),
 
@@ -594,15 +616,24 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
   };
 }
 
+/** Registros antigos sem `statusBeforeArchive`: deduz pelo último evento de encerramento. */
+function legacyStatusBeforeArchive(db: Database, p: Project): Exclude<Project["status"], "arquivado"> {
+  if (p.completedAt) return "concluido";
+  const last = db.events
+    .filter((e) => e.projectId === p.id && (e.type === "project.cancelled" || e.type === "project.lost"))
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0];
+  return last?.type === "project.cancelled" ? "cancelado" : "perdido";
+}
+
 /** RF-M4-05 — gera tarefas do modelo do tipo de projeto, por etapa. */
-export function generateTasksFromTemplate(db: Database, me: User, p: Project) {
+export function generateTasksFromTemplate(db: Database, me: User | null, p: Project) {
   const tpl = db.projectTypeTaskTemplates.filter((t) => t.projectTypeId === p.projectTypeId && !t.deletedAt).sort((a, b) => a.order - b.order);
   let cursor = Date.now();
   tpl.forEach((t, i) => {
     const start = new Date(cursor);
     cursor += t.defaultDurationDays * 86_400_000;
     const task: Task = {
-      ...baseFields(me.id),
+      ...baseFields(me?.id ?? null),
       projectId: p.id,
       module: "projeto",
       parentTaskId: null,
