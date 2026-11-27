@@ -52,7 +52,7 @@ import type {
 import { PROJECT_STAGES } from "./reference";
 import { CLIENT_LINK_DEFAULTS } from "./defaults";
 
-export const SEED_VERSION = 12;
+export const SEED_VERSION = 13;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
