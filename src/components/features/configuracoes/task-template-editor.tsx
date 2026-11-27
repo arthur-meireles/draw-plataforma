@@ -1,14 +1,16 @@
 "use client";
 import { StageIcon } from "@/components/domain";
-import { Button, IconButton, Input } from "@/components/ui";
-import { PROJECT_STAGES } from "@/data/reference";
-import type { ProjectStageKey } from "@/data/types";
+import { Button, Combobox, IconButton, Input, type Option } from "@/components/ui";
+import { MEMBER_ROLE_LABEL, PROJECT_STAGES, STAGE_DEFAULT_ROLE } from "@/data/reference";
+import type { MemberRole, ProjectStageKey } from "@/data/types";
 
 export interface TemplateDraft {
   key: string;
   stageKey: ProjectStageKey;
   title: string;
   days: string;
+  /** Papel da equipe que recebe a tarefa (RN-72); "" = padrão da etapa. */
+  role: MemberRole | "";
 }
 
 let seq = 0;
@@ -16,6 +18,11 @@ export const newTemplateKey = () => `tpl_${Date.now().toString(36)}_${seq++}`;
 
 /** Etapas que recebem tarefas-modelo (a etapa final não gera trabalho). */
 const STAGES = PROJECT_STAGES.filter((s) => s.key !== "concluido");
+
+const roleOptions = (stage: ProjectStageKey): Option<MemberRole | "padrao">[] => [
+  { value: "padrao", label: `Padrão da etapa (${MEMBER_ROLE_LABEL[STAGE_DEFAULT_ROLE[stage]]})` },
+  ...(Object.keys(MEMBER_ROLE_LABEL) as MemberRole[]).map((r) => ({ value: r, label: MEMBER_ROLE_LABEL[r] })),
+];
 
 /**
  * Editor de tarefas-modelo por etapa (RF-M2-05): adicionar, remover e reordenar.
@@ -48,10 +55,20 @@ export function TaskTemplateEditor({ value, onChange, errors }: { value: Templat
             </header>
             <ul className="divide-y divide-line">
               {items.map((t, i) => (
-                <li key={t.key} className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-1 p-2 md:grid-cols-[1fr_6rem_auto]">
+                <li key={t.key} className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-1 p-2 md:grid-cols-[1fr_11rem_6rem_auto]">
                   <div className="col-span-2 md:col-span-1">
                     <Input value={t.title} onChange={(e) => patch(t.key, { title: e.target.value })} placeholder="Título da tarefa" aria-label={`Título da tarefa ${i + 1} em ${stage.label}`} invalid={!!errors[t.key]?.title} />
                     {errors[t.key]?.title && <p className="mt-1 text-xs text-danger">{errors[t.key].title}</p>}
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <Combobox
+                      options={roleOptions(stage.key)}
+                      value={t.role || "padrao"}
+                      onChange={(v) => patch(t.key, { role: !v || v === "padrao" ? "" : v })}
+                      aria-label={`Papel que recebe a tarefa ${i + 1} em ${stage.label}`}
+                      className="w-full"
+                      contentClassName="w-60"
+                    />
                   </div>
                   <div>
                     <Input value={t.days} inputMode="numeric" onChange={(e) => patch(t.key, { days: e.target.value.replace(/\D/g, "").slice(0, 3) })} placeholder="Dias" aria-label={`Prazo em dias da tarefa ${i + 1} em ${stage.label}`} invalid={!!errors[t.key]?.days} suffix={<span className="pr-1.5 text-xs text-fg-subtle">dias</span>} className="pr-11" />
@@ -66,7 +83,7 @@ export function TaskTemplateEditor({ value, onChange, errors }: { value: Templat
               ))}
             </ul>
             <div className="border-t border-line px-2 py-1.5 first:border-t-0">
-              <Button size="sm" variant="ghost" icon="add" onClick={() => onChange([...value, { key: newTemplateKey(), stageKey: stage.key, title: "", days: "3" }])}>
+              <Button size="sm" variant="ghost" icon="add" onClick={() => onChange([...value, { key: newTemplateKey(), stageKey: stage.key, title: "", days: "3", role: "" }])}>
                 Adicionar tarefa em {stage.label}
               </Button>
             </div>

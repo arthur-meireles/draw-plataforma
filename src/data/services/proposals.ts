@@ -4,7 +4,7 @@ import type { Database, ID, Project, Proposal, User } from "../types";
 import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, requireAccess, touch, write } from "./_core";
 import { notifyMany, projectAudience } from "./audience";
 import { createClientLink, resolveRecipients } from "./client-links";
-import { generateTasksFromTemplate } from "./projects";
+import { closeQuoteTasks, generateTasksFromTemplate } from "./projects";
 import { canSeeMoney } from "@/lib/permissions";
 
 /** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
@@ -59,6 +59,7 @@ export function approveProposalTx(db: Database, me: User | null, prop: Proposal,
       status: "previsto",
     });
   });
+  closeQuoteTasks(db, p);
   generateTasksFromTemplate(db, me, p);
   emit(db, me, {
     type: "proposal.approved",

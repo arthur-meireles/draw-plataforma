@@ -125,7 +125,7 @@ describe("RN-58 — desfazer aprovação", () => {
     expect(back.contractedAmountCents).toBeNull();
     expect(db.proposals.find((x) => x.id === prop.id)!.status).toBe("enviada");
     expect(db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt)).toHaveLength(0);
-    expect(db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt)).toHaveLength(0);
+    expect(db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida")).toHaveLength(0);
     expect(db.events.some((e) => e.type === "proposal.approval_undone" && e.projectId === p.id)).toBe(true);
     // pode aprovar de novo
     await proposalsApi.approve(prop.id);
@@ -190,5 +190,40 @@ describe("RN-71 — recusa só de enviada; rascunho é descartado", () => {
     const { prop: other } = await quoteWithSentProposal();
     await proposalsApi.approve(other.id);
     await expect(proposalsApi.reject(other.id)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("RN-72/73 — tarefas do modelo por papel e no prazo; cotação com tarefas", () => {
+  it("cotação nasce com tarefas do responsável; ao aprovar elas são encerradas", async () => {
+    const { p, prop } = await quoteWithSentProposal();
+    const quoteTasks = loadDb().tasks.filter((t) => t.projectId === p.id && !t.deletedAt);
+    expect(quoteTasks.map((t) => t.title)).toContain("Elaborar proposta");
+    expect(quoteTasks.every((t) => t.assigneeUserId === "usr_carlos")).toBe(true);
+    await proposalsApi.approve(prop.id);
+    const after = loadDb().tasks.filter((t) => quoteTasks.some((q) => q.id === t.id));
+    expect(after.every((t) => t.statusKey === "concluida")).toBe(true);
+  });
+  it("tarefas de design vão para o designer da equipe; sem o papel, para o responsável; datas até o prazo", async () => {
+    const due = new Date(Date.now() + 10 * 86_400_000).toISOString();
+    const p = await directProject({ dueAt: due });
+    const tasks = loadDb().tasks.filter((t) => t.projectId === p.id && !t.deletedAt);
+    const design = tasks.filter((t) => t.stageKey === "design" || t.stageKey === "ajustes_design");
+    const roteiro = tasks.filter((t) => t.stageKey === "roteiro" || t.stageKey === "ajustes_roteiro");
+    expect(design.length).toBeGreaterThan(0);
+    expect(design.every((t) => t.assigneeUserId === "usr_lucas")).toBe(true);
+    expect(roteiro.every((t) => t.assigneeUserId === "usr_carlos")).toBe(true);
+    expect(tasks.every((t) => new Date(t.dueAt!).getTime() <= new Date(due).getTime() + 1000)).toBe(true);
+    expect(tasks.some((t) => t.dueAt === due)).toBe(true);
+  });
+  it("papel definido no modelo prevalece e resolve freelancer da equipe", async () => {
+    const db = loadDb();
+    const julia = db.freelancers.find((f) => f.userId === "usr_julia")!;
+    const type = typeByPrefix("APR");
+    const { projectTypesApi } = await import("./index");
+    await projectTypesApi.save({ name: type.name, codePrefix: type.codePrefix, description: type.description ?? null, icon: type.icon, active: true, templates: [{ stageKey: "roteiro", title: "Roteiro com freelancer", defaultDurationDays: 2, defaultRole: "designer" }] }, type.id);
+    const p = await directProject({ team: [{ freelancerId: julia.id, memberRole: "designer", agreedAmountCents: 10_000 }] });
+    const t = loadDb().tasks.find((x) => x.projectId === p.id && x.title === "Roteiro com freelancer")!;
+    expect(t.assigneeFreelancerId).toBe(julia.id);
+    expect(loadDb().notifications.some((n) => n.userId === "usr_julia" && n.entityId === t.id)).toBe(true);
   });
 });

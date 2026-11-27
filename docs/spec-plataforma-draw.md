@@ -199,7 +199,7 @@ erDiagram
 | `freelancers` | `user_id` (nulo até ter login), `name`, `email`, `phone`, `job_title` (cargo/área de atuação, obrigatório no cadastro — ex.: Designer gráfico, Advogado revisor), `legal_name`, `document` (CPF/CNPJ, cifrado), `pix_key` (cifrado), `bank_*` (cifrados), `status`, `notes` |
 | `freelancer_specialties` | `freelancer_id`, `specialty` (enum: `design`/`roteiro`/`juridico`/`outro`) |
 | `project_types` | `name`, `code_prefix` (único), `description`, `active`. **Catálogo mantido pelo admin.** |
-| `project_type_task_templates` | `project_type_id`, `stage_key`, `title`, `order`, `default_duration_days` |
+| `project_type_task_templates` | `project_type_id`, `stage_key`, `title`, `order`, `default_duration_days`, `default_role` (papel da equipe que recebe a tarefa; nulo = padrão da etapa — RN-72) |
 
 ### 6.3 Processo (tabelas de referência, semeadas por migração)
 
@@ -310,7 +310,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 |---|---|---|
 | RF-M3-01 | Funil de projetos em cotação por etapa fixa (`quote_stages`), em kanban e lista. | R1 |
 | RF-M3-02 | Criar projeto em cotação: cliente (obrigatório; cadastrar na hora se novo), tipo, título, responsável. | R1 |
-| RF-M3-03 | Tarefas da cotação com prazo e responsável (ex.: elaborar proposta). | R1 |
+| RF-M3-03 | Tarefas da cotação com prazo e responsável (ex.: elaborar proposta) — geradas ao criar a cotação (RN-73). | R1 |
 | RF-M3-04 | Propostas versionadas com valor, parcelas e arquivo; datas de envio e aprovação registradas pelo sistema. | R1 |
 | RF-M3-07 | **Enviar proposta ao cliente** (RN-51): escolher destinatários entre os contatos do cliente (padrão: contato de cobrança/decisor) e um recado; o sistema marca a proposta como enviada, cria o link público `/c/:token` (30 dias, revogável) e envia e-mail transacional. O cliente vê versão, escopo, valor, parcelas e PDF e responde **Aprovar proposta** ou **Pedir ajustes** (comentário obrigatório). "Propostas enviadas ao cliente" no prontuário mostra status (enviado, visto, aprovado, ajustes pedidos, expirado, revogado) com reenviar/revogar. | R1 |
 | RF-M3-05 | Aprovar proposta dispara RN-01; perder exige motivo. | R1 |
@@ -324,7 +324,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-02 | Projetos ativos por etapa fixa (`project_stages`) em **kanban** e **lista**; **calendário** e **Gantt** na R2. | R1 / R2 |
 | RF-M4-03 | Cartão do projeto: código, cliente, título, prioridade, prazo, equipe, progresso de subtarefas, atraso, status de aprovação e faturamento. | R1 |
 | RF-M4-04 | Página do projeto (prontuário), abas: Visão geral · Tarefas · Equipe · Arquivos · Comentários · Aprovações · Financeiro · Histórico. | R1 |
-| RF-M4-05 | Ao ativar, gerar tarefas a partir do modelo do tipo de projeto, por etapa. | R1 |
+| RF-M4-05 | Ao ativar, gerar tarefas a partir do modelo do tipo de projeto, por etapa, distribuídas pela equipe por papel e com datas dentro do prazo do projeto (RN-72). | R1 |
 | RF-M4-06 | Tarefas e subtarefas com responsável (interno ou freelancer), prazo, prioridade, status, estimativa. | R1 |
 | RF-M4-07 | Prioridade manual por arrastar dentro da etapa. | R1 |
 | RF-M4-08 | "Minhas tarefas": atrasadas, hoje, esta semana, depois — inclui subtarefas atribuídas à pessoa e separa as de projetos parados ou encerrados (RN-57). | R1 |
@@ -464,6 +464,8 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-59 | **Reabrir projeto concluído**: Projetos **T**, motivo obrigatório, só `concluido` (arquivado: desarquivar antes). Volta a `ativo` em `validacao_cliente`, `completed_at` nulo; contas a pagar, links e pedidos de NF já gerados permanecem (nova conclusão só trata freelancers sem pagável — RN-40). Evento `project.reopened` com `kind = concluido` e motivo; avisa responsável e equipe. |
 | RN-70 | **Reativar projeto cancelado**: Projetos **T**, motivo obrigatório, só `cancelado`. Volta a `ativo` na mesma etapa, `lost_reason` nulo; os recebíveis que o cancelamento passou a `cancelado` (ids guardados no evento `project.cancelled`) voltam a `previsto`. Evento `project.reactivated`; avisa responsável e equipe (e Financeiro/Gestão quando houver recebíveis restaurados). |
 | RN-71 | **Recusa e descarte de proposta**: "Registrar recusa" só para proposta `enviada` de projeto em `cotacao` (aprovada → usar RN-58; rascunho → descartar), motivo opcional guardado no evento `proposal.rejected`. Rascunho pode ser **descartado** (soft delete da proposta e das parcelas, evento `proposal.discarded`); a numeração de versões não é reaproveitada. Mesmas permissões das propostas (RN-30). |
+| RN-72 | **Tarefas do modelo por papel e no prazo** (aprovação RN-01 e projeto direto RN-02): cada tarefa-modelo vai para o primeiro membro ativo da equipe com o papel do modelo (`default_role`) ou, sem ele, o papel padrão da etapa (Roteiro/Ajustes de roteiro → roteirista; Design/Ajustes de design → designer; Validação → responsável) — interno ou freelancer; sem membro com o papel, vai para o responsável do projeto. Datas em sequência a partir de hoje; com `due_at` futuro, as durações são distribuídas proporcionalmente até o prazo (a última vence no prazo) e o evento `project.tasks_generated` registra `exceeds_deadline` quando o modelo somava mais dias que o disponível. Quem recebe tarefa (exceto o responsável) ganha `atribuicao`. |
+| RN-73 | **Tarefas da cotação** (RF-M3-03): ao criar a cotação, o responsável recebe "Diagnóstico com o cliente" (+2 dias), "Elaborar proposta" (+5) e "Follow-up da proposta" (+10), nas etapas do funil correspondentes. Na aprovação as que ainda estiverem abertas são concluídas; em cotação perdida saem de Minhas tarefas (RN-57). |
 | RN-17 | Drive (detalhe da RN-16): pastas-raiz da estrutura da Draw não são renomeadas nem excluídas; nome único por pasta-mãe; pasta só é excluída vazia; arquivo de projeto não é movido (fica na pasta do projeto); arquivos de mesmo nome em pastas diferentes são arquivos distintos (só viram versão dentro da mesma pasta ou projeto). |
 | RN-40 | **Conclusão não pula freelancer.** Todo membro freelancer sem pagável — ativo, ou removido da equipe com valor acordado — precisa de decisão: com valor acordado e ativo, gera o pagável (RN-03); sem valor ou removido, o diálogo de conclusão pede o valor (vira `agreed_amount_cents`, evento antes/depois — RN-09) ou "sem pagamento" (`project_members.payment_waived = true`, evento `project.member_payment_waived`). Faltando decisão, `complete` responde 422 e nada é gravado. |
 | RN-41 | **NF registrada manualmente** (recebida por e-mail/WhatsApp): só em `aguardando_nf` ou `divergente`, por quem tem `payables = T`; exige nº, valor e data de emissão; PDF opcional. Aplica a RN-04 (valor ≠ acordado → `divergente` com nota; igual → `em_conferencia`), marca o pedido com `source = manual` e o formulário público deixa de aceitar envio. Evento `payable.invoice_registered` com os valores anteriores. |

@@ -295,7 +295,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
             <ul className="list-disc space-y-1 pl-5">
               <li>o projeto passa de cotação para <strong>ativo</strong>, com o valor contratado de <Money cents={approving?.amountCents} className="font-medium text-fg" />;</li>
               <li>cria os recebíveis conforme as {approving?.installments.length ?? 0} parcelas da proposta;</li>
-              <li>gera as tarefas do modelo do tipo de projeto, por etapa;</li>
+              <li>gera as tarefas do modelo do tipo de projeto, por etapa, para a equipe de cada papel (sem ninguém no papel, para o responsável), com datas até o prazo;</li>
               <li>as demais propostas abertas são marcadas como recusadas.</li>
               <li>se o cliente ainda não respondeu pelo link, o link deixa de aceitar resposta.</li>
             </ul>

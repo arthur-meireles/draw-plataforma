@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "../reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES, QUOTE_TASK_TEMPLATE, STAGE_DEFAULT_ROLE } from "../reference";
 import type {
   Database,
   ID,
@@ -29,7 +29,7 @@ import {
   visibleProjects,
   write,
 } from "./_core";
-import { notifyMany, projectAudience } from "./audience";
+import { freelancerUserId, notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 
@@ -203,6 +203,7 @@ export const projectsApi = {
       };
       db.projects.push(p);
       db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: input.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
+      generateQuoteTasks(db, me, p);
       emit(db, me, { type: "project.created", entityType: "project", entityId: p.id, project: p, data: { origin: "cotacao" } });
       notify(db, me, { userId: input.ownerId, type: "atribuicao", title: "Você é responsável por uma nova cotação", project: p });
       return p;
@@ -634,15 +635,72 @@ function legacyStatusBeforeArchive(db: Database, p: Project): Exclude<Project["s
   return last?.type === "project.cancelled" ? "cancelado" : "perdido";
 }
 
-/** RF-M4-05 — gera tarefas do modelo do tipo de projeto, por etapa. */
+/**
+ * RN-72 — quem da equipe recebe a tarefa-modelo: o papel do modelo (ou o padrão da etapa) resolve o primeiro
+ * membro ativo com esse papel (interno ou freelancer); sem ninguém, vai para o responsável do projeto.
+ */
+export function resolveTemplateAssignee(db: Database, p: Project, role: MemberRole): { userId: ID | null; freelancerId: ID | null } {
+  const m = db.projectMembers
+    .filter((x) => x.projectId === p.id && x.active && !x.deletedAt && x.memberRole === role)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (m && role !== "responsavel") return { userId: m.userId, freelancerId: m.userId ? null : m.freelancerId };
+  return { userId: p.ownerId, freelancerId: null };
+}
+
+/**
+ * RF-M4-05 / RN-72 — gera tarefas do modelo do tipo de projeto, por etapa, distribuídas por papel da equipe.
+ * Datas: em sequência a partir de hoje; com prazo do projeto no futuro, as durações são distribuídas
+ * proporcionalmente até o prazo (a última tarefa vence no prazo) e o evento avisa se o modelo excedia o prazo.
+ */
 export function generateTasksFromTemplate(db: Database, me: User | null, p: Project) {
   const tpl = db.projectTypeTaskTemplates.filter((t) => t.projectTypeId === p.projectTypeId && !t.deletedAt).sort((a, b) => a.order - b.order);
-  let cursor = Date.now();
+  if (!tpl.length) return;
+  const DAY = 86_400_000;
+  const start = Date.now();
+  const totalDays = tpl.reduce((a, t) => a + Math.max(0, t.defaultDurationDays), 0);
+  const due = p.dueAt ? new Date(p.dueAt).getTime() : null;
+  const window = due && due > start ? due - start : null;
+  const exceedsDeadline = !!window && totalDays * DAY > window;
+  const msPerDay = window && totalDays > 0 ? window / totalDays : DAY;
+  let cursor = start;
   tpl.forEach((t, i) => {
-    const start = new Date(cursor);
-    cursor += t.defaultDurationDays * 86_400_000;
+    const from = cursor;
+    cursor += Math.max(0, t.defaultDurationDays) * msPerDay;
+    const to = window && i === tpl.length - 1 ? due! : cursor;
+    const who = resolveTemplateAssignee(db, p, t.defaultRole ?? STAGE_DEFAULT_ROLE[t.stageKey]);
     const task: Task = {
       ...baseFields(me?.id ?? null),
+      projectId: p.id,
+      module: "projeto",
+      parentTaskId: null,
+      stageKey: t.stageKey,
+      title: t.title,
+      description: null,
+      assigneeUserId: who.userId,
+      assigneeFreelancerId: who.freelancerId,
+      statusKey: "a_fazer",
+      priorityKey: "media",
+      startAt: new Date(from).toISOString(),
+      dueAt: new Date(to).toISOString(),
+      estimateMinutes: null,
+      position: i * 1000,
+      sprintId: null,
+      completedAt: null,
+      area: null,
+    };
+    db.tasks.push(task);
+    const userId = who.userId ?? freelancerUserId(db, who.freelancerId);
+    if (userId !== p.ownerId) notify(db, me, { userId, type: "atribuicao", title: `Nova tarefa: ${t.title}`, project: p, entityType: "task", entityId: task.id });
+  });
+  emit(db, me, { type: "project.tasks_generated", entityType: "project", entityId: p.id, project: p, data: { count: tpl.length, exceedsDeadline, templateDays: totalDays } });
+}
+
+/** RF-M3-03 / RN-73 — tarefas da cotação para o responsável (diagnóstico, proposta, follow-up). */
+export function generateQuoteTasks(db: Database, me: User, p: Project) {
+  const now = Date.now();
+  QUOTE_TASK_TEMPLATE.forEach((t, i) => {
+    db.tasks.push({
+      ...baseFields(me.id),
       projectId: p.id,
       module: "projeto",
       parentTaskId: null,
@@ -653,15 +711,26 @@ export function generateTasksFromTemplate(db: Database, me: User | null, p: Proj
       assigneeFreelancerId: null,
       statusKey: "a_fazer",
       priorityKey: "media",
-      startAt: start.toISOString(),
-      dueAt: new Date(cursor).toISOString(),
+      startAt: new Date(now).toISOString(),
+      dueAt: new Date(now + t.dueInDays * 86_400_000).toISOString(),
       estimateMinutes: null,
       position: i * 1000,
       sprintId: null,
       completedAt: null,
       area: null,
-    };
-    db.tasks.push(task);
+    });
   });
-  if (tpl.length) emit(db, me, { type: "project.tasks_generated", entityType: "project", entityId: p.id, project: p, data: { count: tpl.length } });
+}
+
+/** RN-73 — ao aprovar, as tarefas da cotação ainda abertas são encerradas (a proposta foi aceita). */
+export function closeQuoteTasks(db: Database, p: Project) {
+  const quoteStages = new Set<string>(QUOTE_TASK_TEMPLATE.map((t) => t.stageKey));
+  const now = nowIso();
+  const open = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida" && !!t.stageKey && quoteStages.has(t.stageKey) && !t.parentTaskId);
+  open.forEach((t) => {
+    t.statusKey = "concluida";
+    t.completedAt = now;
+    t.updatedAt = now;
+  });
+  return open.length;
 }

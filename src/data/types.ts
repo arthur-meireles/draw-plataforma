@@ -183,6 +183,8 @@ export interface ProjectTypeTaskTemplate extends BaseEntity {
   title: string;
   order: number;
   defaultDurationDays: number;
+  /** Papel na equipe que recebe a tarefa (RN-72). Ausente/nulo = papel padrão da etapa (`STAGE_DEFAULT_ROLE`). */
+  defaultRole?: MemberRole | null;
 }
 
 /* ───────────── 6.3 Processo (referência, somente leitura) ───────────── */
