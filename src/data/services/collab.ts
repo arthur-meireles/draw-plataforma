@@ -4,6 +4,7 @@ import { PROJECT_STAGES } from "../reference";
 import type { Approval, ApprovalDecidedVia, ApprovalDecision, Database, FileCategory, FileEntity, ID, NotificationType, User } from "../types";
 import { ApiError, assertProjectVisible, emit, notify, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { freelancerUserId, mentionableUserIds, notifyMany, projectAudience } from "./audience";
+import { applyDecisionToStage } from "./approval-flow";
 import { canRead, canSeeMoney, canWrite, canWriteAll } from "@/lib/permissions";
 
 const DECISION_LABEL: Record<Exclude<ApprovalDecision, "pendente">, string> = { aprovado: "aprovado", ajustes: "ajustes pedidos", negado: "negado" };
@@ -38,6 +39,8 @@ export function decideApprovalTx(
     : `Aprovação ${DECISION_LABEL[decision]} — ${stage}`;
   const body = [byClient ? `${a.decidedByName ?? "Cliente"} respondeu pelo link` : null, a.reason ? `"${a.reason}"` : null].filter(Boolean).join(": ") || undefined;
   notifyMany(db, me, [a.requestedBy, ...projectAudience(db, p)], { type: byClient ? "cliente" : "aprovacao", title, body, project: p, entityType: "approval", entityId: a.id });
+  // RN-74 — a decisão move o projeto no quadro (aprovado avança; ajustes volta para a etapa de ajustes).
+  applyDecisionToStage(db, me, p, a);
   return a;
 }
 
@@ -216,8 +219,9 @@ export const commentsApi = {
         .filter((c) => c.projectId === p.id && !c.deletedAt && (taskId === undefined || c.taskId === taskId))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .map((c) => {
-          const u = db.users.find((x) => x.id === c.authorId);
-          return { ...c, authorName: u?.name ?? "—", authorColor: u?.avatarColor ?? "#888", taskTitle: c.taskId ? db.tasks.find((t) => t.id === c.taskId)?.title ?? null : null };
+          const u = c.authorId ? db.users.find((x) => x.id === c.authorId) : null;
+          const external = !c.authorId;
+          return { ...c, external, authorName: external ? (c.externalAuthorName ?? "Cliente") : (u?.name ?? "—"), authorColor: u?.avatarColor ?? "#8a8f98", taskTitle: c.taskId ? db.tasks.find((t) => t.id === c.taskId)?.title ?? null : null };
         });
     }),
 

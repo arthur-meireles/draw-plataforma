@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import type { AdmArea, Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
+import type { AdmArea, Database, ID, PriorityKey, Project, Task, TaskStatusKey, User } from "../types";
 import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { notifyMany } from "./audience";
 import { canRead, canWrite, canWriteAll } from "@/lib/permissions";
@@ -12,6 +12,8 @@ export interface TaskFilters {
   sprintId?: ID | "backlog";
   parentTaskId?: ID | null;
   includeSubtasks?: boolean;
+  /** RN-57 — em `assignee: "me"`, tarefas de projetos concluídos/cancelados/perdidos/arquivados ficam fora por padrão. */
+  includeClosedProjects?: boolean;
   q?: string;
 }
 
@@ -27,7 +29,15 @@ export interface TaskView extends Task {
   isOverdue: boolean;
   /** RN-38 — quem está logado pode mudar o status (editor da tarefa ou responsável por tarefa ADM). Só nas respostas de `list`/`get`. */
   canChangeStatus?: boolean;
+  /** Título da tarefa-pai, quando é subtarefa (Minhas tarefas mostra "↳ pai"). */
+  parentTitle: string | null;
+  projectStatus: Project["status"] | null;
+  /** Projeto pausado ou encerrado: a tarefa não conta como atrasada (RN-13 / RN-57). */
+  projectOnHold: boolean;
 }
+
+/** Status de projeto em que tarefas seguem em andamento. */
+const OPEN_PROJECT_STATUSES: Project["status"][] = ["ativo", "cotacao"];
 
 export function toTaskView(db: Database, t: Task): TaskView {
   const p = t.projectId ? db.projects.find((x) => x.id === t.projectId) : null;
@@ -35,6 +45,7 @@ export function toTaskView(db: Database, t: Task): TaskView {
   const u = t.assigneeUserId ? db.users.find((x) => x.id === t.assigneeUserId) : null;
   const f = t.assigneeFreelancerId ? db.freelancers.find((x) => x.id === t.assigneeFreelancerId) : null;
   const subs = db.tasks.filter((x) => x.parentTaskId === t.id && !x.deletedAt);
+  const onHold = !!p && (!!p.pausedAt || !OPEN_PROJECT_STATUSES.includes(p.status));
   return {
     ...t,
     projectCode: p?.code ?? null,
@@ -45,7 +56,10 @@ export function toTaskView(db: Database, t: Task): TaskView {
     subtasksDone: subs.filter((s) => s.statusKey === "concluida").length,
     subtasksTotal: subs.length,
     commentsCount: db.comments.filter((c) => c.taskId === t.id && !c.deletedAt).length,
-    isOverdue: t.statusKey !== "concluida" && !!t.dueAt && new Date(t.dueAt).getTime() < Date.now(),
+    isOverdue: !onHold && t.statusKey !== "concluida" && !!t.dueAt && new Date(t.dueAt).getTime() < Date.now(),
+    parentTitle: t.parentTaskId ? (db.tasks.find((x) => x.id === t.parentTaskId)?.title ?? null) : null,
+    projectStatus: p?.status ?? null,
+    projectOnHold: onHold,
   };
 }
 
@@ -101,7 +115,12 @@ export const tasksApi = {
           if (f.sprintId === "backlog" && t.sprintId) return false;
           if (f.sprintId && f.sprintId !== "backlog" && t.sprintId !== f.sprintId) return false;
           if (f.parentTaskId !== undefined && t.parentTaskId !== f.parentTaskId) return false;
-          if (!f.includeSubtasks && f.parentTaskId === undefined && t.parentTaskId) return false;
+          // RN-57 — em "Minhas tarefas" as subtarefas atribuídas a mim também aparecem.
+          if (!f.includeSubtasks && f.assignee !== "me" && f.parentTaskId === undefined && t.parentTaskId) return false;
+          if (f.assignee === "me" && !f.includeClosedProjects && t.projectId) {
+            const st = db.projects.find((x) => x.id === t.projectId)?.status;
+            if (st && !OPEN_PROJECT_STATUSES.includes(st)) return false;
+          }
           if (q && !t.title.toLowerCase().includes(q)) return false;
           return true;
         })
@@ -144,6 +163,7 @@ export const tasksApi = {
       if (taskModule === "adm" && !canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão no Administrativo.");
       if (taskModule === "projeto") requireAccess(me, "tasks", "write", "Seu perfil só consulta tarefas de projeto. Peça ao responsável do projeto para criar a tarefa.");
       if (taskModule === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
+      if (p && !OPEN_PROJECT_STATUSES.includes(p.status)) throw new ApiError(409, "Este projeto está encerrado e não recebe tarefas novas. Reabra o projeto para continuar.");
       const siblings = db.tasks.filter((t) => t.projectId === (p?.id ?? null) && t.parentTaskId === (input.parentTaskId ?? null));
       const parent = input.parentTaskId ? db.tasks.find((t) => t.id === input.parentTaskId) : null;
       const t: Task = {
@@ -192,6 +212,12 @@ export const tasksApi = {
         emit(db, me, { type: "task.status_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.statusKey, to: patch.statusKey, title: t.title } });
         // RN-53 — tarefa em revisão avisa o responsável do projeto e quem pediu a tarefa.
         if (patch.statusKey === "em_revisao") notifyMany(db, me, [p?.ownerId, t.createdBy], { type: "revisao", title: `Tarefa para revisar: ${t.title}`, body: `${me.name} enviou para revisão`, project: p, entityType: "task", entityId: t.id });
+        // RN-57 — hand-off: concluída avisa o responsável do projeto e quem pediu; voltou da revisão avisa quem executa.
+        if (patch.statusKey === "concluida") notifyMany(db, me, [p?.ownerId, t.createdBy], { type: "revisao", title: `Tarefa concluída: ${t.title}`, body: `${me.name} concluiu`, project: p, entityType: "task", entityId: t.id });
+        if (before.statusKey === "em_revisao" && (patch.statusKey === "a_fazer" || patch.statusKey === "em_andamento")) {
+          const assignee = t.assigneeUserId ?? (t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null);
+          notifyMany(db, me, [assignee], { type: "revisao", title: `Tarefa voltou da revisão: ${t.title}`, body: `${me.name} pediu ajustes`, project: p, entityType: "task", entityId: t.id });
+        }
       }
       if ((patch.assigneeUserId && patch.assigneeUserId !== before.assigneeUserId) || (patch.assigneeFreelancerId && patch.assigneeFreelancerId !== before.assigneeFreelancerId)) {
         const flUser = t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null;

@@ -30,7 +30,7 @@ export function ProjectTypeSheet({ open, type, onClose, readOnly }: { open: bool
     setIcon(type?.icon ?? "folder");
     setDescription(type?.description ?? "");
     setActive(type?.active ?? true);
-    setTemplates((type?.templates ?? []).map((t) => ({ key: newTemplateKey(), stageKey: t.stageKey, title: t.title, days: String(t.defaultDurationDays) })));
+    setTemplates((type?.templates ?? []).map((t) => ({ key: newTemplateKey(), stageKey: t.stageKey, title: t.title, days: String(t.defaultDurationDays), role: t.defaultRole ?? "" })));
     setErrors({});
     setTplErrors({});
   }, [open, type]);
@@ -59,7 +59,7 @@ export function ProjectTypeSheet({ open, type, onClose, readOnly }: { open: bool
     setTplErrors(te);
     if (Object.keys(errs).length || Object.keys(te).length) return focusFirstInvalid();
     const ordered = [...templates].sort((a, b) => stageOrder(a.stageKey) - stageOrder(b.stageKey));
-    save.mutate({ name, codePrefix: prefix, description: description.trim() || null, icon, active, templates: ordered.map((t) => ({ stageKey: t.stageKey, title: t.title.trim(), defaultDurationDays: Number(t.days) })) });
+    save.mutate({ name, codePrefix: prefix, description: description.trim() || null, icon, active, templates: ordered.map((t) => ({ stageKey: t.stageKey, title: t.title.trim(), defaultDurationDays: Number(t.days), defaultRole: t.role || null })) });
   };
 
   return (

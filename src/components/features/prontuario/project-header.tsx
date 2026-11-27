@@ -82,7 +82,8 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
       {project.status === "cotacao" ? <QuoteStageLabel stageKey={project.quoteStageKey} /> : <ProjectStageLabel stageKey={project.projectStageKey} />}
     </Pill>
   );
-  const canMoveStage = editable && (project.status === "ativo" || project.status === "cotacao");
+  // RN-13 — projeto pausado não muda etapa (retome primeiro).
+  const canMoveStage = editable && !project.pausedAt && (project.status === "ativo" || project.status === "cotacao");
 
   return (
     <div className="space-y-2.5 px-4 pb-3 pt-4 md:px-6">

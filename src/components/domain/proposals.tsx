@@ -193,6 +193,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
   const [editing, setEditing] = useState<ProposalRow | null>(null);
   const [approving, setApproving] = useState<ProposalRow | null>(null);
   const [rejecting, setRejecting] = useState<ProposalRow | null>(null);
+  const [discarding, setDiscarding] = useState<ProposalRow | null>(null);
   const canAct = canWriteAll("commercial") && projectStatus === "cotacao";
 
   const [sending, setSending] = useState<ProposalRow | null>(null);
@@ -201,7 +202,8 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
     success: "Proposta aprovada: o projeto está ativo, com recebíveis e tarefas criados",
     onSuccess: () => approved.flash(() => setApproving(null)),
   });
-  const reject = useApiMutation((id: ID) => proposalsApi.reject(id), { success: "Recusa registrada", onSuccess: () => setRejecting(null) });
+  const reject = useApiMutation(({ id, reason }: { id: ID; reason?: string }) => proposalsApi.reject(id, reason), { success: "Recusa registrada", onSuccess: () => setRejecting(null) });
+  const discard = useApiMutation((id: ID) => proposalsApi.discard(id), { success: "Rascunho descartado", onSuccess: () => setDiscarding(null) });
 
   return (
     <Section
@@ -253,6 +255,9 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
                 <span className="flex-1" />
                 {canAct && p.status === "rascunho" && (
                   <>
+                    <Button size="sm" variant="destructive-ghost" icon="delete" onClick={() => setDiscarding(p)}>
+                      Descartar…
+                    </Button>
                     <Button size="sm" icon="edit" onClick={() => setEditing(p)}>
                       Editar rascunho
                     </Button>
@@ -290,7 +295,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
             <ul className="list-disc space-y-1 pl-5">
               <li>o projeto passa de cotação para <strong>ativo</strong>, com o valor contratado de <Money cents={approving?.amountCents} className="font-medium text-fg" />;</li>
               <li>cria os recebíveis conforme as {approving?.installments.length ?? 0} parcelas da proposta;</li>
-              <li>gera as tarefas do modelo do tipo de projeto, por etapa;</li>
+              <li>gera as tarefas do modelo do tipo de projeto, por etapa, para a equipe de cada papel (sem ninguém no papel, para o responsável), com datas até o prazo;</li>
               <li>as demais propostas abertas são marcadas como recusadas.</li>
               <li>se o cliente ainda não respondeu pelo link, o link deixa de aceitar resposta.</li>
             </ul>
@@ -309,8 +314,19 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
         description="A cotação volta para Negociação e você pode enviar uma nova versão."
         confirmLabel="Registrar recusa"
         destructive
+        reason={{ label: "Por que o cliente recusou? (opcional)", placeholder: "Ex.: preço acima do orçamento, escopo diferente…" }}
         loading={reject.isPending}
-        onConfirm={() => rejecting && reject.mutate(rejecting.id)}
+        onConfirm={(r) => rejecting && reject.mutate({ id: rejecting.id, reason: r })}
+      />
+      <ConfirmDialog
+        open={!!discarding}
+        onOpenChange={(o) => !o && setDiscarding(null)}
+        title={`Descartar o rascunho v${discarding?.version ?? ""}?`}
+        description="O rascunho sai da lista de propostas. O histórico registra o descarte."
+        confirmLabel="Descartar rascunho"
+        destructive
+        loading={discard.isPending}
+        onConfirm={() => discarding && discard.mutate(discarding.id)}
       />
     </Section>
   );

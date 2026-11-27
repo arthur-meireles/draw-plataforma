@@ -1,6 +1,6 @@
 /** Cadastros: clientes, contatos, grupos, freelancers, tipos de projeto (M2). */
 import { baseFields, nowIso } from "../db";
-import type { Address, Client, ClientContact, Freelancer, ID, ProjectStageKey, ProjectType, Specialty } from "../types";
+import type { Address, Client, ClientContact, Freelancer, ID, MemberRole, ProjectStageKey, ProjectType, Specialty } from "../types";
 import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { issueUserInvite } from "./admin";
 import { toListItem, computeFinancials } from "./projects";
@@ -337,7 +337,7 @@ export const projectTypesApi = {
         })),
     ),
 
-  save: (input: { name: string; codePrefix: string; description?: string | null; icon: string; active: boolean; templates: { stageKey: ProjectStageKey; title: string; defaultDurationDays: number }[] }, id?: ID) =>
+  save: (input: { name: string; codePrefix: string; description?: string | null; icon: string; active: boolean; templates: { stageKey: ProjectStageKey; title: string; defaultDurationDays: number; defaultRole?: MemberRole | null }[] }, id?: ID) =>
     write((db, me) => {
       if (!canWriteAll(me, "settings")) throw new ApiError(403, "Só administradores mantêm o catálogo.");
       const prefix = input.codePrefix.trim().toUpperCase();
@@ -359,7 +359,7 @@ export const projectTypesApi = {
       }
       const now = nowIso();
       db.projectTypeTaskTemplates.filter((x) => x.projectTypeId === t.id && !x.deletedAt).forEach((x) => (x.deletedAt = now));
-      input.templates.forEach((tpl, i) => db.projectTypeTaskTemplates.push({ ...baseFields(me.id), projectTypeId: t.id, stageKey: tpl.stageKey, title: tpl.title, order: i + 1, defaultDurationDays: tpl.defaultDurationDays }));
+      input.templates.forEach((tpl, i) => db.projectTypeTaskTemplates.push({ ...baseFields(me.id), projectTypeId: t.id, stageKey: tpl.stageKey, title: tpl.title, order: i + 1, defaultDurationDays: tpl.defaultDurationDays, defaultRole: tpl.defaultRole ?? null }));
       emit(db, me, { type: id ? "project_type.updated" : "project_type.created", entityType: "project_type", entityId: t.id, data: { name: t.name } });
       return t;
     }),

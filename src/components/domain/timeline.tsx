@@ -2,7 +2,7 @@
 /** Linha do tempo de eventos (RF-X-02) e conversa de comentários com menções. */
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Avatar, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
+import { Avatar, Badge, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { commentsApi, eventsApi } from "@/data/services";
 import { APPROVAL_DECISION_LABEL, PAYABLE_STATUS_LABEL, projectStage, quoteStage, taskStatus } from "@/data/reference";
@@ -44,7 +44,11 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "project.lost":
       return { icon: "stageLost", text: <>marcou a cotação como perdida: {b(String(d.reason ?? ""))}</> };
     case "project.reopened":
-      return { icon: "restore", text: <>reabriu a cotação</> };
+      return { icon: "restore", text: d.kind === "concluido" ? <>reabriu o projeto concluído: {b(String(d.reason ?? ""))}</> : <>reabriu a cotação</> };
+    case "project.reactivated":
+      return { icon: "restore", text: <>reativou o projeto cancelado: {b(String(d.reason ?? ""))}{d.receivablesRestored ? <> ({String(d.receivablesRestored)} recebível(is) de volta a previsto)</> : null}</> };
+    case "proposal.approval_undone":
+      return { icon: "undo", text: <>desfez a aprovação da proposta {b(`v${d.version}`)} — voltou para cotação: {b(String(d.reason ?? ""))}</> };
     case "project.cancelled":
       return { icon: "stageLost", text: <>cancelou o projeto: {b(String(d.reason ?? ""))}</> };
     case "project.paused":
@@ -53,6 +57,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "resume", text: <>retomou o projeto</> };
     case "project.member_added":
       return { icon: "invite", text: <>adicionou um membro à equipe</> };
+    case "project.owner_changed":
+      return { icon: "user", text: <>trocou o responsável do projeto (o anterior segue na equipe como apoio)</> };
     case "project.member_removed":
       return { icon: "team", text: <>removeu um membro da equipe</> };
     case "project.tasks_generated":
@@ -64,7 +70,9 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "proposal.approved":
       return { icon: "approval", text: <>aprovou a proposta {b(`v${d.version}`)} — projeto ativo</> };
     case "proposal.rejected":
-      return { icon: "close", text: <>registrou recusa da proposta {b(`v${d.version}`)}</> };
+      return { icon: "close", text: <>registrou recusa da proposta {b(`v${d.version}`)}{d.reason ? <>: {String(d.reason)}</> : null}</> };
+    case "proposal.discarded":
+      return { icon: "delete", text: <>descartou o rascunho da proposta {b(`v${d.version}`)}</> };
     case "task.created":
       return { icon: "task", text: <>criou a tarefa {b(String(d.title))}</> };
     case "task.status_changed":
@@ -97,6 +105,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "receivable", text: <>lançou a cobrança adicional {b(String(d.description ?? ""))} de {b(money(d.amountCents as number))}</> };
     case "receivable.collection_note":
       return { icon: "comment", text: <>atualizou a nota de cobrança</> };
+    case "receivable.delivery_due":
+      return { icon: "receivable", text: <>trouxe {b(`${d.count} parcela(s) "na entrega"`)} para vencer hoje na conclusão</> };
     case "receivable.cancelled":
       return { icon: "close", text: <>cancelou o lançamento a receber</> };
     case "payable.link_resent":
@@ -240,6 +250,7 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
             <div className="min-w-0 flex-1 rounded-xl border border-line bg-layer-2 px-3 py-2 shadow-raised">
               <div className="mb-0.5 flex items-center gap-2">
                 <span className="text-sm font-medium text-fg">{c.authorName}</span>
+                {c.external && <Badge tone="violet" size="xs">Cliente via link</Badge>}
                 <time className="text-2xs text-fg-subtle" title={dateTime(c.createdAt)}>
                   {relative(c.createdAt)}
                 </time>

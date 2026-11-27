@@ -78,6 +78,7 @@ export function CompleteProjectDialog({ project, open, onOpenChange }: { project
           <li>gera o link seguro para o envio da nota fiscal;</li>
           <li>envia o e-mail de pedido de NF ao freelancer.</li>
         </ul>
+        <p>As parcelas “na entrega” ainda previstas passam a vencer hoje e o Financeiro é avisado do que faturar.</p>
         {preview.isLoading && <Skeleton className="h-16 w-full rounded-lg" />}
         {p && (
           <div className="space-y-1 rounded-lg border border-line bg-layer p-3 text-xs">

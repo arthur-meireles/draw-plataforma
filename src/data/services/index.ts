@@ -23,3 +23,5 @@ export { jobsApi, runDueSweepTx, type SweepResult } from "./jobs";
 export { usersExtraApi, userTypeOf } from "./users-extra";
 export { mfaApi, totp, verifyTotp } from "./mfa";
 export { freelancerSelfApi, type MyFreelancerDataInput } from "./freelancer-self";
+export { projectClosingApi, projectLifecycleApi } from "./project-lifecycle";
+export { deadlineAlertsApi } from "./deadline-alerts";

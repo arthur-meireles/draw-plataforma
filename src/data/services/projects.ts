@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "../reference";
+import { FIRST_PROJECT_STAGE, PROJECT_STAGES, QUOTE_TASK_TEMPLATE, STAGE_DEFAULT_ROLE } from "../reference";
 import type {
   Database,
   ID,
@@ -29,9 +29,11 @@ import {
   visibleProjects,
   write,
 } from "./_core";
-import { notifyMany, projectAudience } from "./audience";
+import { freelancerUserId, notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
+import { afterCompletionTeamChange } from "./team-after-completion";
+import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -139,6 +141,9 @@ function applyFilters(db: Database, rows: Project[], f: ProjectFilters): Project
   });
 }
 
+/** RN-56 — campos que a Operação pode editar no projeto em que está alocada. */
+const OPERATION_EDITABLE = ["title", "briefing", "priorityKey", "size", "dueAt", "estimatedEndAt"] as const;
+
 export const projectsApi = {
   list: (filters: ProjectFilters = {}) =>
     read((db, me) =>
@@ -200,6 +205,7 @@ export const projectsApi = {
       };
       db.projects.push(p);
       db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: input.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
+      generateQuoteTasks(db, me, p);
       emit(db, me, { type: "project.created", entityType: "project", entityId: p.id, project: p, data: { origin: "cotacao" } });
       notify(db, me, { userId: input.ownerId, type: "atribuicao", title: "Você é responsável por uma nova cotação", project: p });
       return p;
@@ -306,6 +312,11 @@ export const projectsApi = {
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
       if (!canWriteAll(me, "projects") && !(me.role === "operacao")) throw new ApiError(403, "Sem permissão para editar o projeto.");
+      // RN-56 — Operação (escopo P) edita só a execução do projeto em que está alocada.
+      if (!canWriteAll(me, "projects")) {
+        const blocked = Object.keys(patch).filter((k) => !OPERATION_EDITABLE.includes(k as (typeof OPERATION_EDITABLE)[number]));
+        if (blocked.length) throw new ApiError(403, "Seu perfil edita só título, briefing, prioridade, tamanho e prazos. Peça à gestão para mudar responsável, cliente, faturamento ou valores.");
+      }
       if (patch.clientId && patch.clientId !== p.clientId) {
         const issued = db.receivables.some((r) => r.projectId === p.id && r.issuedAt);
         if (issued) throw new ApiError(409, "Este projeto já tem nota fiscal emitida e não pode trocar de cliente (RN-12).");
@@ -314,9 +325,14 @@ export const projectsApi = {
         if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão para alterar valores.");
         emitValueChange(db, me, "project", p.id, p, "contractedAmountCents", p.contractedAmountCents, patch.contractedAmountCents);
       }
+      if (patch.ownerId && patch.ownerId !== p.ownerId) {
+        const owner = db.users.find((u) => u.id === patch.ownerId);
+        if (!owner || owner.status !== "ativo" || owner.role === "freelancer") throw new ApiError(422, "Escolha um responsável ativo da equipe interna.", { ownerId: "Escolha um responsável ativo da equipe interna" });
+      }
       const before = { ...p };
       Object.assign(p, patch);
       touch(p);
+      if (patch.ownerId && patch.ownerId !== before.ownerId) syncOwnerMember(db, me, p, before.ownerId);
       const changed = Object.keys(patch).filter((k) => (before as unknown as Record<string, unknown>)[k] !== (p as unknown as Record<string, unknown>)[k]);
       if (changed.length) emit(db, me, { type: "project.updated", entityType: "project", entityId: p.id, project: p, data: { fields: changed } });
       if (patch.ownerId && patch.ownerId !== before.ownerId) notify(db, me, { userId: patch.ownerId, type: "atribuicao", title: "Você agora é responsável pelo projeto", project: p });
@@ -341,6 +357,8 @@ export const projectsApi = {
       } else if (p.status === "ativo") {
         const to = input.stageKey as ProjectStageKey;
         if (to === "concluido") throw new ApiError(422, "Use \"Concluir projeto\" para finalizar e gerar os pagamentos.");
+        // RN-13 — pausado não muda etapa (reordenar na mesma coluna continua livre).
+        if (p.pausedAt && to !== p.projectStageKey) throw new ApiError(409, "Projeto pausado não muda de etapa. Retome o projeto primeiro.");
         if (to !== p.projectStageKey) {
           emit(db, me, { type: "project.stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.projectStageKey, to } });
           p.projectStageKey = to;
@@ -432,7 +450,8 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
-      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length } });
+      const deliveryDue = billDeliveryOnCompletion(db, me, p);
+      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length, deliveryInstallmentsDue: deliveryDue } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto concluído", body: `${me.name} concluiu o projeto`, project: p });
       return { project: p, payablesCreated: created.length };
     }),
@@ -476,8 +495,12 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
-      db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto").forEach((r) => (r.status = "cancelado"));
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason } });
+      const cancelled = db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto" && !r.deletedAt);
+      cancelled.forEach((r) => (r.status = "cancelado"));
+      // RN-59 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
+      // RN-73 — retira pendências com o cliente e avisa Financeiro/contas a pagar do que segue em aberto
+      const closing = closeOnCancel(db, me, p);
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), ...closing } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),
@@ -512,6 +535,7 @@ export const projectsApi = {
       if (!!input.userId === !!input.freelancerId) throw new ApiError(422, "Escolha uma pessoa da equipe ou um freelancer.");
       const existing = db.projectMembers.find((m) => m.projectId === p.id && !m.deletedAt && ((input.userId && m.userId === input.userId) || (input.freelancerId && m.freelancerId === input.freelancerId)));
       if (existing?.active) throw new ApiError(409, "Essa pessoa já faz parte da equipe.");
+      const prevAmount = existing?.agreedAmountCents ?? null;
       if (existing) {
         existing.active = true;
         existing.memberRole = input.memberRole;
@@ -523,6 +547,9 @@ export const projectsApi = {
       const fl = input.freelancerId ? db.freelancers.find((f) => f.id === input.freelancerId) : null;
       emit(db, me, { type: "project.member_added", entityType: "project", entityId: p.id, project: p, data: { userId: input.userId, freelancerId: input.freelancerId, role: input.memberRole, agreedAmountCents: input.agreedAmountCents ?? null } });
       notify(db, me, { userId: input.userId ?? fl?.userId, type: "atribuicao", title: "Você foi alocado em um projeto", project: p });
+      const m = existing ?? db.projectMembers[db.projectMembers.length - 1];
+      // RN-70 — entrou depois da conclusão: não fica sem pagamento em silêncio
+      return { memberId: m.id, paymentSuggestion: afterCompletionTeamChange(db, me, p, m, prevAmount) };
     }),
 
   updateMember: (memberId: ID, patch: { memberRole?: MemberRole; agreedAmountCents?: number | null }) =>
@@ -532,8 +559,11 @@ export const projectsApi = {
       const p = assertProjectVisible(db, me, m.projectId);
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Sem permissão.");
       if ("agreedAmountCents" in patch) emitValueChange(db, me, "project_member", m.id, p, "agreedAmountCents", m.agreedAmountCents, patch.agreedAmountCents);
+      const beforeAmount = m.agreedAmountCents;
       Object.assign(m, patch);
       touch(m);
+      // RN-70 — valor alterado depois da conclusão acompanha o pagável ou sugere o pagamento
+      return { memberId: m.id, paymentSuggestion: "agreedAmountCents" in patch ? afterCompletionTeamChange(db, me, p, m, beforeAmount) : null };
     }),
 
   /** RN-08 — sair do projeto remove acesso mas preserva registros. */
@@ -586,6 +616,28 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
   };
 }
 
+/**
+ * RN-55 — trocar o responsável coloca o novo na equipe como `responsavel` (criando ou reativando o membro)
+ * e rebaixa o anterior para `apoio` (continua na equipe e vendo o projeto).
+ */
+function syncOwnerMember(db: Database, me: User, p: Project, previousOwnerId: ID) {
+  const members = db.projectMembers.filter((m) => m.projectId === p.id && !m.deletedAt);
+  const prev = members.find((m) => m.userId === previousOwnerId && m.memberRole === "responsavel");
+  if (prev) {
+    prev.memberRole = "apoio";
+    touch(prev);
+  }
+  const next = members.find((m) => m.userId === p.ownerId);
+  if (next) {
+    next.active = true;
+    next.memberRole = "responsavel";
+    touch(next);
+  } else {
+    db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: p.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
+  }
+  emit(db, me, { type: "project.owner_changed", entityType: "project", entityId: p.id, project: p, data: { from: previousOwnerId, to: p.ownerId } });
+}
+
 /** Registros antigos sem `statusBeforeArchive`: deduz pelo último evento de encerramento. */
 function legacyStatusBeforeArchive(db: Database, p: Project): Exclude<Project["status"], "arquivado"> {
   if (p.completedAt) return "concluido";
@@ -595,15 +647,72 @@ function legacyStatusBeforeArchive(db: Database, p: Project): Exclude<Project["s
   return last?.type === "project.cancelled" ? "cancelado" : "perdido";
 }
 
-/** RF-M4-05 — gera tarefas do modelo do tipo de projeto, por etapa. */
+/**
+ * RN-72 — quem da equipe recebe a tarefa-modelo: o papel do modelo (ou o padrão da etapa) resolve o primeiro
+ * membro ativo com esse papel (interno ou freelancer); sem ninguém, vai para o responsável do projeto.
+ */
+export function resolveTemplateAssignee(db: Database, p: Project, role: MemberRole): { userId: ID | null; freelancerId: ID | null } {
+  const m = db.projectMembers
+    .filter((x) => x.projectId === p.id && x.active && !x.deletedAt && x.memberRole === role)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (m && role !== "responsavel") return { userId: m.userId, freelancerId: m.userId ? null : m.freelancerId };
+  return { userId: p.ownerId, freelancerId: null };
+}
+
+/**
+ * RF-M4-05 / RN-72 — gera tarefas do modelo do tipo de projeto, por etapa, distribuídas por papel da equipe.
+ * Datas: em sequência a partir de hoje; com prazo do projeto no futuro, as durações são distribuídas
+ * proporcionalmente até o prazo (a última tarefa vence no prazo) e o evento avisa se o modelo excedia o prazo.
+ */
 export function generateTasksFromTemplate(db: Database, me: User | null, p: Project) {
   const tpl = db.projectTypeTaskTemplates.filter((t) => t.projectTypeId === p.projectTypeId && !t.deletedAt).sort((a, b) => a.order - b.order);
-  let cursor = Date.now();
+  if (!tpl.length) return;
+  const DAY = 86_400_000;
+  const start = Date.now();
+  const totalDays = tpl.reduce((a, t) => a + Math.max(0, t.defaultDurationDays), 0);
+  const due = p.dueAt ? new Date(p.dueAt).getTime() : null;
+  const window = due && due > start ? due - start : null;
+  const exceedsDeadline = !!window && totalDays * DAY > window;
+  const msPerDay = window && totalDays > 0 ? window / totalDays : DAY;
+  let cursor = start;
   tpl.forEach((t, i) => {
-    const start = new Date(cursor);
-    cursor += t.defaultDurationDays * 86_400_000;
+    const from = cursor;
+    cursor += Math.max(0, t.defaultDurationDays) * msPerDay;
+    const to = window && i === tpl.length - 1 ? due! : cursor;
+    const who = resolveTemplateAssignee(db, p, t.defaultRole ?? STAGE_DEFAULT_ROLE[t.stageKey]);
     const task: Task = {
       ...baseFields(me?.id ?? null),
+      projectId: p.id,
+      module: "projeto",
+      parentTaskId: null,
+      stageKey: t.stageKey,
+      title: t.title,
+      description: null,
+      assigneeUserId: who.userId,
+      assigneeFreelancerId: who.freelancerId,
+      statusKey: "a_fazer",
+      priorityKey: "media",
+      startAt: new Date(from).toISOString(),
+      dueAt: new Date(to).toISOString(),
+      estimateMinutes: null,
+      position: i * 1000,
+      sprintId: null,
+      completedAt: null,
+      area: null,
+    };
+    db.tasks.push(task);
+    const userId = who.userId ?? freelancerUserId(db, who.freelancerId);
+    if (userId !== p.ownerId) notify(db, me, { userId, type: "atribuicao", title: `Nova tarefa: ${t.title}`, project: p, entityType: "task", entityId: task.id });
+  });
+  emit(db, me, { type: "project.tasks_generated", entityType: "project", entityId: p.id, project: p, data: { count: tpl.length, exceedsDeadline, templateDays: totalDays } });
+}
+
+/** RF-M3-03 / RN-72 — tarefas da cotação para o responsável (diagnóstico, proposta, follow-up). */
+export function generateQuoteTasks(db: Database, me: User, p: Project) {
+  const now = Date.now();
+  QUOTE_TASK_TEMPLATE.forEach((t, i) => {
+    db.tasks.push({
+      ...baseFields(me.id),
       projectId: p.id,
       module: "projeto",
       parentTaskId: null,
@@ -614,15 +723,26 @@ export function generateTasksFromTemplate(db: Database, me: User | null, p: Proj
       assigneeFreelancerId: null,
       statusKey: "a_fazer",
       priorityKey: "media",
-      startAt: start.toISOString(),
-      dueAt: new Date(cursor).toISOString(),
+      startAt: new Date(now).toISOString(),
+      dueAt: new Date(now + t.dueInDays * 86_400_000).toISOString(),
       estimateMinutes: null,
       position: i * 1000,
       sprintId: null,
       completedAt: null,
       area: null,
-    };
-    db.tasks.push(task);
+    });
   });
-  if (tpl.length) emit(db, me, { type: "project.tasks_generated", entityType: "project", entityId: p.id, project: p, data: { count: tpl.length } });
+}
+
+/** RN-72 — ao aprovar, as tarefas da cotação ainda abertas são encerradas (a proposta foi aceita). */
+export function closeQuoteTasks(db: Database, p: Project) {
+  const quoteStages = new Set<string>(QUOTE_TASK_TEMPLATE.map((t) => t.stageKey));
+  const now = nowIso();
+  const open = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida" && !!t.stageKey && quoteStages.has(t.stageKey) && !t.parentTaskId);
+  open.forEach((t) => {
+    t.statusKey = "concluida";
+    t.completedAt = now;
+    t.updatedAt = now;
+  });
+  return open.length;
 }

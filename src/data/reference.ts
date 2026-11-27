@@ -42,6 +42,23 @@ export const PROJECT_STAGES: ReferenceItem<ProjectStageKey>[] = [
   { key: "concluido", label: "Concluído", order: 6, category: "done" },
 ];
 
+/** RN-72 — papel da equipe que recebe, por padrão, as tarefas-modelo de cada etapa (fallback: responsável). */
+export const STAGE_DEFAULT_ROLE: Record<ProjectStageKey, MemberRole> = {
+  roteiro: "roteirista",
+  ajustes_roteiro: "roteirista",
+  design: "designer",
+  ajustes_design: "designer",
+  validacao_cliente: "responsavel",
+  concluido: "responsavel",
+};
+
+/** RF-M3-03 / RN-72 — tarefas da cotação, criadas para o responsável ao abrir a cotação (prazo em dias corridos). */
+export const QUOTE_TASK_TEMPLATE: { stageKey: QuoteStageKey; title: string; dueInDays: number }[] = [
+  { stageKey: "diagnostico", title: "Diagnóstico com o cliente", dueInDays: 2 },
+  { stageKey: "elaboracao", title: "Elaborar proposta", dueInDays: 5 },
+  { stageKey: "enviada", title: "Follow-up da proposta", dueInDays: 10 },
+];
+
 /** Primeira etapa de execução — onde o projeto entra ao ser aprovado ou criado direto. */
 export const FIRST_PROJECT_STAGE: ProjectStageKey = "roteiro";
 
