@@ -48,8 +48,8 @@ export function MyTasksView() {
       <Toolbar
         end={
           <span className="flex flex-wrap items-center gap-3">
-            <Checkbox checked={showClosed} onCheckedChange={(v) => set({ encerrados: v ? "1" : undefined })} label="Incluir projetos encerrados" />
-            <Checkbox checked={showDone} onCheckedChange={(v) => set({ concluidas: v ? "1" : undefined })} label="Mostrar concluídas" />
+            <Checkbox checked={showClosed} onCheckedChange={(v) => set({ encerrados: v ? "1" : undefined })} label={<><span className="max-md:hidden">Incluir projetos encerrados</span><span className="md:hidden">Encerrados</span></>} />
+            <Checkbox checked={showDone} onCheckedChange={(v) => set({ concluidas: v ? "1" : undefined })} label={<><span className="max-md:hidden">Mostrar concluídas</span><span className="md:hidden">Concluídas</span></>} />
           </span>
         }
       >
