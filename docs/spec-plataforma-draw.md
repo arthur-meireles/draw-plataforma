@@ -333,7 +333,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-18 | **Pedir aprovação ao cliente** e **Enviar entrega ao cliente** (aba Aprovações, RN-52): destinatários entre os contatos do cliente, arquivos escolhidos (versão atual; nunca proposta/NF) e recado → link público `/c/:token` (purposes `aprovacao`/`entrega`, 30 dias) + e-mail transacional. Na aprovação o cliente aprova ou pede ajustes, e a decisão fica na Approval (`decided_via = link_cliente`). "Envios ao cliente" lista os links com status, copiar link, reenviar e revogar. "Registrar pedido…" continua para pedidos feitos fora do sistema. | R1 |
 | RF-M4-11 | Materiais de apoio liberados ao freelancer (manual de marca do cliente, tom de voz…). | R1 |
 | RF-M4-12 | Concluir projeto dispara RN-03; arquivar mantém tudo (RN-07). | R1 |
-| RF-M4-13 | Alertas de prazo próximo (padrão 2 dias) e atraso. | R1 |
+| RF-M4-13 | Alertas de prazo próximo (padrão 2 dias) e atraso — na tela (faixa de alertas) e na Caixa de entrada: `prazo` (vence em até 2 dias) e `atraso` para o responsável do projeto ativo não pausado e para o responsável de cada tarefa aberta (fora de projeto pausado/encerrado), um aviso por pessoa, item e data de prazo (idempotente). No back-end: job diário; no front local, `deadlineAlertsApi.sweep` roda ao abrir a sessão. | R1 |
 | RF-M4-17 | Aba **Tarefas** do prontuário e **Minhas tarefas** nas visões lista, kanban por status, calendário e Gantt (RF-X-06). | R1 |
 | RF-M4-14 | Marcos e aprendizados; métricas de entrega (`project_deliverable_metrics`). | R2 |
 | RF-M4-15 | Pausar/retomar projeto (RN-13) com motivo; selo "Parado" em cartões, linhas e prontuário; filtro "Situação". Tamanho (P/M/G) e condição de pagamento no prontuário e no assistente — "À vista" gera 1 parcela, "50/50" gera 2 (na aprovação / na entrega). | R1 |
@@ -894,6 +894,7 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | `projectsApi.complete(id, decisions)` · `projectsExtraApi.completionPreview` | `POST /projects/:id/complete` `{ decisions: [{ member_id, action: pagar\|sem_pagamento, amount_cents? }] }` · `GET /projects/:id/completion-preview` (RN-40) |
 | `projectLifecycleApi.undoApprovalPreview / undoApproval / reopenCompleted / reactivateCancelled` | `GET /projects/:id/undo-approval-preview`, `POST /projects/:id/undo-approval` `{ reason, keep_tasks? }` (RN-58), `POST /projects/:id/reopen-completed` `{ reason }` (RN-59), `POST /projects/:id/reactivate` `{ reason }` (RN-59) |
 | `projectClosingApi.cancelPreview` | `GET /projects/:id/cancel-preview` (RN-73: recebíveis a cancelar, NFs emitidas em aberto, tarefas abertas, aprovações pendentes, freelancers sem pagamento) |
+| `deadlineAlertsApi.sweep` | Job diário do back-end (sem endpoint público); local: chamado ao abrir a sessão (RF-M4-13) |
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
 | `commentsApi` (inclui `mentionables`), `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `GET /projects/:id/mentionables`, `/approvals`, `/events`, `/notifications` |

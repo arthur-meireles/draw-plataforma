@@ -20,3 +20,4 @@ export { clientLinksApi, publicClientLinkApi, CLIENT_LINK_DAYS, type ClientLinkP
 export { payablesExtraApi, type CompletionDecision, type FreelancerPaymentInput, type ManualInvoiceInput } from "./payables-extra";
 export { masterImportApi, parseMasterSheet, MASTER_TEMPLATE_HEADERS, MASTER_TEMPLATE_EXAMPLE, type MasterRow, type MasterReport } from "./importacao";
 export { projectClosingApi, projectLifecycleApi } from "./project-lifecycle";
+export { deadlineAlertsApi } from "./deadline-alerts";

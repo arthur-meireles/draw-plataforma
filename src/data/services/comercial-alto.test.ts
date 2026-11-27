@@ -341,3 +341,24 @@ describe("RN-73 — encerramento: conclusão fatura a entrega; cancelamento ence
     expect(db.notifications.some((n) => n.userId === "usr_fernanda" && n.title.includes("freelancers sem pagamento"))).toBe(true);
   });
 });
+
+describe("RF-M4-13 — avisos de prazo e atraso na Caixa de entrada", () => {
+  it("gera prazo/atraso para responsável e tarefa, sem duplicar e sem projeto pausado", async () => {
+    const soon = new Date(Date.now() + 86_400_000).toISOString();
+    const past = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const p = await directProject({ dueAt: soon });
+    const t = await tasksApi.create({ projectId: p.id, title: "Entregar peça", assigneeUserId: "usr_lucas", dueAt: past });
+    const { deadlineAlertsApi } = await import("./index");
+    await deadlineAlertsApi.sweep();
+    const notes = () => loadDb().notifications;
+    expect(notes().some((n) => n.userId === "usr_carlos" && n.type === "prazo" && n.entityId === p.id)).toBe(true);
+    expect(notes().some((n) => n.userId === "usr_lucas" && n.type === "atraso" && n.entityId === t.id)).toBe(true);
+    const count = notes().length;
+    await deadlineAlertsApi.sweep();
+    expect(notes().length).toBe(count);
+    const t2 = await tasksApi.create({ projectId: p.id, title: "Outra", assigneeUserId: "usr_lucas", dueAt: past });
+    await projectsApi.pause(p.id, "Cliente viajando");
+    await deadlineAlertsApi.sweep();
+    expect(notes().some((n) => n.entityId === t2.id && n.type === "atraso")).toBe(false);
+  });
+});

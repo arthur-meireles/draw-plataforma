@@ -5,7 +5,8 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, authApi, clientsApi, notificationsApi, peopleApi, projectTypesApi, usersApi } from "./services";
+import { useEffect } from "react";
+import { ApiError, authApi, clientsApi, deadlineAlertsApi, notificationsApi, peopleApi, projectTypesApi, usersApi } from "./services";
 
 export function useApiQuery<T>(key: QueryKey, fn: () => Promise<T>, opts?: Omit<UseQueryOptions<T, ApiError>, "queryKey" | "queryFn">) {
   return useQuery<T, ApiError>({ queryKey: key, queryFn: fn, ...opts });
@@ -51,3 +52,24 @@ export const useAllPeople = () => useApiQuery(["people", "all"], peopleApi.all, 
 export const useClientOptions = () => useApiQuery(["clients", "options"], () => clientsApi.list(), { staleTime: 30_000 });
 export const useUnreadCount = () => useApiQuery(["notifications", "unread"], notificationsApi.unreadCount, { refetchInterval: 30_000 });
 export const useOrganization = () => useApiQuery(["organization"], usersApi.organization, { staleTime: 60_000 });
+
+/**
+ * RF-M4-13 — avisos de prazo/atraso na Caixa de entrada: varre uma vez por sessão aberta (no back-end, job diário).
+ * Idempotente no serviço; falha silenciosa (não atrapalha a navegação).
+ */
+export function useDeadlineAlerts(userId: string | null | undefined) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    deadlineAlertsApi
+      .sweep()
+      .then((r) => {
+        if (alive && r.created > 0) void qc.invalidateQueries({ queryKey: ["notifications"] });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [userId, qc]);
+}
