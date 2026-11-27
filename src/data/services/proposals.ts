@@ -191,17 +191,35 @@ export const proposalsApi = {
       return { proposal: prop, project };
     }),
 
-  reject: (proposalId: ID) =>
+  /** Registra a recusa do cliente (motivo opcional). Só proposta `enviada` de projeto em cotação; rascunho se descarta (RN-71). */
+  reject: (proposalId: ID, reason?: string | null) =>
     write((db, me) => {
-      const prop = db.proposals.find((x) => x.id === proposalId);
+      const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
       requireProposalWrite(me);
-      if (prop.status !== "enviada" && prop.status !== "rascunho") throw new ApiError(409, "Só propostas em rascunho ou enviadas podem ser recusadas.");
+      if (p.status !== "cotacao") throw new ApiError(409, "Só é possível registrar recusa em projetos em cotação. Para desfazer uma aprovação, use \"Desfazer aprovação…\" no projeto.");
+      if (prop.status !== "enviada") throw new ApiError(409, prop.status === "rascunho" ? "Rascunho não é recusado: descarte-o." : "Só propostas enviadas podem ter a recusa registrada.");
       prop.status = "recusada";
       touch(prop);
       if (p.quoteStageKey === "enviada") p.quoteStageKey = "negociacao";
-      emit(db, me, { type: "proposal.rejected", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version } });
+      emit(db, me, { type: "proposal.rejected", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, reason: reason?.trim() || null } });
+      return prop;
+    }),
+
+  /** RN-71 — descarta um rascunho (soft delete com as parcelas). A numeração de versões não é reaproveitada. */
+  discard: (proposalId: ID) =>
+    write((db, me) => {
+      const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
+      if (!prop) throw new ApiError(404, "Proposta não encontrada.");
+      const p = assertProjectVisible(db, me, prop.projectId);
+      requireProposalWrite(me);
+      if (prop.status !== "rascunho") throw new ApiError(409, "Só rascunhos podem ser descartados. Propostas enviadas ficam no histórico.");
+      const now = nowIso();
+      prop.deletedAt = now;
+      touch(prop);
+      db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt).forEach((i) => (i.deletedAt = now));
+      emit(db, me, { type: "proposal.discarded", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, amountCents: prop.amountCents } });
       return prop;
     }),
 };

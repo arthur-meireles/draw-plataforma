@@ -176,3 +176,19 @@ describe("RN-70 — reativar projeto cancelado", () => {
     await expect(projectLifecycleApi.reactivateCancelled(p.id, "de novo")).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe("RN-71 — recusa só de enviada; rascunho é descartado", () => {
+  it("descarta rascunho, não recusa rascunho nem proposta aprovada, e guarda o motivo da recusa", async () => {
+    const { p, prop } = await quoteWithSentProposal();
+    const draft = await proposalsApi.create(p.id, { amountCents: 500_000, installments: [{ amountCents: 500_000, dueRule: "Na aprovação", dueAt: null }] });
+    await expect(proposalsApi.reject(draft.id)).rejects.toMatchObject({ status: 409 });
+    await proposalsApi.discard(draft.id);
+    expect((await proposalsApi.listByProject(p.id)).some((x) => x.id === draft.id)).toBe(false);
+    await proposalsApi.reject(prop.id, "Preço alto");
+    expect(loadDb().events.find((e) => e.type === "proposal.rejected" && e.entityId === prop.id)?.data.reason).toBe("Preço alto");
+    await expect(proposalsApi.discard(prop.id)).rejects.toMatchObject({ status: 409 });
+    const { prop: other } = await quoteWithSentProposal();
+    await proposalsApi.approve(other.id);
+    await expect(proposalsApi.reject(other.id)).rejects.toMatchObject({ status: 409 });
+  });
+});

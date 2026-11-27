@@ -70,7 +70,9 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "proposal.approved":
       return { icon: "approval", text: <>aprovou a proposta {b(`v${d.version}`)} — projeto ativo</> };
     case "proposal.rejected":
-      return { icon: "close", text: <>registrou recusa da proposta {b(`v${d.version}`)}</> };
+      return { icon: "close", text: <>registrou recusa da proposta {b(`v${d.version}`)}{d.reason ? <>: {String(d.reason)}</> : null}</> };
+    case "proposal.discarded":
+      return { icon: "delete", text: <>descartou o rascunho da proposta {b(`v${d.version}`)}</> };
     case "task.created":
       return { icon: "task", text: <>criou a tarefa {b(String(d.title))}</> };
     case "task.status_changed":
