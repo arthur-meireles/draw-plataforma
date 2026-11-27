@@ -296,3 +296,15 @@ describe("RN-71 — ajustes pedidos pelo cliente aparecem em Comentários", () =
     expect(c.authorId).toBeNull();
   });
 });
+
+describe("RF-M4-08 — criar tarefa direto (Minhas tarefas) e projeto encerrado", () => {
+  it("cria tarefa atribuída a mim em projeto ativo; projeto concluído não recebe tarefa nova", async () => {
+    const p = await directProject();
+    as("usr_lucas");
+    const t = await tasksApi.create({ projectId: p.id, title: "Minha tarefa", assigneeUserId: "usr_lucas" });
+    expect((await tasksApi.list({ assignee: "me" })).some((x) => x.id === t.id)).toBe(true);
+    as("usr_paula");
+    await projectsApi.complete(p.id);
+    await expect(tasksApi.create({ projectId: p.id, title: "Depois" })).rejects.toMatchObject({ status: 409 });
+  });
+});

@@ -1,12 +1,14 @@
 "use client";
 /** Minhas tarefas (RF-M4-08): atrasadas, hoje, esta semana, depois — ou por projeto / status. */
-import { useMemo } from "react";
-import { Badge, Checkbox, PageBody, PageHeader, SearchInput, SegmentedControl, Toolbar, ClearFiltersButton, ViewSwitcher } from "@/components/ui";
+import { useMemo, useState } from "react";
+import { Badge, Button, Checkbox, Fab, PageBody, PageHeader, SearchInput, SegmentedControl, Toolbar, ClearFiltersButton, ViewSwitcher } from "@/components/ui";
 import { TASK_VIEW_OPTIONS, TaskPeek, TaskViews, useTaskView } from "@/components/domain";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi } from "@/data/services";
 import { plural } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
+import { usePermissions } from "@/components/layout/session";
+import { NewMyTaskDialog } from "./new-my-task-dialog";
 
 type Group = "prazo" | "projeto" | "status";
 const GROUP_TO_LIST = { prazo: "due", projeto: "project", status: "status" } as const;
@@ -14,6 +16,10 @@ const GROUP_TO_LIST = { prazo: "due", projeto: "project", status: "status" } as 
 export function MyTasksView() {
   const [f, set] = useUrlState({ agrupar: "prazo", concluidas: undefined as string | undefined, encerrados: undefined as string | undefined, q: "", tarefa: undefined as string | undefined });
   const [view, setView] = useTaskView("lista");
+  const { canWrite, canWriteAll, isFreelancer } = usePermissions();
+  // criar daqui: projeto (Tarefas com escrita) ou Administrativo (ADM T); freelancer só cria subtarefas
+  const canCreate = !isFreelancer && (canWrite("tasks") || canWriteAll("adm"));
+  const [creating, setCreating] = useState(false);
   const group = (["prazo", "projeto", "status"].includes(f.agrupar) ? f.agrupar : "prazo") as Group;
   const showDone = f.concluidas === "1";
   const showClosed = f.encerrados === "1";
@@ -31,6 +37,11 @@ export function MyTasksView() {
           <>
             {overdue > 0 && <Badge tone="danger" dot className="max-sm:hidden">{plural(overdue, "atrasada", "atrasadas")}</Badge>}
             <ViewSwitcher value={view} onChange={setView} views={TASK_VIEW_OPTIONS} />
+            {canCreate && (
+              <Button size="sm" variant="primary" icon="add" onClick={() => setCreating(true)} className="max-md:hidden">
+                Nova tarefa
+              </Button>
+            )}
           </>
         }
       />
@@ -74,6 +85,8 @@ export function MyTasksView() {
         />
       </PageBody>
       <TaskPeek taskId={f.tarefa ?? null} onClose={() => set({ tarefa: undefined })} />
+      {canCreate && <Fab label="Nova tarefa" onClick={() => setCreating(true)} />}
+      {canCreate && <NewMyTaskDialog open={creating} onOpenChange={setCreating} />}
     </>
   );
 }

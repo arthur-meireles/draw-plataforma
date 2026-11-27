@@ -13,6 +13,7 @@ import type { AdmArea, ID, PriorityKey, TaskStatusKey } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
 import { ADM_AREAS, PROJECT_STATUS_LABEL, projectStage, quoteStage } from "@/data/reference";
 import { AssigneePill, type PersonRef } from "./pickers";
+import { usePermissions } from "@/components/layout/session";
 import { DoneTitle, DueChip, PriorityPill, ProjectCode, TaskCheck, TaskStatusIcon, TaskStatusPill } from "./badges";
 import { CommentThread, EventTimeline } from "./timeline";
 
@@ -269,6 +270,9 @@ export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | 
 
   const patch = (p: Parameters<typeof tasksApi.update>[1]) => t && update.mutate({ id: t.id, patch: p });
   const ro = t ? !t.canEdit : true;
+  const perms = usePermissions();
+  // subtarefa só em projeto aberto e com escrita em Tarefas (ou ADM T)
+  const canAddSub = !!t && (t.module === "adm" ? perms.canWriteAll("adm") : perms.canWrite("tasks")) && (!t.projectStatus || t.projectStatus === "ativo" || t.projectStatus === "cotacao");
 
   return (
     <Sheet
@@ -349,7 +353,8 @@ export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | 
                 {t.subtasks.map((s) => (
                   <TaskRow key={s.id} task={s} restrictAssignees={restrictAssignees} readOnly={ro && s.assigneeUserId !== null} />
                 ))}
-                <TaskQuickAdd projectId={t.projectId} parentTaskId={t.id} module={t.module} label="Adicionar subtarefa" />
+                {canAddSub && <TaskQuickAdd projectId={t.projectId} parentTaskId={t.id} module={t.module} label="Adicionar subtarefa" />}
+                {!canAddSub && !t.subtasks.length && <p className="px-3 py-2 text-xs text-fg-subtle">Sem subtarefas.</p>}
               </div>
             </section>
           )}

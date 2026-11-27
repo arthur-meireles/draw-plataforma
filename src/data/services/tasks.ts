@@ -150,6 +150,7 @@ export const tasksApi = {
       if (taskModule === "adm" && !canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão no Administrativo.");
       if (taskModule === "projeto") requireAccess(me, "tasks", "write", "Seu perfil só consulta tarefas de projeto. Peça ao responsável do projeto para criar a tarefa.");
       if (taskModule === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
+      if (p && !OPEN_PROJECT_STATUSES.includes(p.status)) throw new ApiError(409, "Este projeto está encerrado e não recebe tarefas novas. Reabra o projeto para continuar.");
       const siblings = db.tasks.filter((t) => t.projectId === (p?.id ?? null) && t.parentTaskId === (input.parentTaskId ?? null));
       const parent = input.parentTaskId ? db.tasks.find((t) => t.id === input.parentTaskId) : null;
       const t: Task = {
