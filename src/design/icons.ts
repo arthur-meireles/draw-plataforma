@@ -13,11 +13,13 @@ import {
   SignalHigh, SignalLow, SignalMedium, Smartphone, Sparkles, Star, Sun, Tag, Target, Timer, Trash2, TrendingDown, TrendingUp, Undo2,
   Upload, User, UserPlus, Users, Wallet, WifiOff, X, XCircle, Zap, Wrench, History, Flag, Layers, CircleCheckBig, Hourglass, Banknote,
   FolderOpen, FolderLock, FolderInput, FolderPlus, Building, PackageCheck, Milestone, BadgeCheck, MailCheck, Server, Palette, Contact, LayoutGrid, Camera,
-  Pause, Play, ClipboardList, ContactRound,
+  Pause, Play, ClipboardList, ContactRound, QrCode,
   type LucideIcon,
 } from "lucide-react";
 
 export const icons = {
+  // 2FA: aplicativo autenticador (RN-37)
+  authenticator: QrCode,
   // pausa de projeto ("Caso parado")
   pause: Pause,
   resume: Play,

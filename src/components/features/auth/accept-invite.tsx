@@ -7,7 +7,8 @@ import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
 import { Badge, Button, Callout, EmptyState, PasswordField, PasswordStrength, Skeleton, TextField } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { ROLE_LABEL } from "@/data/reference";
-import { authApi } from "@/data/services";
+import { MfaEnrollment } from "@/components/domain";
+import { authApi, mfaApi } from "@/data/services";
 import { focusFirstInvalid } from "@/lib/focus";
 
 /** Aceite de convite (RF-M1-02): confirma nome, cria a senha e entra. */
@@ -25,12 +26,15 @@ export function AcceptInvite() {
     if (invite.data) setName(invite.data.name);
   }, [invite.data]);
 
+  /** RN-37: convite de administrador cadastra o 2FA antes da primeira sessão. */
+  const [enroll, setEnroll] = useState<string | null>(null);
+  const enter = () => {
+    qc.clear();
+    router.replace("/");
+  };
   const accept = useApiMutation((v: { name: string; password: string }) => authApi.acceptInvite(token, v), {
-    success: "Conta criada. Bem-vindo à Draw!",
-    onSuccess: () => {
-      qc.clear();
-      router.replace("/");
-    },
+    success: (r) => (r.mfaEnrollChallenge ? "Senha criada. Agora ligue a verificação em duas etapas." : "Conta criada. Bem-vindo à Draw!"),
+    onSuccess: (r) => (r.mfaEnrollChallenge ? setEnroll(r.mfaEnrollChallenge) : enter()),
     onError: (e) => {
       setErrors(e.fieldErrors ?? {});
       focusFirstInvalid();
@@ -50,7 +54,12 @@ export function AcceptInvite() {
 
   return (
     <AuthLayout footer="Draw Legal Design · uso interno">
-      {invite.isLoading ? (
+      {enroll ? (
+        <div className="space-y-4">
+          <AuthHeading title="Cadastre a verificação em duas etapas" description="Administradores só entram com o 2FA ligado." />
+          <MfaEnrollment start={() => mfaApi.startEnrollmentForChallenge(enroll)} confirm={(c) => mfaApi.confirmEnrollmentForChallenge(enroll, c)} onDone={enter} doneLabel="Entrar na plataforma" />
+        </div>
+      ) : invite.isLoading ? (
         <div className="space-y-4" aria-busy>
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-10" />

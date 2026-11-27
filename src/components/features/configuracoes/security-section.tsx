@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
-import { usePermissions } from "@/components/layout/session";
-import { Button, Callout, PasswordField, PasswordStrength, Section, Switch } from "@/components/ui";
-import { useApiMutation, useMe } from "@/data/hooks";
-import { usersApi } from "@/data/services";
+import { toast } from "sonner";
+import { MfaEnrollment, RecoveryCodesList } from "@/components/domain";
+import { Badge, Button, Callout, Dialog, ErrorState, PasswordField, PasswordStrength, Section, Skeleton } from "@/components/ui";
+import { useApiMutation, useApiQuery } from "@/data/hooks";
+import { mfaApi, usersApi } from "@/data/services";
+import { dateFull } from "@/lib/format";
 import { focusFirstInvalid } from "@/lib/focus";
 
 function ChangePasswordForm() {
@@ -51,19 +53,102 @@ function ChangePasswordForm() {
   );
 }
 
-/** Segurança da conta: 2FA (obrigatório para admin — RF-M1-06) e troca de senha. */
+/** Pede a senha para desligar o 2FA ou gerar novos códigos (RN-37). */
+function PasswordConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, run, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; description: string; confirmLabel: string; destructive?: boolean; run: (password: string) => Promise<unknown>; onDone: (data: unknown) => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | undefined>();
+  const m = useApiMutation(run, { success: false, onSuccess: (d) => (setPassword(""), onDone(d)), onError: (e) => setError(e.fieldErrors?.password ?? e.message) });
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!password) return setError("Informe sua senha");
+    m.mutate(password);
+  };
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => (setPassword(""), setError(undefined), onOpenChange(o))}
+      title={title}
+      description={description}
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button variant={destructive ? "destructive" : "primary"} loading={m.isPending} onClick={() => submit()}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} noValidate>
+        <PasswordField label="Sua senha" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} error={error} />
+      </form>
+    </Dialog>
+  );
+}
+
+/** Verificação em duas etapas: cadastro (QR + código), códigos de recuperação e desligar (RF-M1-06 / RN-37). */
+function MfaBlock() {
+  const status = useApiQuery(["me", "mfa"], mfaApi.status);
+  const [enrolling, setEnrolling] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const s = status.data;
+
+  if (status.isLoading) return <Skeleton className="h-16" />;
+  if (status.error || !s) return <ErrorState error={status.error} onRetry={() => status.refetch()} className="py-6" />;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium text-fg">
+            Verificação em duas etapas (2FA)
+            {s.enabled ? <Badge tone="success" dot>Ligada</Badge> : <Badge tone="neutral">Desligada</Badge>}
+          </p>
+          <p className="max-w-md text-xs text-fg-subtle">
+            {s.enabled ? `Pede um código do aplicativo autenticador a cada entrada${s.enrolledAt ? ` · cadastrada em ${dateFull(s.enrolledAt)}` : ""}. Códigos de recuperação restantes: ${s.recoveryCodesLeft}.` : "Além da senha, pede um código do aplicativo autenticador a cada entrada."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!s.enabled || !s.hasSecret ? (
+            <Button variant="primary" size="sm" icon="shield" onClick={() => setEnrolling(true)}>
+              {s.enabled ? "Cadastrar aplicativo…" : "Ligar 2FA…"}
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" icon="key" onClick={() => setRegenerating(true)}>
+              Gerar novos códigos…
+            </Button>
+          )}
+          {s.enabled && !s.required && (
+            <Button variant="destructive-ghost" size="sm" onClick={() => setDisabling(true)}>
+              Desligar…
+            </Button>
+          )}
+        </div>
+      </div>
+      {s.required && <Callout tone="info" title="Obrigatório para administradores">Seu perfil acessa valores, cofre e configurações, por isso a verificação em duas etapas não pode ser desligada.</Callout>}
+      {s.enabled && s.recoveryCodesLeft > 0 && s.recoveryCodesLeft <= 3 && <Callout tone="warning">Restam poucos códigos de recuperação. Gere novos e guarde em lugar seguro.</Callout>}
+
+      <Dialog open={enrolling} onOpenChange={setEnrolling} size="lg" title="Ligar verificação em duas etapas" description="Use um aplicativo autenticador no celular.">
+        {enrolling && <MfaEnrollment start={mfaApi.startEnrollment} confirm={mfaApi.confirmEnrollment} onDone={() => setEnrolling(false)} onCancel={() => setEnrolling(false)} />}
+      </Dialog>
+      <PasswordConfirmDialog open={disabling} onOpenChange={setDisabling} title="Desligar a verificação em duas etapas?" description="Sua conta volta a pedir só a senha. Os códigos de recuperação deixam de valer." confirmLabel="Desligar 2FA" destructive run={mfaApi.disable} onDone={() => (setDisabling(false), toast.success("Verificação em duas etapas desligada"))} />
+      <PasswordConfirmDialog open={regenerating} onOpenChange={setRegenerating} title="Gerar novos códigos de recuperação?" description="Os códigos anteriores deixam de valer na hora." confirmLabel="Gerar códigos" run={mfaApi.regenerateRecoveryCodes} onDone={(d) => (setRegenerating(false), setCodes((d as { recoveryCodes: string[] }).recoveryCodes))} />
+      <Dialog open={!!codes} onOpenChange={(o) => !o && setCodes(null)} title="Novos códigos de recuperação" description="Cada código entra uma única vez. Eles não aparecem de novo." footer={<Button variant="primary" onClick={() => setCodes(null)}>Guardei os códigos</Button>}>
+        {codes && <RecoveryCodesList codes={codes} />}
+      </Dialog>
+    </div>
+  );
+}
+
+/** Segurança da conta: 2FA (obrigatório para admin — RF-M1-06/RN-37) e troca de senha. */
 export function SecuritySection() {
-  const { isAdmin } = usePermissions();
-  const me = useMe();
-  const mfa = useApiMutation(usersApi.setMfa, { success: (_d) => (me.data?.mfaEnabled ? "Verificação em duas etapas desligada" : "Verificação em duas etapas ligada") });
-  const enabled = isAdmin ? true : !!me.data?.mfaEnabled;
   return (
     <Section title="Segurança" description="Proteja o acesso à sua conta" icon="shield">
       <div className="space-y-6">
-        <div className="space-y-3">
-          <Switch label="Verificação em duas etapas (2FA)" description="Além da senha, pede um código do aplicativo autenticador a cada entrada." checked={enabled} disabled={isAdmin || mfa.isPending || me.isLoading} onCheckedChange={(v) => mfa.mutate(v)} />
-          {isAdmin && <Callout tone="info" title="Obrigatório para administradores">Seu perfil acessa valores, cofre e configurações, por isso a verificação em duas etapas não pode ser desligada.</Callout>}
-        </div>
+        <MfaBlock />
         <div className="border-t border-line pt-5">
           <h3 className="mb-3 text-sm font-semibold text-fg">Alterar senha</h3>
           <ChangePasswordForm />

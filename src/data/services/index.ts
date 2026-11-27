@@ -21,3 +21,4 @@ export { payablesExtraApi, type CompletionDecision, type FreelancerPaymentInput,
 export { masterImportApi, parseMasterSheet, MASTER_TEMPLATE_HEADERS, MASTER_TEMPLATE_EXAMPLE, type MasterRow, type MasterReport } from "./importacao";
 export { jobsApi, runDueSweepTx, type SweepResult } from "./jobs";
 export { usersExtraApi, userTypeOf } from "./users-extra";
+export { mfaApi, totp, verifyTotp } from "./mfa";

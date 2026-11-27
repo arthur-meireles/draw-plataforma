@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePermissions } from "@/components/layout/session";
-import { Button, Section, Skeleton, TextField } from "@/components/ui";
+import { Button, Section, Skeleton, Switch, TextField } from "@/components/ui";
 import { useApiMutation, useOrganization } from "@/data/hooks";
 import { usersApi } from "@/data/services";
 import { focusFirstInvalid } from "@/lib/focus";
@@ -14,6 +14,7 @@ export function OrgSettingsSection() {
   const [day, setDay] = useState("");
   const [soon, setSoon] = useState("");
   const [tax, setTax] = useState("");
+  const [mfaAdmins, setMfaAdmins] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const settings = org.data?.org.settings;
@@ -22,6 +23,7 @@ export function OrgSettingsSection() {
       setDay(String(settings.freelancerPaymentDay));
       setSoon(String(settings.dueSoonDays));
       setTax(String(settings.taxRatePct ?? 6).replace(".", ","));
+      setMfaAdmins(settings.requireMfaForAdmins ?? true);
     }
   }, [settings]);
 
@@ -45,7 +47,7 @@ export function OrgSettingsSection() {
     if (!tax.trim() || !Number.isFinite(t) || t < 0 || t > 30) errs.taxRatePct = "Use uma alíquota entre 0% e 30%";
     setErrors(errs);
     if (Object.keys(errs).length) return focusFirstInvalid();
-    save.mutate({ freelancerPaymentDay: d, dueSoonDays: s, taxRatePct: Math.round(t * 100) / 100 });
+    save.mutate({ freelancerPaymentDay: d, dueSoonDays: s, taxRatePct: Math.round(t * 100) / 100, requireMfaForAdmins: mfaAdmins });
   };
 
   return (
@@ -58,6 +60,9 @@ export function OrgSettingsSection() {
             <TextField label="Dia de pagamento dos freelancers" inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value.replace(/\D/g, "").slice(0, 2))} error={errors.freelancerPaymentDay} hint="Entre 1 e 28, para valer em todos os meses (RN-06)." />
             <TextField label="Dias de alerta de vencimento" inputMode="numeric" value={soon} onChange={(e) => setSoon(e.target.value.replace(/\D/g, "").slice(0, 2))} error={errors.dueSoonDays} hint="Recebimentos e pagamentos “a vencer” entram em alerta nesta janela." />
             <TextField label="Alíquota de imposto (%)" inputMode="decimal" suffix="%" value={tax} onChange={(e) => setTax(e.target.value.replace(/[^\d,.]/g, "").slice(0, 5))} error={errors.taxRatePct} hint="Entre 0% e 30%. Calcula o imposto dos novos recebíveis; os já lançados não mudam." />
+            <div className="sm:col-span-2">
+              <Switch label="Exigir verificação em duas etapas dos administradores" description="Administrador sem 2FA cadastra o aplicativo autenticador no próximo login e não consegue desligar (RN-37)." checked={mfaAdmins} onCheckedChange={setMfaAdmins} />
+            </div>
             {canEdit && (
               <div className="sm:col-span-2">
                 <Button type="submit" variant="primary" loading={save.isPending}>

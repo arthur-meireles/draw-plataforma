@@ -7,6 +7,7 @@ import { visibleTasks } from "./tasks";
 import { access, canRead, canWriteAll } from "@/lib/permissions";
 import { isDemoMode } from "@/lib/demo";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
+import { checkSecondFactor, issueEnrollChallenge, mfaRequiredFor, needsMfaEnrollment } from "./mfa";
 import { ensureFreelancerRecord, roleChangeDetail, securityLog, userTypeOf, usersExtraApi } from "./users-extra";
 
 /* ───────── Autenticação (mock) ───────── */
@@ -29,9 +30,10 @@ const log = (db: Database, userId: ID | null, action: AccessLogAction, detail: s
 const resetsOf = (db: Database) => (db.passwordResets ??= []);
 const invitesOf = (db: Database) => (db.userInvites ??= []);
 
+/** Nunca sai do serviço: senha e segredos do 2FA (RN-37). */
 const safeUser = (u: User) => {
-  const { passwordMock: _pw, ...rest } = u;
-  void _pw;
+  const { passwordMock: _pw, mfaSecret: _s, mfaPendingSecret: _p, mfaRecoveryCodes: _r, ...rest } = u;
+  void _pw, void _s, void _p, void _r;
   return rest;
 };
 
@@ -75,7 +77,7 @@ export const authApi = {
    * RF-M1-01 / RNF-01 — bloqueio progressivo após falhas.
    * RN-30 — com 2FA, devolve `mfaChallenge` e NÃO cria sessão; sem 2FA, entra direto.
    */
-  login: async (email: string, password: string): Promise<{ id: ID; mfaRequired: false } | { id: ID; mfaRequired: true; mfaChallenge: string }> => {
+  login: async (email: string, password: string): Promise<{ id: ID; mfaRequired: false } | { id: ID; mfaRequired: true; mfaChallenge: string; mfaEnroll: boolean }> => {
     await latency(500);
     const key = email.trim().toLowerCase();
     const fails = failures.get(key) ?? 0;
@@ -89,11 +91,16 @@ export const authApi = {
         throw new ApiError(401, "E-mail ou senha incorretos.");
       }
       failures.delete(key);
+      // RN-37 — administrador sem 2FA cadastra antes de entrar (desafio de cadastro, sem sessão)
+      if (needsMfaEnrollment(db, u)) {
+        setSessionUserId(null);
+        return { id: u.id, mfaRequired: true as const, mfaChallenge: issueEnrollChallenge(u.id), mfaEnroll: true };
+      }
       if (u.mfaEnabled) {
         const mfaChallenge = secureToken();
         mfaChallenges.set(mfaChallenge, { userId: u.id, expiresAt: Date.now() + MFA_CHALLENGE_TTL_MS });
         setSessionUserId(null); // nenhuma sessão até o código ser confirmado
-        return { id: u.id, mfaRequired: true as const, mfaChallenge };
+        return { id: u.id, mfaRequired: true as const, mfaChallenge, mfaEnroll: false };
       }
       u.lastLoginAt = nowIso();
       log(db, u.id, "login");
@@ -102,7 +109,10 @@ export const authApi = {
     });
   },
 
-  /** RN-30 — confirma o código do desafio e só então cria a sessão. Demonstração: qualquer 6 dígitos. */
+  /**
+   * RN-30/RN-37 — confirma o código do desafio e só então cria a sessão: código TOTP do aplicativo ou um código de
+   * recuperação (consumido). Demonstração: qualquer 6 dígitos também passa.
+   */
   verifyMfa: async (mfaChallenge: string, code: string) => {
     await latency(300);
     const ch = mfaChallenges.get(mfaChallenge);
@@ -110,16 +120,17 @@ export const authApi = {
       mfaChallenges.delete(mfaChallenge);
       throw new ApiError(401, "A verificação expirou. Entre com e-mail e senha de novo.");
     }
-    if (!/^\d{6}$/.test(code)) {
+    const how = await checkSecondFactor(ch.userId, code);
+    if (!how) {
       transaction((db) => log(db, ch.userId, "mfa_failed"));
-      throw new ApiError(422, "Digite os 6 números do aplicativo autenticador.", { code: "Digite os 6 números" });
+      throw new ApiError(422, "Código incorreto. Digite os 6 números do aplicativo autenticador ou um código de recuperação.", { code: "Código incorreto" });
     }
     mfaChallenges.delete(mfaChallenge);
     return transaction((db) => {
       const u = db.users.find((x) => x.id === ch.userId && x.status === "ativo");
       if (!u) throw new ApiError(401, "Este usuário não pode entrar agora. Fale com a administração.");
       u.lastLoginAt = nowIso();
-      log(db, u.id, "login", "2FA");
+      log(db, u.id, "login", how === "recovery" ? "2FA · código de recuperação" : "2FA");
       setSessionUserId(u.id);
       return true;
     });
@@ -230,8 +241,13 @@ export const authApi = {
       touch(inv);
       log(db, u.id, "invite_accepted");
       emit(db, null, { type: "user.invite_accepted", entityType: "user", entityId: u.id, data: { email: u.email } });
+      // RN-37 — convite de administrador: cadastra o 2FA antes da primeira sessão
+      if (mfaRequiredFor(db, u) && !u.mfaEnabled) {
+        setSessionUserId(null);
+        return { userId: u.id, mfaEnrollChallenge: issueEnrollChallenge(u.id) as string | null };
+      }
       setSessionUserId(u.id);
-      return u.id;
+      return { userId: u.id, mfaEnrollChallenge: null as string | null };
     });
   },
 
@@ -333,14 +349,6 @@ export const usersApi = {
     await issueUserInvite(id, { email: true, event: "user.invite_resent" });
   },
 
-  setMfa: (enabled: boolean) =>
-    write((db, me) => {
-      const u = db.users.find((x) => x.id === me.id)!;
-      if (!enabled && u.role === "admin") throw new ApiError(409, "O 2FA é obrigatório para administradores.");
-      u.mfaEnabled = enabled;
-      touch(u);
-    }),
-
   changePassword: (current: string, next: string) =>
     write((db, me) => {
       const u = db.users.find((x) => x.id === me.id)!;
@@ -362,7 +370,7 @@ export const usersApi = {
   /** Parâmetros da organização: todos leem (prazos e alíquota aparecem nas telas); só admin altera. */
   organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
 
-  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number }) =>
+  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number; requireMfaForAdmins?: boolean }) =>
     write((db, me) => {
       requireAccess(me, "settings", "all", "Só administradores alteram as regras da organização.");
       const settings = { ...db.organizations[0].settings, ...patch };

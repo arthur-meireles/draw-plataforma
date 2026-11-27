@@ -48,6 +48,14 @@ export interface User extends BaseEntity {
    * sessão gravada com versão antiga deixa de valer. No back-end: revogar linhas de `sessions`.
    */
   sessionVersion?: number;
+  /**
+   * RN-37 — 2FA por TOTP. `mfaSecret` (base32; no back-end cifrado), `mfaPendingSecret` (cadastro iniciado e ainda
+   * não confirmado), `mfaRecoveryCodes` (SHA-256 dos códigos de recuperação ainda não usados), `mfaEnrolledAt`.
+   */
+  mfaSecret?: string | null;
+  mfaPendingSecret?: string | null;
+  mfaRecoveryCodes?: string[];
+  mfaEnrolledAt?: ISODate | null;
 }
 
 export type MemberRole = "responsavel" | "designer" | "roteirista" | "advogado" | "apoio";

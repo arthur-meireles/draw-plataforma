@@ -3,15 +3,18 @@
  * (RN-35/36), 2FA com cadastro e obrigatoriedade (RN-37), tarefas ADM pelo responsável (RN-38),
  * dados do próprio freelancer (RN-39) e trilha de segurança (RN-60).
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { setSessionUserId } from "./_core";
-import { authApi, jobsApi, runDueSweepTx, tasksApi, usersApi, usersExtraApi } from "./index";
+import { authApi, jobsApi, mfaApi, runDueSweepTx, tasksApi, totp, usersApi, usersExtraApi, verifyTotp } from "./index";
+import { base32Encode } from "./mfa";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 const DAY = 86_400_000;
 const iso = (days: number) => new Date(Date.now() + days * DAY).toISOString();
 const notifs = (userId: string, entityId: string) => loadDb().notifications.filter((n) => n.userId === userId && n.entityId === entityId);
+
+afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -221,5 +224,104 @@ describe("RN-60 — trilha de segurança", () => {
     as("usr_paula");
     await usersApi.invite({ name: "Log", email: "log@draw.com.br", role: "comercial" });
     expect(logs("invite_sent")).toHaveLength(1);
+  });
+});
+
+describe("RN-37 — 2FA com cadastro, códigos de recuperação e obrigatório para admin", () => {
+  const prod = () => vi.stubEnv("NODE_ENV", "production");
+
+  it("TOTP segue a RFC 6238 (vetor SHA-1 de teste)", async () => {
+    const secret = base32Encode(new TextEncoder().encode("12345678901234567890"));
+    expect(await totp(secret, 59_000, 8)).toBe("94287082");
+    expect(await totp(secret, 1_111_111_109_000, 8)).toBe("07081804");
+    expect(await verifyTotp(secret, await totp(secret, 59_000), 59_000)).toBe(true);
+    expect(await verifyTotp(secret, "000000", 59_000)).toBe(false);
+  });
+
+  it("cadastro: só liga com o código do aplicativo; devolve 10 códigos; segredos nunca saem na API", async () => {
+    as("usr_carlos");
+    const setup = await mfaApi.startEnrollment();
+    prod();
+    await expect(mfaApi.confirmEnrollment("123456")).rejects.toMatchObject({ status: 422 });
+    const code = await totp(setup.secret.replace(/\s/g, ""));
+    const r = await mfaApi.confirmEnrollment(code);
+    expect(r.recoveryCodes).toHaveLength(10);
+    expect(await mfaApi.status()).toMatchObject({ enabled: true, recoveryCodesLeft: 10 });
+    const me = (await authApi.me()) as Record<string, unknown>;
+    expect(me.mfaSecret).toBeUndefined();
+    expect(me.mfaRecoveryCodes).toBeUndefined();
+    expect(logs("mfa_enabled")).toHaveLength(1);
+  });
+
+  it("login fora da demonstração: código errado falha; TOTP e código de recuperação (uso único) entram", async () => {
+    as("usr_carlos");
+    const setup = await mfaApi.startEnrollment();
+    const secret = setup.secret.replace(/\s/g, "");
+    const { recoveryCodes } = await mfaApi.confirmEnrollment(await totp(secret));
+    as(null);
+    prod();
+    let r = await authApi.login("carlos@draw.com.br", "draw123");
+    if (!r.mfaRequired || r.mfaEnroll) throw new Error("esperava 2FA");
+    await expect(authApi.verifyMfa(r.mfaChallenge, "000000")).rejects.toMatchObject({ status: 422 });
+    await authApi.verifyMfa(r.mfaChallenge, await totp(secret));
+    expect((await authApi.me())?.id).toBe("usr_carlos");
+    await authApi.logout();
+    r = await authApi.login("carlos@draw.com.br", "draw123");
+    if (!r.mfaRequired) throw new Error("esperava 2FA");
+    await authApi.verifyMfa(r.mfaChallenge, recoveryCodes[0].toUpperCase());
+    expect(logs("mfa_recovery_used")).toHaveLength(1);
+    await authApi.logout();
+    r = await authApi.login("carlos@draw.com.br", "draw123");
+    if (!r.mfaRequired) throw new Error("esperava 2FA");
+    await expect(authApi.verifyMfa(r.mfaChallenge, recoveryCodes[0])).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("admin sem 2FA cadastra no login antes de qualquer sessão", async () => {
+    const r = await authApi.login("admin@drawthelaw.com.br", "draw123");
+    expect(r).toMatchObject({ mfaRequired: true, mfaEnroll: true });
+    if (!r.mfaRequired) throw new Error();
+    expect(await authApi.me()).toBeNull();
+    await mfaApi.startEnrollmentForChallenge(r.mfaChallenge);
+    const { recoveryCodes } = await mfaApi.confirmEnrollmentForChallenge(r.mfaChallenge, "123456");
+    expect(recoveryCodes).toHaveLength(10);
+    expect((await authApi.me())?.id).toBe("usr_admin");
+    await expect(mfaApi.disable("draw123")).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("promover a admin sem 2FA derruba a sessão e o próximo login pede o cadastro", async () => {
+    const v = () => loadDb().users.find((u) => u.id === "usr_carlos")?.sessionVersion ?? 0;
+    const before = v();
+    as("usr_paula");
+    await usersApi.update("usr_carlos", { role: "admin" });
+    expect(v()).toBe(before + 1); // sessão aberta com a versão anterior deixa de valer
+    as(null);
+    const r = await authApi.login("carlos@draw.com.br", "draw123");
+    expect(r).toMatchObject({ mfaRequired: true, mfaEnroll: true });
+  });
+
+  it("convite de admin: aceitar não cria sessão até cadastrar o 2FA", async () => {
+    as("usr_paula");
+    const inv = await usersApi.invite({ name: "Nova Admin", email: "nadmin@draw.com.br", role: "admin" });
+    as(null);
+    const r = await authApi.acceptInvite(inv.inviteToken, { name: "Nova Admin", password: "senhaforte1" });
+    expect(r.mfaEnrollChallenge).toBeTruthy();
+    expect(await authApi.me()).toBeNull();
+    await mfaApi.startEnrollmentForChallenge(r.mfaEnrollChallenge!);
+    await mfaApi.confirmEnrollmentForChallenge(r.mfaEnrollChallenge!, "654321");
+    expect((await authApi.me())?.id).toBe(inv.id);
+  });
+
+  it("organização pode deixar de exigir; não-admin desliga com a senha", async () => {
+    as("usr_paula");
+    const org = loadDb().organizations[0].settings;
+    await usersApi.updateOrganization({ ...org, requireMfaForAdmins: false });
+    as(null);
+    expect(await authApi.login("admin@drawthelaw.com.br", "draw123")).toMatchObject({ mfaRequired: false });
+    as("usr_carlos");
+    await mfaApi.startEnrollment();
+    await mfaApi.confirmEnrollment("123456");
+    await expect(mfaApi.disable("errada")).rejects.toMatchObject({ status: 422 });
+    await mfaApi.disable("draw123");
+    expect((await mfaApi.status()).enabled).toBe(false);
   });
 });
