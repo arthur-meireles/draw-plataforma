@@ -417,3 +417,24 @@ describe("RN-68 — cancelar projeto com pendências financeiras", () => {
     expect(after.notifications.some((n) => n.userId === "usr_fernanda" && n.projectId === p.id && n.title === "Projeto cancelado com pendências financeiras")).toBe(true);
   });
 });
+
+describe("RN-69 — importação de recebíveis preserva NF e recebimento", () => {
+  it("linha com NF e recebimento entra como recebido; recebido sem emissão é erro", async () => {
+    const { importsApi } = await import("./index");
+    const code = loadDb().projects.find((p) => !p.deletedAt)!.code;
+    const rows = [
+      { codigo_projeto: code, descricao: "Hist pago", valor: "1.000,00", vencimento: "2026-01-10", nf_numero: "321", emissao: "2026-01-05", recebido_em: "2026-01-12" },
+      { codigo_projeto: code, descricao: "Hist faturado", valor: "500,00", vencimento: "2026-02-10", nf_numero: "322", emissao: "2026-02-01", recebido_em: "" },
+      { codigo_projeto: code, descricao: "Ruim", valor: "10,00", vencimento: "2026-02-10", nf_numero: "", emissao: "", recebido_em: "2026-02-11" },
+    ];
+    const report = await importsApi.preview("recebiveis", rows);
+    expect(report.errors.some((e) => e.line === 4)).toBe(true);
+    await importsApi.commit("recebiveis", "r.csv", rows, report);
+    const recs = loadDb().receivables;
+    const pago = recs.find((r) => r.description === "Hist pago")!;
+    expect(pago.status).toBe("recebido");
+    expect(pago.invoiceNumber).toBe("321");
+    expect(recs.find((r) => r.description === "Hist faturado")!.status).toBe("faturado");
+    expect(recs.some((r) => r.description === "Ruim")).toBe(false);
+  });
+});
