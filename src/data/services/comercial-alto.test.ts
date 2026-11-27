@@ -68,3 +68,15 @@ describe("RN-55 — trocar o responsável o coloca na equipe", () => {
     await expect(projectsApi.update(p.id, { ownerId: "usr_julia" })).rejects.toMatchObject({ status: 422 });
   });
 });
+
+describe("RN-56 — escopo de edição da Operação", () => {
+  it("Operação edita prazo/prioridade, mas não responsável, cliente, faturamento ou valores", async () => {
+    const p = await directProject();
+    as("usr_lucas");
+    await projectsApi.update(p.id, { priorityKey: "alta", dueAt: new Date().toISOString() });
+    expect(fresh(p.id).priorityKey).toBe("alta");
+    await expect(projectsApi.update(p.id, { ownerId: "usr_lucas" })).rejects.toMatchObject({ status: 403 });
+    await expect(projectsApi.update(p.id, { paymentCondition: "a_vista" })).rejects.toMatchObject({ status: 403 });
+    await expect(projectsApi.update(p.id, { billingContactId: null })).rejects.toMatchObject({ status: 403 });
+  });
+});

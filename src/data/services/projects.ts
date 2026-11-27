@@ -139,6 +139,9 @@ function applyFilters(db: Database, rows: Project[], f: ProjectFilters): Project
   });
 }
 
+/** RN-56 — campos que a Operação pode editar no projeto em que está alocada. */
+const OPERATION_EDITABLE = ["title", "briefing", "priorityKey", "size", "dueAt", "estimatedEndAt"] as const;
+
 export const projectsApi = {
   list: (filters: ProjectFilters = {}) =>
     read((db, me) =>
@@ -306,6 +309,11 @@ export const projectsApi = {
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
       if (!canWriteAll(me, "projects") && !(me.role === "operacao")) throw new ApiError(403, "Sem permissão para editar o projeto.");
+      // RN-56 — Operação (escopo P) edita só a execução do projeto em que está alocada.
+      if (!canWriteAll(me, "projects")) {
+        const blocked = Object.keys(patch).filter((k) => !OPERATION_EDITABLE.includes(k as (typeof OPERATION_EDITABLE)[number]));
+        if (blocked.length) throw new ApiError(403, "Seu perfil edita só título, briefing, prioridade, tamanho e prazos. Peça à gestão para mudar responsável, cliente, faturamento ou valores.");
+      }
       if (patch.clientId && patch.clientId !== p.clientId) {
         const issued = db.receivables.some((r) => r.projectId === p.id && r.issuedAt);
         if (issued) throw new ApiError(409, "Este projeto já tem nota fiscal emitida e não pode trocar de cliente (RN-12).");
