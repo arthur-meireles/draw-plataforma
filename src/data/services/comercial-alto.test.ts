@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { financeApi, projectLifecycleApi, projectsApi, proposalsApi, tasksApi } from "./index";
+import { approvalsApi, financeApi, projectLifecycleApi, projectsApi, proposalsApi, tasksApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -225,5 +225,34 @@ describe("RN-72/73 — tarefas do modelo por papel e no prazo; cotação com tar
     const t = loadDb().tasks.find((x) => x.projectId === p.id && x.title === "Roteiro com freelancer")!;
     expect(t.assigneeFreelancerId).toBe(julia.id);
     expect(loadDb().notifications.some((n) => n.userId === "usr_julia" && n.entityId === t.id)).toBe(true);
+  });
+});
+
+describe("RN-74 — decisão de aprovação move a etapa", () => {
+  it("aprovado no roteiro avança para design; ajustes no design volta para ajustes de design", async () => {
+    const p = await directProject();
+    const a1 = await approvalsApi.request(p.id, { stageKey: "roteiro", requestedFrom: "Cliente" });
+    await approvalsApi.decide(a1.id, "aprovado");
+    expect(fresh(p.id).projectStageKey).toBe("design");
+    const a2 = await approvalsApi.request(p.id, { stageKey: "design", requestedFrom: "Cliente" });
+    await approvalsApi.decide(a2.id, "ajustes", "Trocar a paleta");
+    expect(fresh(p.id).projectStageKey).toBe("ajustes_design");
+    expect(loadDb().events.some((e) => e.type === "project.stage_changed" && e.projectId === p.id && e.data.via === "aprovacao")).toBe(true);
+  });
+  it("validação aprovada não conclui sozinha; aprovação de etapa antiga ou projeto pausado não move", async () => {
+    const p = await directProject();
+    await projectsApi.move(p.id, { stageKey: "validacao_cliente", position: 1 });
+    const pending = loadDb().approvals.find((a) => a.projectId === p.id && a.decision === "pendente")!;
+    await approvalsApi.decide(pending.id, "aprovado");
+    expect(fresh(p.id).status).toBe("ativo");
+    expect(fresh(p.id).projectStageKey).toBe("validacao_cliente");
+    expect(loadDb().notifications.some((n) => n.userId === "usr_carlos" && n.title.includes("pronto para concluir"))).toBe(true);
+    const old = await approvalsApi.request(p.id, { stageKey: "roteiro", requestedFrom: "Cliente" });
+    await approvalsApi.decide(old.id, "ajustes", "x");
+    expect(fresh(p.id).projectStageKey).toBe("validacao_cliente");
+    const again = await approvalsApi.request(p.id, { stageKey: "validacao_cliente", requestedFrom: "Cliente" });
+    await projectsApi.pause(p.id, "Férias");
+    await approvalsApi.decide(again.id, "ajustes", "y");
+    expect(fresh(p.id).projectStageKey).toBe("validacao_cliente");
   });
 });

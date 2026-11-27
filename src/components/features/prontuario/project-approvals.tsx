@@ -51,7 +51,7 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
   const [sending, setSending] = useState<null | { kind: "aprovacao"; approvalId?: ID; stageKey?: ProjectStageKey } | { kind: "entrega" }>(null);
   const [deciding, setDeciding] = useState<{ approval: Approval; decision: "ajustes" | "negado" } | null>(null);
   const decide = useApiMutation(({ id, decision, reason }: { id: ID; decision: "aprovado" | "ajustes" | "negado"; reason?: string }) => approvalsApi.decide(id, decision, reason), {
-    success: (a) => (a.decision === "aprovado" ? "Aprovação registrada" : a.decision === "ajustes" ? "Pedido de ajustes registrado" : "Negativa registrada"),
+    success: (a) => (a.decision === "aprovado" ? (a.stageKey === "validacao_cliente" ? "Validação registrada. O projeto está pronto para concluir." : "Aprovação registrada. O projeto avança de etapa quando estava nela.") : a.decision === "ajustes" ? "Pedido de ajustes registrado. O projeto volta para a etapa de ajustes." : "Negativa registrada"),
     onSuccess: () => setDeciding(null),
   });
   const canDecide = !isFreelancer && canWrite("projects");
@@ -120,7 +120,7 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
         open={!!deciding}
         onOpenChange={(o) => !o && setDeciding(null)}
         title={deciding?.decision === "ajustes" ? "Pedir ajustes?" : "Registrar negativa?"}
-        description={deciding?.decision === "ajustes" ? "A equipe é avisada e vê o motivo no histórico." : "A equipe é avisada e vê o motivo no histórico. A etapa não avança."}
+        description={deciding?.decision === "ajustes" ? "A equipe é avisada e vê o motivo no histórico. Se o projeto ainda estiver nesta etapa, ele volta para a etapa de ajustes." : "A equipe é avisada e vê o motivo no histórico. A etapa não avança."}
         confirmLabel={deciding?.decision === "ajustes" ? "Pedir ajustes" : "Registrar negativa"}
         destructive={deciding?.decision === "negado"}
         reason={{ label: deciding?.decision === "ajustes" ? "O que precisa mudar" : "Motivo da negativa", placeholder: "Seja específico para a equipe agir", required: true }}
