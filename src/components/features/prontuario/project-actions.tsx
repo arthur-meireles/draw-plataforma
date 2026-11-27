@@ -7,6 +7,7 @@ import { projectLifecycleApi, projectsApi } from "@/data/services";
 import { toast } from "sonner";
 import { CompleteProjectDialog } from "./complete-project-dialog";
 import { UndoApprovalDialog } from "./undo-approval-dialog";
+import { CancelProjectDialog } from "./cancel-project-dialog";
 import type { ProjectDetail } from "./use-project";
 
 type Pending = "lost" | "cancel" | "complete" | "archive" | "pause" | "undoApproval" | "reopenDone" | "reactivate" | null;
@@ -17,7 +18,6 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
   const [pending, setPending] = useState<Pending>(null);
   const close = () => setPending(null);
   const lost = useApiMutation((reason: string) => projectsApi.markLost(project.id, reason), { success: "Cotação marcada como perdida", onSuccess: close });
-  const cancel = useApiMutation((reason: string) => projectsApi.cancel(project.id, reason), { success: "Projeto cancelado", onSuccess: close });
   const archive = useApiMutation(() => projectsApi.archive(project.id), { success: "Projeto arquivado. Nada foi apagado.", onSuccess: close });
   const pause = useApiMutation((reason: string) => projectsApi.pause(project.id, reason), { success: "Projeto marcado como parado", onSuccess: close });
   const resume = useApiMutation(() => projectsApi.resume(project.id), { success: "Projeto retomado" });
@@ -101,17 +101,7 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
         loading={pause.isPending}
         onConfirm={(r) => pause.mutate(r ?? "")}
       />
-      <ConfirmDialog
-        open={pending === "cancel"}
-        onOpenChange={(o) => !o && close()}
-        title={`Cancelar ${project.code}?`}
-        description="Recebíveis ainda previstos são cancelados. O projeto e todo o histórico continuam consultáveis."
-        confirmLabel="Cancelar projeto"
-        destructive
-        reason={{ label: "Motivo do cancelamento", placeholder: "Explique por que o projeto foi cancelado", required: true }}
-        loading={cancel.isPending}
-        onConfirm={(r) => cancel.mutate(r ?? "")}
-      />
+      <CancelProjectDialog project={project} open={pending === "cancel"} onOpenChange={(o) => !o && close()} />
       <ConfirmDialog
         open={pending === "archive"}
         onOpenChange={(o) => !o && close()}

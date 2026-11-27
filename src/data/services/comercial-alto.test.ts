@@ -308,3 +308,36 @@ describe("RF-M4-08 — criar tarefa direto (Minhas tarefas) e projeto encerrado"
     await expect(tasksApi.create({ projectId: p.id, title: "Depois" })).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe("RN-73 — encerramento: conclusão fatura a entrega; cancelamento encerra o que está aberto", () => {
+  it("conclusão traz a parcela 'na entrega' para hoje e avisa o Financeiro", async () => {
+    const later = new Date(Date.now() + 40 * 86_400_000).toISOString();
+    const p = await directProject({
+      contractedAmountCents: 200_000,
+      installments: [
+        { description: "50% na aprovação", amountCents: 100_000, expectedAt: new Date().toISOString() },
+        { description: "50% na entrega", amountCents: 100_000, expectedAt: later },
+      ],
+    });
+    await projectsApi.complete(p.id);
+    const r = loadDb().receivables.find((x) => x.projectId === p.id && x.description === "50% na entrega")!;
+    expect(new Date(r.expectedAt).getTime()).toBeLessThan(new Date(later).getTime());
+    expect(loadDb().notifications.some((n) => n.userId === "usr_fernanda" && n.projectId === p.id && n.title.includes("a faturar"))).toBe(true);
+  });
+  it("cancelamento retira aprovações pendentes e avisa sobre NF emitida e freelancer sem pagamento", async () => {
+    const fl = loadDb().freelancers.find((f) => f.userId === "usr_julia")!;
+    const p = await directProject({ team: [{ freelancerId: fl.id, memberRole: "designer", agreedAmountCents: 10_000 }] });
+    await approvalsApi.request(p.id, { stageKey: "roteiro", requestedFrom: "Cliente" });
+    const rec = loadDb().receivables.find((r) => r.projectId === p.id)!;
+    await financeApi.issueInvoice(rec.id, { invoiceNumber: "77", issuedAt: new Date().toISOString() });
+    const { projectClosingApi } = await import("./index");
+    const prev = await projectClosingApi.cancelPreview(p.id);
+    expect(prev).toMatchObject({ invoicedOpen: 1, pendingApprovals: 1 });
+    expect(prev.freelancers).toHaveLength(1);
+    await projectsApi.cancel(p.id, "Cliente desistiu");
+    const db = loadDb();
+    expect(db.approvals.filter((a) => a.projectId === p.id && a.decision === "pendente" && !a.deletedAt)).toHaveLength(0);
+    expect(db.notifications.some((n) => n.userId === "usr_fernanda" && n.title.includes("NF(s) emitida(s)"))).toBe(true);
+    expect(db.notifications.some((n) => n.userId === "usr_fernanda" && n.title.includes("freelancers sem pagamento"))).toBe(true);
+  });
+});

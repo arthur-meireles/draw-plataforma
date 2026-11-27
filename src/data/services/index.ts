@@ -19,4 +19,4 @@ export { admExtraApi } from "./adm-extra";
 export { clientLinksApi, publicClientLinkApi, CLIENT_LINK_DAYS, type ClientLinkPurpose, type ClientLinkStatus } from "./client-links";
 export { payablesExtraApi, type CompletionDecision, type FreelancerPaymentInput, type ManualInvoiceInput } from "./payables-extra";
 export { masterImportApi, parseMasterSheet, MASTER_TEMPLATE_HEADERS, MASTER_TEMPLATE_EXAMPLE, type MasterRow, type MasterReport } from "./importacao";
-export { projectLifecycleApi } from "./project-lifecycle";
+export { projectClosingApi, projectLifecycleApi } from "./project-lifecycle";

@@ -5,10 +5,10 @@
  */
 import { nowIso } from "../db";
 import { PROJECT_STAGES } from "../reference";
-import type { Database, ID, Project } from "../types";
+import type { Database, ID, Project, User } from "../types";
 import { ApiError, assertProjectVisible, emit, read, requireAccess, touch, write } from "./_core";
 import { notifyMany, projectAudience } from "./audience";
-import { canSeeMoney } from "@/lib/permissions";
+import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 /** Etapas de execução (tarefas geradas na ativação pertencem a elas). */
 const EXECUTION_STAGES = new Set<string>(PROJECT_STAGES.map((s) => s.key));
@@ -138,5 +138,76 @@ export const projectLifecycleApi = {
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto reativado", body: `Motivo: ${why}`, project: p });
       if (restored.length) notifyMany(db, me, financeTeam(db), { type: "projeto", title: "Projeto reativado — recebíveis voltaram a previstos", body: `${restored.length} recebível(is) restaurado(s)`, project: p });
       return p;
+    }),
+};
+
+/* ───────── RN-73 — encerramento: conclusão fatura a entrega; cancelamento encerra o que está aberto ───────── */
+
+const isDeliveryInstallment = (db: Database, r: Database["receivables"][number]) => {
+  const rule = r.proposalInstallmentId ? db.proposalInstallments.find((i) => i.id === r.proposalInstallmentId)?.dueRule : null;
+  return /entrega/i.test(rule ?? "") || /entrega/i.test(r.description);
+};
+
+/** Na conclusão: parcelas "Na entrega" previstas para depois de hoje passam a vencer hoje; o Financeiro é avisado do que faturar. */
+export function billDeliveryOnCompletion(db: Database, me: User, p: Project) {
+  const today = new Date();
+  const pending = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status === "previsto");
+  const moved: { id: ID; from: string }[] = [];
+  pending.filter((r) => isDeliveryInstallment(db, r) && new Date(r.expectedAt) > today).forEach((r) => {
+    moved.push({ id: r.id, from: r.expectedAt });
+    r.expectedAt = today.toISOString();
+    touch(r);
+  });
+  if (moved.length) emit(db, me, { type: "receivable.delivery_due", entityType: "project", entityId: p.id, project: p, data: { count: moved.length, receivables: moved } });
+  if (pending.length)
+    notifyMany(db, me, financeTeam(db), { type: "projeto", title: `Projeto concluído: ${pending.length} parcela(s) a faturar`, body: moved.length ? `${moved.length} parcela(s) "na entrega" agora vencem hoje` : undefined, project: p });
+  return moved.length;
+}
+
+/** O que o cancelamento afeta (prévia do diálogo). */
+function cancelImpact(db: Database, p: Project) {
+  const invoiced = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status !== "cancelado" && r.status !== "recebido" && !!r.issuedAt);
+  const openTasks = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida").length;
+  const pendingApprovals = db.approvals.filter((a) => a.projectId === p.id && a.decision === "pendente" && !a.deletedAt);
+  const freelancers = db.projectMembers
+    .filter((m) => m.projectId === p.id && !m.deletedAt && m.freelancerId && !m.paymentWaived && !db.payables.some((x) => x.projectMemberId === m.id && !x.deletedAt))
+    .map((m) => ({ memberId: m.id, name: db.freelancers.find((f) => f.id === m.freelancerId)?.name ?? "Freelancer", agreedAmountCents: m.agreedAmountCents }));
+  const previsto = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status === "previsto").length;
+  return { invoiced, openTasks, pendingApprovals, freelancers, previsto };
+}
+
+/** No cancelamento: retira aprovações pendentes e links abertos ao cliente; avisa Financeiro (NF emitida) e contas a pagar (freelancers sem pagamento). */
+export function closeOnCancel(db: Database, me: User, p: Project) {
+  const now = nowIso();
+  const impact = cancelImpact(db, p);
+  impact.pendingApprovals.forEach((a) => {
+    a.deletedAt = now;
+    touch(a);
+  });
+  const links = db.shareLinks.filter((l) => l.projectId === p.id && ["proposta", "aprovacao", "entrega"].includes(l.purpose) && !l.revokedAt && !l.response);
+  links.forEach((l) => (l.revokedAt = now));
+  if (impact.invoiced.length)
+    notifyMany(db, me, financeTeam(db), { type: "projeto", title: `Projeto cancelado com ${impact.invoiced.length} NF(s) emitida(s)`, body: "Revise a cobrança ou o cancelamento das notas em A receber", project: p });
+  const payers = db.users.filter((u) => u.status === "ativo" && canWriteAll(u, "payables")).map((u) => u.id);
+  if (impact.freelancers.length)
+    notifyMany(db, me, payers, { type: "projeto", title: "Projeto cancelado: freelancers sem pagamento", body: `${impact.freelancers.map((f) => f.name).join(", ")} — avalie pagamento proporcional na aba Equipe`, project: p });
+  return { approvalsWithdrawn: impact.pendingApprovals.length, linksRevoked: links.length, invoicedOpen: impact.invoiced.length, freelancersWithoutPayment: impact.freelancers.length, openTasks: impact.openTasks };
+}
+
+export const projectClosingApi = {
+  /** Prévia do "Cancelar projeto…" (RN-73). */
+  cancelPreview: (projectId: ID) =>
+    read((db, me) => {
+      const p = assertProjectVisible(db, me, projectId);
+      const i = cancelImpact(db, p);
+      const money = canSeeMoney(me);
+      return {
+        receivablesToCancel: i.previsto,
+        invoicedOpen: i.invoiced.length,
+        invoicedOpenCents: money ? i.invoiced.reduce((a, r) => a + r.amountCents, 0) : null,
+        openTasks: i.openTasks,
+        pendingApprovals: i.pendingApprovals.length,
+        freelancers: i.freelancers.map((f) => ({ ...f, agreedAmountCents: money ? f.agreedAmountCents : null })),
+      };
     }),
 };

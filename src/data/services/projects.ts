@@ -33,6 +33,7 @@ import { freelancerUserId, notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 import { afterCompletionTeamChange } from "./team-after-completion";
+import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -449,7 +450,8 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
-      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length } });
+      const deliveryDue = billDeliveryOnCompletion(db, me, p);
+      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length, deliveryInstallmentsDue: deliveryDue } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto concluído", body: `${me.name} concluiu o projeto`, project: p });
       return { project: p, payablesCreated: created.length };
     }),
@@ -496,7 +498,9 @@ export const projectsApi = {
       const cancelled = db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto" && !r.deletedAt);
       cancelled.forEach((r) => (r.status = "cancelado"));
       // RN-59 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id) } });
+      // RN-73 — retira pendências com o cliente e avisa Financeiro/contas a pagar do que segue em aberto
+      const closing = closeOnCancel(db, me, p);
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), ...closing } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),
