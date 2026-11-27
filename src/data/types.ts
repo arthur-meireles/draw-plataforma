@@ -605,6 +605,16 @@ export interface Notification extends BaseEntity {
   readAt: ISODate | null;
 }
 
+/**
+ * RN-34 — marca de alerta já gerado pela rotina de prazos (`jobsApi.runDueSweep`). Chave única por
+ * marco (ex.: `prazo:task:<id>:<dueAt>:<userId>`) garante que a rotina é idempotente: rodar de novo no
+ * mesmo dia (ou em vários dias) não repete o aviso. No back-end: tabela `due_alerts` com `key` único.
+ */
+export interface DueAlert extends BaseEntity {
+  key: string;
+  sentAt: ISODate;
+}
+
 export interface NotificationPreference extends BaseEntity {
   userId: ID;
   type: NotificationType;
@@ -691,6 +701,8 @@ export interface Database {
   events: DomainEvent[];
   notifications: Notification[];
   notificationPreferences: NotificationPreference[];
+  /** RN-34 — alertas já gerados pela rotina de prazos (idempotência). */
+  dueAlerts: DueAlert[];
   imports: ImportJob[];
   emailLogs: EmailLog[];
   systemMailSettings: SystemMailSettings[];

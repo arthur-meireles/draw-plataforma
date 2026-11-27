@@ -5,7 +5,8 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ApiError, authApi, clientsApi, notificationsApi, peopleApi, projectTypesApi, usersApi } from "./services";
+import { useEffect } from "react";
+import { ApiError, authApi, clientsApi, jobsApi, notificationsApi, peopleApi, projectTypesApi, usersApi } from "./services";
 
 export function useApiQuery<T>(key: QueryKey, fn: () => Promise<T>, opts?: Omit<UseQueryOptions<T, ApiError>, "queryKey" | "queryFn">) {
   return useQuery<T, ApiError>({ queryKey: key, queryFn: fn, ...opts });
@@ -51,3 +52,30 @@ export const useAllPeople = () => useApiQuery(["people", "all"], peopleApi.all, 
 export const useClientOptions = () => useApiQuery(["clients", "options"], () => clientsApi.list(), { staleTime: 30_000 });
 export const useUnreadCount = () => useApiQuery(["notifications", "unread"], notificationsApi.unreadCount, { refetchInterval: 30_000 });
 export const useOrganization = () => useApiQuery(["organization"], usersApi.organization, { staleTime: 60_000 });
+
+/**
+ * RN-34 — rotina de prazos (prazo/atraso de tarefas e projetos, documentos vencendo, recebíveis vencidos).
+ * O chassi roda ao abrir o app e a cada 30 minutos; no back-end real é um job diário. Idempotente.
+ */
+export function useDueSweep(enabled: boolean) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const run = () =>
+      jobsApi
+        .runDueSweep()
+        .then((r) => {
+          if (alive && r.created > 0) qc.invalidateQueries({ queryKey: ["notifications"] });
+        })
+        .catch(() => {
+          /* sem sessão ou armazenamento indisponível: tenta de novo no próximo ciclo */
+        });
+    void run();
+    const id = window.setInterval(run, 30 * 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [enabled, qc]);
+}

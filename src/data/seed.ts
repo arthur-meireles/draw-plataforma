@@ -1101,6 +1101,7 @@ export function createSeed(): Database {
     accessLogs: [],
     passwordResets: [],
     userInvites: [],
+    dueAlerts: [],
     clientGroups,
     clients,
     clientContacts,

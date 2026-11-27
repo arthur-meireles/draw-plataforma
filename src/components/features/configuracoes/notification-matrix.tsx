@@ -7,8 +7,8 @@ import type { NotificationType } from "@/data/types";
 const TYPES: { type: NotificationType; label: string; description: string }[] = [
   { type: "atribuicao", label: "Atribuição", description: "Quando você vira responsável por um projeto, entra numa equipe ou recebe uma tarefa" },
   { type: "mencao", label: "Menções", description: "Quando alguém menciona você em um comentário" },
-  { type: "prazo", label: "Prazo chegando", description: "Tarefas e entregas perto do vencimento" },
-  { type: "atraso", label: "Atrasos", description: "Tarefas que passaram do prazo" },
+  { type: "prazo", label: "Prazo chegando", description: "Tarefas, entregas e documentos perto do vencimento" },
+  { type: "atraso", label: "Atrasos", description: "Tarefas, projetos, documentos e recebimentos que passaram do prazo" },
   { type: "aprovacao", label: "Aprovações", description: "Pedidos e decisões de aprovação nos seus projetos" },
   { type: "cliente", label: "Respostas do cliente", description: "Quando o cliente aprova ou pede ajustes pelo link enviado" },
   { type: "etapa", label: "Mudança de etapa", description: "Quando um projeto seu muda de etapa" },

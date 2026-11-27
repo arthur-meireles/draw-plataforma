@@ -6,7 +6,7 @@
  */
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useMe } from "@/data/hooks";
+import { useDueSweep, useMe } from "@/data/hooks";
 import { AppShellSkeleton } from "@/components/ui";
 import { OfflineIndicator, UpdateBanner } from "@/components/pwa/pwa-ui";
 import { LayoutContext } from "./layout-context";
@@ -17,6 +17,7 @@ import { CommandPalette } from "./command-palette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
+  useDueSweep(!!me.data);
   const router = useRouter();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
