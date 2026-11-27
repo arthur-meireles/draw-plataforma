@@ -4,6 +4,7 @@ import type { Address, Client, ClientContact, Freelancer, ID, ProjectStageKey, P
 import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { issueUserInvite } from "./admin";
 import { toListItem, computeFinancials } from "./projects";
+import { effectiveReceivableStatus } from "./finance-rules";
 import { canRead, canSeeMoney, canWriteAll, access } from "@/lib/permissions";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 
@@ -86,7 +87,8 @@ export const clientsApi = {
         contacts: db.clientContacts.filter((x) => x.clientId === c.id && !x.deletedAt),
         projects: projects.map((p) => toListItem(db, p, me)),
         proposals: money ? db.proposals.filter((pr) => projects.some((p) => p.id === pr.projectId) && !pr.deletedAt).map((pr) => ({ ...pr, projectCode: projects.find((p) => p.id === pr.projectId)!.code })) : [],
-        receivables: receivables.map((r) => ({ ...r, projectCode: db.projects.find((p) => p.id === r.projectId)?.code ?? "" })),
+        // RN-45 — mesmo status efetivo da lista de contas a receber (vencido derivado)
+        receivables: receivables.map((r) => ({ ...r, status: effectiveReceivableStatus(r), projectCode: db.projects.find((p) => p.id === r.projectId)?.code ?? "" })),
         indicators: {
           projects: projects.length,
           active: projects.filter((p) => p.status === "ativo").length,

@@ -81,3 +81,18 @@ describe("RN-45 — prazo do cliente no vencimento", () => {
     expect(after.dueBasis).toContain("Emissão da NF + 20 dias");
   });
 });
+
+describe("RN-45 — vencido derivado em todas as telas", () => {
+  it("ficha do cliente e cartão do projeto mostram vencido", async () => {
+    const db = loadDb();
+    const r = db.receivables.find((x) => x.status === "previsto" && !x.deletedAt)!;
+    r.expectedAt = new Date(Date.now() - 5 * DAY).toISOString();
+    save(db);
+    const { clientsApi } = await import("./index");
+    const c = await clientsApi.get(r.clientId);
+    expect(c.receivables.find((x) => x.id === r.id)?.status).toBe("vencido");
+    const p = c.projects.find((x) => x.id === r.projectId);
+    if (p) expect(p.billingStatus).toBe("vencido");
+    expect(loadDb().receivables.find((x) => x.id === r.id)?.status).toBe("previsto");
+  });
+});

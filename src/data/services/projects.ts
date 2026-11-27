@@ -32,6 +32,7 @@ import {
 import { notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
+import { effectiveReceivableStatus } from "./finance-rules";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -58,7 +59,7 @@ export interface ProjectListItem extends Project {
   tasksOpen: number;
   isOverdue: boolean;
   pendingApproval: boolean;
-  billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido";
+  billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido" | "vencido";
 }
 
 /** RN-05 — próximo código do prefixo (também usado pela importação da planilha master). */
@@ -84,7 +85,9 @@ export function toListItem(db: Database, p: Project, me: User): ProjectListItem 
   const billingStatus: ProjectListItem["billingStatus"] =
     recs.length === 0
       ? "sem_faturamento"
-      : recs.every((r) => r.status === "recebido")
+      : recs.some((r) => effectiveReceivableStatus(r) === "vencido")
+        ? "vencido"
+        : recs.every((r) => r.status === "recebido")
         ? "recebido"
         : recs.every((r) => r.status !== "previsto")
           ? "faturado"

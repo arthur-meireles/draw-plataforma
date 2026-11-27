@@ -205,8 +205,8 @@ export const ProposalStatusBadge = ({ status }: { status: ProposalStatus }) => <
 const approvalTone: Record<ApprovalDecision, Tone> = { pendente: "warning", aprovado: "success", ajustes: "orange", negado: "danger" };
 export const ApprovalBadge = ({ decision }: { decision: ApprovalDecision }) => <Badge tone={approvalTone[decision]} pulseKey={decision} dot>{APPROVAL_DECISION_LABEL[decision]}</Badge>;
 
-const billingLabel = { sem_faturamento: null, a_faturar: "A faturar", parcial: "Faturado parcial", faturado: "Faturado", recebido: "Recebido" } as const;
-const billingTone = { a_faturar: "neutral", parcial: "info", faturado: "info", recebido: "success" } as const;
+const billingLabel = { sem_faturamento: null, a_faturar: "A faturar", parcial: "Faturado parcial", faturado: "Faturado", recebido: "Recebido", vencido: "Cobrança vencida" } as const;
+const billingTone = { a_faturar: "neutral", parcial: "info", faturado: "info", recebido: "success", vencido: "danger" } as const;
 export function BillingBadge({ status }: { status: keyof typeof billingLabel }) {
   if (status === "sem_faturamento") return null;
   return (
