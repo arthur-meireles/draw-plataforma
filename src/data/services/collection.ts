@@ -34,7 +34,7 @@ export const collectionApi = {
         status === "vencido"
           ? `Identificamos que a ${nf}, no valor de ${brl(r.amountCents)}, referente a "${r.description}" do projeto ${p.code} — ${p.title}, venceu em ${day(r.expectedAt)} e ainda não consta como paga.`
           : `Segue a ${nf}, no valor de ${brl(r.amountCents)}, referente a "${r.description}" do projeto ${p.code} — ${p.title}, com vencimento em ${day(r.expectedAt)}.`,
-        c.paymentTermsNote ? `Condição combinada: ${c.paymentTermsNote}.` : null,
+        c.paymentTermsNote ? `Condição combinada: ${c.paymentTermsNote.replace(/[.\s]+$/, "")}.` : null,
         status === "vencido" ? "Se o pagamento já foi feito, pode desconsiderar esta mensagem e, se possível, nos envie o comprovante." : null,
         "",
         `Qualquer dúvida, fale com o Financeiro da Draw${fin.email ? `: ${fin.email}` : ""}${fin.phone ? ` · ${fin.phone}` : ""}.`,

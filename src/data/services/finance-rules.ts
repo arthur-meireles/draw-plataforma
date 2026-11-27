@@ -68,10 +68,19 @@ export function financeAudience(db: Database, p?: Project | null): ID[] {
   return active.filter((u) => u.role === "admin").map((u) => u.id);
 }
 
-/** Mascara um documento/chave mostrando só os 4 últimos caracteres úteis (RN-48). */
+/**
+ * Mascara um documento/chave (RN-48): e-mail vira "j•••@dominio"; documento/telefone mostra só os 4 últimos dígitos;
+ * outras chaves, os 4 últimos caracteres.
+ */
 export function maskTail(value: string | null | undefined, keep = 4): string | null {
   if (!value) return null;
   const clean = value.trim();
+  if (clean.includes("@")) {
+    const [local, domain] = clean.split("@");
+    return `${local.slice(0, 1)}•••@${domain}`;
+  }
+  const digits = clean.replace(/\D/g, "");
+  if (digits.length >= 8) return `•••• ${digits.slice(-keep)}`;
   if (clean.length <= keep) return "•".repeat(clean.length);
   return `•••• ${clean.slice(-keep)}`;
 }
