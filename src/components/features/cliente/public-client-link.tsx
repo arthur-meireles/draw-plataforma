@@ -22,7 +22,7 @@ const HEADING: Record<Info["purpose"], (i: Info) => { title: string; description
 
 function Blocked({ icon, title, description }: { icon: IconName; title: string; description: string }) {
   return (
-    <AuthLayout footer="Dúvidas? Responda ao e-mail que você recebeu da Draw.">
+    <AuthLayout audience="externo" footer="Dúvidas? Responda ao e-mail que você recebeu da Draw.">
       <EmptyState icon={icon} title={title} description={description} />
     </AuthLayout>
   );
@@ -168,7 +168,7 @@ export function PublicClientLink({ token }: { token: string }) {
 
   if (q.isLoading)
     return (
-      <AuthLayout width="lg">
+      <AuthLayout audience="externo" width="lg">
         <div className="space-y-5" aria-busy role="status" aria-label="Carregando">
           <div className="space-y-2">
             <Skeleton className="h-7 w-2/3" />
@@ -187,7 +187,7 @@ export function PublicClientLink({ token }: { token: string }) {
     if (/expirou/i.test(msg)) return <Blocked icon="time" title="Este link expirou" description="Por segurança, o link vale por 30 dias. Peça um novo ao seu contato na Draw e você recebe outro por e-mail." />;
     if (/desativado/i.test(msg)) return <Blocked icon="lock" title="Este link foi desativado" description="A Draw desativou este envio. Se ainda precisar do material, peça um novo link ao seu contato." />;
     return (
-      <AuthLayout>
+      <AuthLayout audience="externo">
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       </AuthLayout>
     );
@@ -200,7 +200,7 @@ export function PublicClientLink({ token }: { token: string }) {
   const answered = done ?? info.response?.decision ?? null;
 
   return (
-    <AuthLayout width="lg" footer={`Enviado pela ${info.organizationName}. Dúvidas? Responda ao e-mail que você recebeu.`}>
+    <AuthLayout audience="externo" width="lg" footer={`Enviado pela ${info.organizationName}. Dúvidas? Responda ao e-mail que você recebeu.`}>
       <div className="space-y-5">
         <AuthHeading title={head.title} description={head.description} />
         <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
