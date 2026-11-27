@@ -10,6 +10,7 @@ import { financeApi, payablesExtraApi, reversalsApi } from "@/data/services";
 import { dateFull, fromDateInput, money, toDateInput } from "@/lib/format";
 import { PAYABLE_KIND_LABEL, PayableAmount, payableDiff } from "./payable-bits";
 import { RegisterInvoiceDialog } from "./register-invoice-dialog";
+import { DeclaredDataSection, PayeeSummary } from "./payee-data";
 import type { PayableRow } from "./types";
 
 type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | "undoApproval" | "reversePayment" | null;
@@ -46,7 +47,10 @@ function PayDialog({ row, open, onOpenChange }: { row: PayableRow; open: boolean
         </>
       }
     >
-      <DateField label="Data do pagamento" required autoFocus value={date} onChange={(e) => setDate(e.target.value)} error={error} />
+      <div className="space-y-4">
+        {row.kind === "freelancer" && <PayeeSummary payableId={row.id} />}
+        <DateField label="Data do pagamento" required autoFocus value={date} onChange={(e) => setDate(e.target.value)} error={error} />
+      </div>
     </Dialog>
   );
 }
@@ -188,16 +192,34 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
 
             {req?.submittedAt && (
               <Section title={req.source === "manual" ? "NF registrada pelo Financeiro" : "Dados declarados pelo freelancer"} description={`${req.source === "manual" ? "Registrada" : "Enviados"} em ${dateFull(req.submittedAt)}`} icon="freelancers">
-                <DescriptionList
-                  columns={1}
-                  items={[
-                    { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
-                    { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
-                    { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
-                    { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
-                    { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
-                  ]}
-                />
+                {req.source === "manual" ? (
+                    <DescriptionList
+                      columns={1}
+                      items={[
+                        { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
+                        { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
+                        { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
+                        { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
+                        { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
+                      ]}
+                    />
+                ) : (
+                  <DeclaredDataSection
+                    payableId={row.id}
+                    fallback={
+                      <DescriptionList
+                        columns={1}
+                        items={[
+                          { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
+                          { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
+                          { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
+                          { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
+                          { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
+                        ]}
+                      />
+                    }
+                  />
+                )}
               </Section>
             )}
 

@@ -4,7 +4,7 @@ import type { Database, ID, Payable, PayableStatus, Project, Receivable, Receiva
 import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, queueSystemEmail, read, touch, write } from "./_core";
 import { applyInvoiceAmount } from "./payables-extra";
 import { computeFinancials } from "./projects";
-import { clientTermDays, dueFromInvoice, effectiveReceivableStatus, financeAudience } from "./finance-rules";
+import { clientTermDays, dueFromInvoice, effectiveReceivableStatus, financeAudience, financeContactOf, maskTail } from "./finance-rules";
 import { notifyMany } from "./audience";
 import { access, canWriteAll } from "@/lib/permissions";
 
@@ -371,7 +371,9 @@ export const publicInvoiceApi = {
       reissueReason: pay.status === "aguardando_nf" ? (req.reissueReason ?? null) : null,
       reissueRequestedAt: pay.status === "aguardando_nf" ? (req.reissueRequestedAt ?? null) : null,
       expiresAt: link.expiresAt,
-      freelancer: { name: fl.name, legalName: fl.legalName, document: fl.document, pixKey: fl.pixKey, bankName: fl.bankName, bankAgency: fl.bankAgency, bankAccount: fl.bankAccount },
+      // RN-48 — quem tem o link não vê CPF/CNPJ nem PIX completos, nem dados bancários: só os 4 últimos dígitos
+      freelancer: { name: fl.name, legalName: fl.legalName, documentMasked: maskTail(fl.document), pixKeyMasked: maskTail(fl.pixKey), hasDocument: !!fl.document, hasPixKey: !!fl.pixKey },
+      financeContact: financeContactOf(db),
     });
   },
 
@@ -381,9 +383,14 @@ export const publicInvoiceApi = {
       const link = db.shareLinks.find((s) => s.token === token && s.purpose === "nf_freelancer");
       if (!link || link.revokedAt || new Date(link.expiresAt).getTime() < Date.now()) throw new ApiError(409, "Este link não é mais válido.");
       if (link.maxUses && link.useCount >= link.maxUses) throw new ApiError(409, "Limite de envios atingido. Fale com a Draw.");
+      const payFl = db.freelancers.find((f) => f.id === db.payables.find((p) => p.id === link.targetId)?.freelancerId);
+      // RN-48 — em branco = mantém o que está no cadastro (o link não mostra o dado completo)
+      const document = input.document.trim() || payFl?.document || "";
+      const pixKey = input.pixKey.trim() || payFl?.pixKey || "";
       const errors: Record<string, string> = {};
       if (!input.legalName.trim()) errors.legalName = "Informe a razão social ou nome";
-      if (!input.document.trim()) errors.document = "Informe CPF ou CNPJ";
+      if (!document) errors.document = "Informe CPF ou CNPJ";
+      if (!pixKey) errors.pixKey = "Informe a chave PIX para o pagamento";
       if (!input.invoiceNumber.trim()) errors.invoiceNumber = "Informe o número da NF";
       if (input.amountCents <= 0) errors.amountCents = "Informe o valor da NF";
       if (!input.fileName) errors.file = "Anexe o PDF da nota fiscal";
@@ -403,7 +410,7 @@ export const publicInvoiceApi = {
       // RN-04
       const status = applyInvoiceAmount(pay, input.amountCents);
       touch(pay);
-      Object.assign(req, { submittedAt: nowIso(), declaredLegalName: input.legalName, declaredDocument: input.document, declaredPixKey: input.pixKey, declaredInvoiceNumber: input.invoiceNumber, declaredAmountCents: input.amountCents, source: "formulario" });
+      Object.assign(req, { submittedAt: nowIso(), declaredLegalName: input.legalName, declaredDocument: document, declaredPixKey: pixKey, declaredInvoiceNumber: input.invoiceNumber, declaredAmountCents: input.amountCents, source: "formulario" });
       link.useCount += 1;
       emit(db, null, { type: "payable.invoice_submitted", entityType: "payable", entityId: pay.id, project: p, data: { amountCents: input.amountCents, divergent: status === "divergente" } });
       // RN-46 — só o Financeiro envolvido (da equipe do projeto; senão, o perfil Financeiro; sem ninguém, a administração)

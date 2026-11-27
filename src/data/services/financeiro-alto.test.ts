@@ -232,3 +232,50 @@ describe("RN-65 — margem com adicionais e impostos", () => {
     expect(after.marginCents).toBe(after.revenueCents - after.taxCents - after.freelancerCostCents - after.otherCostCents);
   });
 });
+
+describe("RN-48 — dados do freelancer no link público e no pagamento", () => {
+  function linkFor() {
+    const db = loadDb();
+    const pay = db.payables.find((p) => p.status === "aguardando_nf" && p.kind === "freelancer")!;
+    const fl = db.freelancers.find((f) => f.id === pay.freelancerId)!;
+    fl.document = "12345678901";
+    fl.pixKey = "pix-antigo@x.com";
+    fl.bankAccount = "99999-9";
+    const req = db.freelancerInvoiceRequests.find((r) => r.payableId === pay.id)!;
+    const link = db.shareLinks.find((s) => s.id === req.shareLinkId)!;
+    link.expiresAt = new Date(Date.now() + DAY).toISOString();
+    link.useCount = 0;
+    save(db);
+    return { pay, fl, token: link.token };
+  }
+
+  it("o link não devolve CPF, PIX completos nem conta bancária", async () => {
+    const { publicInvoiceApi } = await import("./index");
+    const { token } = linkFor();
+    const info = await publicInvoiceApi.get(token);
+    const json = JSON.stringify(info);
+    expect(json).not.toContain("12345678901");
+    expect(json).not.toContain("pix-antigo@x.com");
+    expect(json).not.toContain("99999-9");
+    expect(info.freelancer.documentMasked).toBe("•••• 8901");
+  });
+
+  it("documento/PIX em branco mantêm o cadastro; declarado diferente pode atualizar o cadastro", async () => {
+    const { publicInvoiceApi, freelancerPaymentDataApi } = await import("./index");
+    const { pay, fl, token } = linkFor();
+    await publicInvoiceApi.submit(token, { legalName: "Nova Razão ME", document: "", pixKey: "pix-novo@x.com", invoiceNumber: "5", amountCents: pay.agreedAmountCents, fileName: "nf.pdf", fileSize: 10, dataUrl: null });
+    const req = loadDb().freelancerInvoiceRequests.find((r) => r.payableId === pay.id)!;
+    expect(req.declaredDocument).toBe("12345678901");
+    as("usr_fernanda");
+    const data = await freelancerPaymentDataApi.get(pay.id);
+    expect(data.differs.map((d) => d.field)).toEqual(expect.arrayContaining(["pixKey", "legalName"]));
+    await freelancerPaymentDataApi.applyDeclared(pay.id);
+    const after = loadDb().freelancers.find((f) => f.id === fl.id)!;
+    expect(after.pixKey).toBe("pix-novo@x.com");
+    expect(after.legalName).toBe("Nova Razão ME");
+    const ev = loadDb().events.find((e) => e.type === "freelancer.payment_data_updated" && e.entityId === fl.id)!;
+    expect(JSON.stringify(ev.data)).not.toContain("pix-novo@x.com");
+    as("usr_carlos");
+    await expect(freelancerPaymentDataApi.get(pay.id)).rejects.toMatchObject({ status: 403 });
+  });
+});

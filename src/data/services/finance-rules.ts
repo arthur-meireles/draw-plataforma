@@ -75,3 +75,13 @@ export function maskTail(value: string | null | undefined, keep = 4): string | n
   if (clean.length <= keep) return "•".repeat(clean.length);
   return `•••• ${clean.slice(-keep)}`;
 }
+
+/**
+ * RN-67 — contato do Financeiro mostrado nas páginas públicas (NF do freelancer), no lugar de "responda ao e-mail":
+ * o que estiver em Configurações → Organização; sem isso, o e-mail do primeiro usuário Financeiro ativo.
+ */
+export function financeContactOf(db: Database): { email: string | null; phone: string | null } {
+  const s = db.organizations[0]?.settings;
+  const fallback = db.users.find((u) => u.role === "financeiro" && u.status === "ativo" && !u.deletedAt);
+  return { email: s?.financeContactEmail || fallback?.email || null, phone: s?.financeContactPhone || fallback?.phone || null };
+}

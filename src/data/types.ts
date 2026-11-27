@@ -26,7 +26,14 @@ export interface Organization extends Omit<BaseEntity, "organizationId"> {
   name: string;
   slug: string;
   /** taxRatePct: alíquota padrão sobre faturamento (planilha atual: 6%). */
-  settings: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct: number };
+  settings: {
+    freelancerPaymentDay: number;
+    dueSoonDays: number;
+    taxRatePct: number;
+    /** Contato do Financeiro nas páginas públicas (RN-67). Ausente = e-mail do primeiro usuário Financeiro. */
+    financeContactEmail?: string | null;
+    financeContactPhone?: string | null;
+  };
 }
 
 export interface User extends BaseEntity {
