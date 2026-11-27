@@ -80,7 +80,7 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
                 { label: "Cliente", value: row.clientName },
                 { label: "CNPJ", value: formatCnpj(row.clientCnpj) },
                 { label: "Origem", value: row.kind === "adicional" ? "Cobrança adicional" : row.proposalInstallmentId ? "Parcela da proposta aprovada (RN-01/RN-02)" : "Lançamento avulso ou importado" },
-                { label: "Vencimento", value: dateFull(row.expectedAt) },
+                { label: "Vencimento", value: row.dueBasis ? `${dateFull(row.expectedAt)} · ${row.dueBasis}` : dateFull(row.expectedAt) },
                 { label: "Impostos", value: <Money cents={row.taxCents} /> },
                 { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.issuedAt ? ` · emitida em ${dateFull(row.issuedAt)}` : ""}` : "Ainda não emitida" },
                 { label: "Recebimento", value: row.receivedAt ? dateFull(row.receivedAt) : "—" },

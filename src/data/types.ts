@@ -474,6 +474,8 @@ export interface Receivable extends BaseEntity {
   kind: "parcela" | "adicional";
   /** Histórico curto de cobrança (planilha: Status/Comentários Cobrança). */
   collectionNote: string | null;
+  /** Regra que definiu o vencimento (RN-45), ex.: "Aprovação + 30 dias (prazo do cliente)". Ausente = informado à mão. */
+  dueBasis?: string | null;
 }
 
 export type PayableKind = "freelancer" | "despesa_projeto" | "despesa_adm";

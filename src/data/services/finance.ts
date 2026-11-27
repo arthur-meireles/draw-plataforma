@@ -4,6 +4,7 @@ import type { ID, Payable, PayableStatus, Receivable, ReceivableStatus } from ".
 import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, queueSystemEmail, read, touch, write } from "./_core";
 import { applyInvoiceAmount } from "./payables-extra";
 import { computeFinancials } from "./projects";
+import { clientTermDays, dueFromInvoice, effectiveReceivableStatus } from "./finance-rules";
 import { access, canWriteAll } from "@/lib/permissions";
 
 export interface ReceivableFilters {
@@ -24,10 +25,6 @@ export interface PayableFilters {
 
 const inMonth = (iso: string | null, month?: string) => !month || (!!iso && iso.slice(0, 7) === month);
 
-function effectiveReceivableStatus(r: Receivable): ReceivableStatus {
-  if ((r.status === "previsto" || r.status === "faturado") && new Date(r.expectedAt).getTime() < Date.now() - 86_400_000) return "vencido";
-  return r.status;
-}
 
 export const financeApi = {
   receivables: (f: ReceivableFilters = {}) =>
@@ -51,7 +48,7 @@ export const financeApi = {
     }),
 
   /** RF-M5-02 — emissão de NF. */
-  issueInvoice: (id: ID, input: { invoiceNumber: string; issuedAt: string; invoiceFileId?: ID | null; taxCents?: number }) =>
+  issueInvoice: (id: ID, input: { invoiceNumber: string; issuedAt: string; invoiceFileId?: ID | null; taxCents?: number; expectedAt?: string | null }) =>
     write((db, me) => {
       if (!canWriteAll(me, "receivables")) throw new ApiError(403, "Sem permissão.");
       const r = db.receivables.find((x) => x.id === id);
@@ -62,9 +59,17 @@ export const financeApi = {
       r.issuedAt = input.issuedAt;
       r.invoiceFileId = input.invoiceFileId ?? r.invoiceFileId;
       if (input.taxCents != null) r.taxCents = input.taxCents;
+      const p = db.projects.find((x) => x.id === r.projectId)!;
+      // RN-45 — vencimento da cobrança: o informado no diálogo; sem ele, emissão + prazo do cliente (se houver)
+      const due = input.expectedAt ?? dueFromInvoice(db, r.clientId, input.issuedAt);
+      if (due && due !== r.expectedAt) {
+        emitValueChange(db, me, "receivable", r.id, p, "expectedAt", r.expectedAt, due);
+        r.expectedAt = due;
+        const term = clientTermDays(db, r.clientId);
+        r.dueBasis = input.expectedAt ? (term != null && dueFromInvoice(db, r.clientId, input.issuedAt) === due ? `Emissão da NF + ${term} dias (prazo do cliente)` : "Informado na emissão da NF") : `Emissão da NF + ${term} dias (prazo do cliente)`;
+      }
       r.status = "faturado";
       touch(r);
-      const p = db.projects.find((x) => x.id === r.projectId)!;
       emit(db, me, { type: "receivable.invoiced", entityType: "receivable", entityId: r.id, project: p, data: { invoiceNumber: r.invoiceNumber, amountCents: r.amountCents } });
       return r;
     }),
@@ -90,6 +95,10 @@ export const financeApi = {
       if (!r) throw new ApiError(404, "Lançamento não encontrado.");
       const p = db.projects.find((x) => x.id === r.projectId)!;
       if (patch.amountCents !== undefined) emitValueChange(db, me, "receivable", r.id, p, "amountCents", r.amountCents, patch.amountCents);
+      if (patch.expectedAt !== undefined && patch.expectedAt !== r.expectedAt) {
+        emitValueChange(db, me, "receivable", r.id, p, "expectedAt", r.expectedAt, patch.expectedAt);
+        r.dueBasis = "Alterado manualmente";
+      }
       Object.assign(r, patch);
       touch(r);
       return r;
