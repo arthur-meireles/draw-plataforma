@@ -360,3 +360,41 @@ describe("RN-66 — indicadores com período e escopo do perfil", () => {
     expect(short.finance!.contractedTotal).toBe(inShort);
   });
 });
+
+describe("RN-67 — cobrança pronta para copiar e contato do Financeiro", () => {
+  it("monta a mensagem para o contato de cobrança e registra o envio", async () => {
+    const { collectionApi, usersApi } = await import("./index");
+    as("usr_paula");
+    const org = loadDb().organizations[0].settings;
+    await usersApi.updateOrganization({ freelancerPaymentDay: org.freelancerPaymentDay, dueSoonDays: org.dueSoonDays, taxRatePct: org.taxRatePct, financeContactEmail: "financeiro@draw.com.br", financeContactPhone: "(11) 4000-0000" });
+    await expect(usersApi.updateOrganization({ freelancerPaymentDay: 20, dueSoonDays: 2, financeContactEmail: "sem-arroba" })).rejects.toMatchObject({ status: 422 });
+    const db = loadDb();
+    const r = db.receivables.find((x) => x.status === "previsto" && !x.deletedAt && db.projects.find((p) => p.id === x.projectId)?.billingContactId)!;
+    r.expectedAt = new Date(Date.now() - 5 * DAY).toISOString();
+    save(db);
+    as("usr_fernanda");
+    const m = await collectionApi.message(r.id);
+    expect(m.overdue).toBe(true);
+    expect(m.to?.email).toBeTruthy();
+    expect(m.body).toContain("financeiro@draw.com.br");
+    await collectionApi.registerSent(r.id, { channel: "whatsapp", note: "prometeu pagar" });
+    const after = loadDb().receivables.find((x) => x.id === r.id)!;
+    expect(after.collectionNote).toContain("WhatsApp");
+    expect(loadDb().events.some((e) => e.entityId === r.id && e.type === "receivable.collection_sent")).toBe(true);
+    as("usr_carlos");
+    await expect(collectionApi.registerSent(r.id, { channel: "email" })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("página pública de NF traz o contato do Financeiro", async () => {
+    const { publicInvoiceApi } = await import("./index");
+    const db = loadDb();
+    db.organizations[0].settings.financeContactEmail = "fin@draw.com.br";
+    const pay = db.payables.find((p) => p.status === "aguardando_nf" && p.kind === "freelancer")!;
+    const req = db.freelancerInvoiceRequests.find((x) => x.payableId === pay.id)!;
+    const link = db.shareLinks.find((s) => s.id === req.shareLinkId)!;
+    link.expiresAt = new Date(Date.now() + DAY).toISOString();
+    save(db);
+    const info = await publicInvoiceApi.get(link.token);
+    expect(info.financeContact.email).toBe("fin@draw.com.br");
+  });
+});

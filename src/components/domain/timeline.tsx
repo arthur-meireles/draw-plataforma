@@ -100,6 +100,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "comment", text: <>atualizou a nota de cobrança</> };
     case "receivable.cancelled":
       return { icon: "close", text: <>cancelou o lançamento a receber</> };
+    case "receivable.collection_sent":
+      return { icon: "send", text: <>registrou cobrança enviada ao cliente{d.to ? <> ({b(String(d.to))})</> : null}{d.note ? <>: {String(d.note)}</> : null}</> };
     case "receivable.invoice_cancelled":
       return { icon: "close", text: <>cancelou a NF{(d.previous as { invoiceNumber?: string } | undefined)?.invoiceNumber ? <> {b(String((d.previous as { invoiceNumber?: string }).invoiceNumber))}</> : null}: {b(String(d.reason ?? ""))}</> };
     case "receivable.receipt_reversed":

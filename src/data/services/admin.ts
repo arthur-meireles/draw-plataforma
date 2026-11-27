@@ -344,13 +344,17 @@ export const usersApi = {
   /** Parâmetros da organização: todos leem (prazos e alíquota aparecem nas telas); só admin altera. */
   organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
 
-  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number }) =>
+  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number; financeContactEmail?: string | null; financeContactPhone?: string | null }) =>
     write((db, me) => {
       requireAccess(me, "settings", "all", "Só administradores alteram as regras da organização.");
       const settings = { ...db.organizations[0].settings, ...patch };
       if (settings.taxRatePct < 0 || settings.taxRatePct > 30) throw new ApiError(422, "Use uma alíquota entre 0% e 30%.", { taxRatePct: "Use uma alíquota entre 0% e 30%" });
       if (settings.freelancerPaymentDay < 1 || settings.freelancerPaymentDay > 28) throw new ApiError(422, "Escolha um dia entre 1 e 28.", { freelancerPaymentDay: "Escolha um dia entre 1 e 28" });
       if (!Number.isInteger(settings.dueSoonDays) || settings.dueSoonDays < 1 || settings.dueSoonDays > 30) throw new ApiError(422, "Use de 1 a 30 dias de alerta.", { dueSoonDays: "Use de 1 a 30 dias" });
+      // RN-67 — contato do Financeiro mostrado nas páginas públicas
+      settings.financeContactEmail = settings.financeContactEmail?.trim().toLowerCase() || null;
+      settings.financeContactPhone = settings.financeContactPhone?.trim() || null;
+      if (settings.financeContactEmail && !/^\S+@\S+\.\S+$/.test(settings.financeContactEmail)) throw new ApiError(422, "Informe um e-mail válido para o Financeiro.", { financeContactEmail: "Informe um e-mail válido, ex.: financeiro@draw.com.br" });
       db.organizations[0].settings = settings;
       emit(db, me, { type: "organization.settings_changed", entityType: "organization", entityId: db.organizations[0].id, data: settings });
     }),

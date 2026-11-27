@@ -5,8 +5,9 @@ import { Button, Section, Skeleton, TextField } from "@/components/ui";
 import { useApiMutation, useOrganization } from "@/data/hooks";
 import { usersApi } from "@/data/services";
 import { focusFirstInvalid } from "@/lib/focus";
+import { formatPhone } from "@/lib/format";
 
-/** Regras da organização: dia de pagamento de freelancers (RN-06), dias de alerta de vencimento (RF-M4-13) e alíquota de imposto. */
+/** Regras da organização: dia de pagamento de freelancers (RN-06), dias de alerta de vencimento (RF-M4-13), alíquota de imposto e contato do Financeiro (RN-67). */
 export function OrgSettingsSection() {
   const p = usePermissions();
   const canEdit = p.canWriteAll("settings");
@@ -14,6 +15,8 @@ export function OrgSettingsSection() {
   const [day, setDay] = useState("");
   const [soon, setSoon] = useState("");
   const [tax, setTax] = useState("");
+  const [finEmail, setFinEmail] = useState("");
+  const [finPhone, setFinPhone] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const settings = org.data?.org.settings;
@@ -22,6 +25,8 @@ export function OrgSettingsSection() {
       setDay(String(settings.freelancerPaymentDay));
       setSoon(String(settings.dueSoonDays));
       setTax(String(settings.taxRatePct ?? 6).replace(".", ","));
+      setFinEmail(settings.financeContactEmail ?? "");
+      setFinPhone(settings.financeContactPhone ?? "");
     }
   }, [settings]);
 
@@ -43,9 +48,10 @@ export function OrgSettingsSection() {
     if (!Number.isInteger(d) || d < 1 || d > 28) errs.freelancerPaymentDay = "Escolha um dia entre 1 e 28";
     if (!Number.isInteger(s) || s < 1 || s > 30) errs.dueSoonDays = "Use de 1 a 30 dias";
     if (!tax.trim() || !Number.isFinite(t) || t < 0 || t > 30) errs.taxRatePct = "Use uma alíquota entre 0% e 30%";
+    if (finEmail.trim() && !/^\S+@\S+\.\S+$/.test(finEmail.trim())) errs.financeContactEmail = "Informe um e-mail válido, ex.: financeiro@draw.com.br";
     setErrors(errs);
     if (Object.keys(errs).length) return focusFirstInvalid();
-    save.mutate({ freelancerPaymentDay: d, dueSoonDays: s, taxRatePct: Math.round(t * 100) / 100 });
+    save.mutate({ freelancerPaymentDay: d, dueSoonDays: s, taxRatePct: Math.round(t * 100) / 100, financeContactEmail: finEmail.trim() || null, financeContactPhone: finPhone.trim() || null });
   };
 
   return (
@@ -58,6 +64,8 @@ export function OrgSettingsSection() {
             <TextField label="Dia de pagamento dos freelancers" inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value.replace(/\D/g, "").slice(0, 2))} error={errors.freelancerPaymentDay} hint="Entre 1 e 28, para valer em todos os meses (RN-06)." />
             <TextField label="Dias de alerta de vencimento" inputMode="numeric" value={soon} onChange={(e) => setSoon(e.target.value.replace(/\D/g, "").slice(0, 2))} error={errors.dueSoonDays} hint="Recebimentos e pagamentos “a vencer” entram em alerta nesta janela." />
             <TextField label="Alíquota de imposto (%)" inputMode="decimal" suffix="%" value={tax} onChange={(e) => setTax(e.target.value.replace(/[^\d,.]/g, "").slice(0, 5))} error={errors.taxRatePct} hint="Entre 0% e 30%. Calcula o imposto dos novos recebíveis; os já lançados não mudam." />
+            <TextField label="E-mail do Financeiro" type="email" autoComplete="off" value={finEmail} onChange={(e) => setFinEmail(e.target.value)} error={errors.financeContactEmail} hint="Aparece para freelancers no link de NF e nas mensagens de cobrança. Em branco: e-mail de quem tem perfil Financeiro." />
+            <TextField label="Telefone/WhatsApp do Financeiro" inputMode="tel" value={finPhone} onChange={(e) => setFinPhone(formatPhone(e.target.value))} placeholder="(11) 99999-0000" hint="Opcional. Mostrado junto com o e-mail." />
             {canEdit && (
               <div className="sm:col-span-2">
                 <Button type="submit" variant="primary" loading={save.isPending}>
