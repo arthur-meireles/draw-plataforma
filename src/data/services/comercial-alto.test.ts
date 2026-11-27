@@ -1,0 +1,55 @@
+/**
+ * Comercial/Projetos/Tarefas — furos altos da onda 2 (RN-13, RN-55..59, RN-70..74).
+ */
+import { beforeEach, describe, expect, it } from "vitest";
+import { loadDb, resetDb } from "../db";
+import { setSessionUserId } from "./_core";
+import { projectsApi, proposalsApi } from "./index";
+
+const as = (userId: string) => setSessionUserId(userId);
+const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
+const clientWithContact = () => {
+  const db = loadDb();
+  return db.clients.find((c) => db.clientContacts.some((k) => k.clientId === c.id && k.email))!;
+};
+const fresh = (id: string) => loadDb().projects.find((x) => x.id === id)!;
+
+beforeEach(() => {
+  window.localStorage.clear();
+  resetDb();
+  as("usr_paula");
+});
+
+async function quoteWithSentProposal(owner = "usr_carlos") {
+  const p = await projectsApi.createQuote({ clientId: clientWithContact().id, projectTypeId: typeByPrefix("APR").id, title: "Deck", ownerId: owner });
+  const prop = await proposalsApi.create(p.id, { amountCents: 900_000, installments: [{ amountCents: 900_000, dueRule: "Na aprovação", dueAt: null }] });
+  await proposalsApi.send(prop.id);
+  return { p, prop };
+}
+
+async function directProject(extra: Partial<Parameters<typeof projectsApi.createDirect>[0]> = {}) {
+  return projectsApi.createDirect({
+    clientId: clientWithContact().id,
+    projectTypeId: typeByPrefix("APR").id,
+    title: "Contrato visual",
+    ownerId: "usr_carlos",
+    contractedAmountCents: 100_000,
+    installments: [{ description: "Única", amountCents: 100_000, expectedAt: new Date().toISOString() }],
+    team: [{ userId: "usr_lucas", memberRole: "designer" }],
+    dueAt: null,
+    ...extra,
+  });
+}
+
+describe("RN-13 — projeto pausado não muda etapa", () => {
+  it("move para outra etapa responde 409; reordenar na mesma etapa continua", async () => {
+    const p = await directProject();
+    await projectsApi.pause(p.id, "Cliente viajando");
+    await expect(projectsApi.move(p.id, { stageKey: "design", position: 1 })).rejects.toMatchObject({ status: 409 });
+    await projectsApi.move(p.id, { stageKey: "roteiro", position: 5 });
+    expect(fresh(p.id).position).toBe(5);
+    await projectsApi.resume(p.id);
+    await projectsApi.move(p.id, { stageKey: "design", position: 1 });
+    expect(fresh(p.id).projectStageKey).toBe("design");
+  });
+});

@@ -341,6 +341,8 @@ export const projectsApi = {
       } else if (p.status === "ativo") {
         const to = input.stageKey as ProjectStageKey;
         if (to === "concluido") throw new ApiError(422, "Use \"Concluir projeto\" para finalizar e gerar os pagamentos.");
+        // RN-13 — pausado não muda etapa (reordenar na mesma coluna continua livre).
+        if (p.pausedAt && to !== p.projectStageKey) throw new ApiError(409, "Projeto pausado não muda de etapa. Retome o projeto primeiro.");
         if (to !== p.projectStageKey) {
           emit(db, me, { type: "project.stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.projectStageKey, to } });
           p.projectStageKey = to;

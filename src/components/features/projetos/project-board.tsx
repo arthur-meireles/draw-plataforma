@@ -44,7 +44,7 @@ export function ProjectBoard({ projects, isLoading }: { projects: ProjectListIte
       getPosition={(p) => p.position}
       renderCard={(p, { dragging }) => <ProjectCard project={p} dragging={dragging} />}
       onMove={onMove}
-      canDrag={() => draggable}
+      canDrag={(p) => draggable && !p.pausedAt}
       emptyColumnText="Arraste um projeto para cá"
     />
   );

@@ -444,7 +444,7 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-10 | Exclusões são *soft delete*; exclusão definitiva só por `admin`, registrada. |
 | RN-11 | Datas de envio e aprovação de proposta são registradas pelo sistema, não digitadas. |
 | RN-12 | Um projeto nunca troca de cliente depois de ter recebível emitido. |
-| RN-13 | **Pausar projeto** exige motivo; só projetos `ativo`. Pausado não muda etapa, não conta como atrasado e aparece com selo "Parado"; retomar limpa `paused_at`/`paused_reason`. Eventos `project.paused` / `project.resumed`. |
+| RN-13 | **Pausar projeto** exige motivo; só projetos `ativo`. Pausado não muda etapa (o serviço responde 409 e o quadro/cabeçalho não oferecem a troca; reordenar na mesma coluna continua), não conta como atrasado e aparece com selo "Parado"; retomar limpa `paused_at`/`paused_reason`. Eventos `project.paused` / `project.resumed`. |
 | RN-14 | **Cobrança adicional** cria recebível `kind = adicional` ligado ao projeto, imposto pela alíquota da organização; não altera `contracted_amount_cents` (margem considera recebíveis adicionais à parte). |
 | RN-15 | **Imposto** de recebível = `amount_cents × organizations.settings.tax_rate_pct / 100` (padrão 6%, como na planilha). |
 | RN-16 | **Pastas**: raízes do sistema não são renomeadas/excluídas; pasta só é excluída vazia; arquivos de projeto não são movidos para fora do projeto; `allowed_roles` da pasta-mãe é herdado ao criar subpasta. |
