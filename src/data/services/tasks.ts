@@ -195,6 +195,12 @@ export const tasksApi = {
         emit(db, me, { type: "task.status_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.statusKey, to: patch.statusKey, title: t.title } });
         // RN-53 — tarefa em revisão avisa o responsável do projeto e quem pediu a tarefa.
         if (patch.statusKey === "em_revisao") notifyMany(db, me, [p?.ownerId, t.createdBy], { type: "revisao", title: `Tarefa para revisar: ${t.title}`, body: `${me.name} enviou para revisão`, project: p, entityType: "task", entityId: t.id });
+        // RN-57 — hand-off: concluída avisa o responsável do projeto e quem pediu; voltou da revisão avisa quem executa.
+        if (patch.statusKey === "concluida") notifyMany(db, me, [p?.ownerId, t.createdBy], { type: "revisao", title: `Tarefa concluída: ${t.title}`, body: `${me.name} concluiu`, project: p, entityType: "task", entityId: t.id });
+        if (before.statusKey === "em_revisao" && (patch.statusKey === "a_fazer" || patch.statusKey === "em_andamento")) {
+          const assignee = t.assigneeUserId ?? (t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null);
+          notifyMany(db, me, [assignee], { type: "revisao", title: `Tarefa voltou da revisão: ${t.title}`, body: `${me.name} pediu ajustes`, project: p, entityType: "task", entityId: t.id });
+        }
       }
       if ((patch.assigneeUserId && patch.assigneeUserId !== before.assigneeUserId) || (patch.assigneeFreelancerId && patch.assigneeFreelancerId !== before.assigneeFreelancerId)) {
         const flUser = t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null;

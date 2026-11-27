@@ -362,3 +362,20 @@ describe("RF-M4-13 — avisos de prazo e atraso na Caixa de entrada", () => {
     expect(notes().some((n) => n.entityId === t2.id && n.type === "atraso")).toBe(false);
   });
 });
+
+describe("RN-57 — hand-off de tarefa", () => {
+  it("concluir avisa responsável do projeto e quem criou; voltar da revisão avisa quem executa", async () => {
+    const p = await directProject();
+    as("usr_beatriz");
+    const t = await tasksApi.create({ projectId: p.id, title: "Arte final", assigneeUserId: "usr_lucas" });
+    as("usr_lucas");
+    await tasksApi.update(t.id, { statusKey: "em_revisao" });
+    as("usr_beatriz");
+    await tasksApi.update(t.id, { statusKey: "em_andamento" });
+    expect(loadDb().notifications.some((n) => n.userId === "usr_lucas" && n.title.startsWith("Tarefa voltou da revisão"))).toBe(true);
+    as("usr_lucas");
+    await tasksApi.update(t.id, { statusKey: "concluida" });
+    const notes = loadDb().notifications.filter((n) => n.title.startsWith("Tarefa concluída"));
+    expect(notes.map((n) => n.userId).sort()).toEqual(["usr_beatriz", "usr_carlos"]);
+  });
+});
