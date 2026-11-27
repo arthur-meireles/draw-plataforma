@@ -9,8 +9,8 @@ function detectDelimiter(text: string): string {
   return counts[0].n > 0 ? counts[0].d : ",";
 }
 
-/** Lê um CSV completo. Cabeçalhos são normalizados (minúsculos, sem acento, `_`). */
-export function parseCsv(input: string): CsvTable {
+/** Lê um CSV em linhas cruas (sem normalizar cabeçalho; linhas vazias descartadas). */
+export function parseCsvRecords(input: string): string[][] {
   const text = input.replace(/^﻿/, "");
   const delim = detectDelimiter(text);
   const records: string[][] = [];
@@ -42,7 +42,16 @@ export function parseCsv(input: string): CsvTable {
     row.push(field);
     records.push(row);
   }
-  const nonEmpty = records.filter((r) => r.some((c) => c.trim() !== ""));
+  return records.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+/** Lê um CSV completo. Cabeçalhos são normalizados (minúsculos, sem acento, `_`). */
+export function parseCsv(input: string): CsvTable {
+  return tableFromRecords(parseCsvRecords(input));
+}
+
+/** Linhas cruas (CSV ou planilha) → tabela com cabeçalho normalizado na primeira linha. */
+export function tableFromRecords(nonEmpty: string[][]): CsvTable {
   if (!nonEmpty.length) return { headers: [], rows: [] };
   const headers = nonEmpty[0].map((h) =>
     h
@@ -53,7 +62,7 @@ export function parseCsv(input: string): CsvTable {
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_|_$/g, ""),
   );
-  const rows = nonEmpty.slice(1).map((r) => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? "").trim()])));
+  const rows = nonEmpty.slice(1).map((r) => Object.fromEntries(headers.map((h, i) => [h, String(r[i] ?? "").trim()])));
   return { headers, rows };
 }
 

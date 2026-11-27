@@ -259,7 +259,7 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | `events` | `entity_type`, `entity_id`, `project_id`, `client_id` (desnormalizados para consulta), `actor_id`, `type` (ex.: `project.stage_changed`), `data jsonb` (antes/depois), `occurred_at`. **Append-only.** |
 | `notifications` | `user_id`, `type`, `project_id`, `entity_type`, `entity_id`, `title`, `read_at` |
 | `notification_preferences` | `user_id`, `type`, `enabled` (só no app — Caixa de entrada; `mencao` não pode ser desligada) |
-| `imports` | `kind`, `source_file_id`, `status`, `mapping jsonb`, `report jsonb`, `dry_run` |
+| `imports` | `kind` (`clientes`/`freelancers`/`recebiveis`/`planilha_master`), `source_file_id`, `status`, `mapping jsonb`, `report jsonb` (total, ok, erros por linha, `summary` com contagens por entidade), `dry_run` |
 | `email_logs` | `channel` (`system` — só transacional para pessoas de fora), `provider` (`brevo`/`resend`/`draw_smtp`), `user_id`, `project_id` (nulo para e-mails do sistema sem projeto), `provider_message_id`, `to`, `cc`, `subject`, `template`, `status` (`queued`/`sent`/`delivered`/`bounced`/`complained`/`failed`), `error`, `sent_at` |
 | `email_provider_usage` | `provider`, `date`, `sent_count` (base do limite diário e do fallback) |
 | `system_mail_settings` | `transport` (`brevo_resend`/`draw_smtp`), `smtp_host`, `smtp_port`, `smtp_security`, `smtp_user`, `smtp_password` (cifrado), `from_name`, `from_address` — um registro por organização |
@@ -446,6 +446,7 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-41 | **NF registrada manualmente** (recebida por e-mail/WhatsApp): só em `aguardando_nf` ou `divergente`, por quem tem `payables = T`; exige nº, valor e data de emissão; PDF opcional. Aplica a RN-04 (valor ≠ acordado → `divergente` com nota; igual → `em_conferencia`), marca o pedido com `source = manual` e o formulário público deixa de aceitar envio. Evento `payable.invoice_registered` com os valores anteriores. |
 | RN-42 | **Pedir nova NF** (recusar): só em `em_conferencia` ou `divergente`, motivo obrigatório. O pagável volta a `aguardando_nf` e perde nº/valor/arquivo/nota de divergência (o anterior fica no evento `payable.invoice_rejected`); o link é renovado (30 dias, `use_count = 0`, `revoked_at = null`); o pedido guarda `reissue_reason`; e-mail transacional `nf_freelancer_nova` ao freelancer e `nf_solicitada` na Caixa de entrada se ele tiver login. O formulário público só aceita envio com o pagável em `aguardando_nf` (o servidor recusa reenvio fora disso com 409). "Reenviar link" também zera `use_count` de link esgotado. NF aprovada ou paga não volta. |
 | RN-43 | **Pagamento avulso a freelancer** (sem concluir ou depois dela): por quem tem `payables = T`, para membro freelancer da equipe (ativo ou não) de projeto que não seja cotação/perdido; cria pagável `aguardando_nf` + `share_link` + pedido + e-mail, como na RN-03 (vencimento padrão RN-06, editável). Idempotente por membro: se já houver pagável, responde 409, salvo `additional = true` (não altera o valor acordado); sem adicional, o valor informado vira `agreed_amount_cents` (RN-09). |
+| RN-44 | **Importação da planilha master** (aba "Projetos & Pagamentos", seção 20.3, ordem da 20.6): só quem tem `projects`, `receivables` e `payables` = T (Administrador e Gestão). *Dry run* aplica numa cópia e devolve relatório por linha (cria / atualiza / erro + observações); a gravação pula linhas com erro. Idempotente: projeto por `legacy_code` (reimportar atualiza, não duplica; mudar o cliente de projeto com NF emitida no sistema é erro — RN-12), cliente por CNPJ e depois pelo nome, freelancer pelo nome (criado sem e-mail quando novo), membro por projeto+freelancer, parcela pela descrição `Parcela n (planilha)`, adicional por `Cobrança adicional (planilha)`, pagável por membro (reimportar só avança o status). Tipo de projeto não cadastrado bloqueia a linha. Nenhum e-mail é enviado; pagável importado em `aguardando_nf` ganha link de NF para "Copiar/Reenviar link". Evento `project.imported`/`project.import_updated` por projeto e `import.completed` no job. |
 
 ---
 
@@ -615,7 +616,7 @@ Todos calculados por SQL sobre os relacionamentos (P3), com *materialized views*
 ## 13. Importação e migração
 
 1. Mapear antes de desenvolver: quadros do Monday, planilha de projetos/financeiro, lista de freelancers (coluna de origem → campo de destino).
-2. Importadores idempotentes (chaves: código do projeto, CNPJ, e-mail), com *dry run*, pré-visualização e relatório por linha.
+2. Importadores idempotentes (chaves: código do projeto, `legacy_code` da planilha master, CNPJ, e-mail), com *dry run*, pré-visualização e relatório por linha. Aceitam XLSX (primeira aba, ou a aba "Projetos & Pagamentos" na planilha master) e CSV. Tipos: Clientes, Freelancers, Recebíveis e **Planilha master** (RN-44); não há tipos "projetos"/"pagáveis" avulsos — chegam pela planilha master.
 3. Ordem: usuários → clientes e contatos → freelancers → tipos de projeto → projetos (com origem) → propostas → tarefas abertas → financeiro em aberto → anexos relevantes.
 4. Etapas do Monday mapeadas para as etapas fixas; o que não mapear vai para revisão manual.
 5. Setup conjunto com a equipe; operação paralela curta.
@@ -795,6 +796,8 @@ As colunas do quadro (2. Administrativo, 3. Comercial e Marketing, 4. Projetos, 
 | Total Recebido / Valor a Receber | `v_project_financials.received / to_receive` | Derivados |
 | Valor / Status / Data Cobrança Adicional | `receivables` com `kind = adicional` | RN-14 |
 
+Regras de leitura do importador (RN-44): o cabeçalho é procurado nas 10 primeiras linhas (pode haver título acima); as colunas de cada papel (Designer, Advogado, Roteirista, Outros Freelancers) são lidas em bloco até o próximo papel, porque "Valor", "Liberado para pagto?", "Data Pagto" e "Status Pagto" se repetem; valores aceitam "R$ 1.920", "1.920,50" e número do Excel; datas aceitam dd/mm/aaaa, dd/mm/aa e data do Excel; título perde o prefixo "Cliente - " quando ele bate com o cliente; status: Iniciando/Em Andamento → `ativo` na primeira etapa, Parado → `ativo` + `paused_at`, Finalizado → `concluido` (`completed_at` = Data Entrega), outro texto → `ativo` com aviso; sem valores de parcela, o Valor Total vira 1 parcela (ou 2 metades em 50/50); parcela com data de pagamento → `recebido`, com Data Emissão NF → `faturado`, senão `previsto`; imposto pela RN-15; pagável: REALIZADO/PAGO ou data → `pago`, Liberado SIM → `aprovado`, projeto finalizado ou Liberado NÃO → `aguardando_nf`, "x" → sem pagável; projeto ativo sem informação de pagamento não gera pagável (RN-03 na conclusão). Modelo CSV com as colunas em /financeiro/importar.
+
 ### 20.4 Abas de freelancers
 
 | Aba | Destino |
@@ -857,6 +860,7 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
 | `commentsApi`, `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `/approvals`, `/events`, `/notifications` |
+| `masterImportApi.preview / commit` (+ `parseMasterSheet`, leitura em `lib/spreadsheet.ts`) | `POST /imports/master/preview` (dry run, relatório por linha) · `POST /imports/master` (grava, `Idempotency-Key`; RN-44) |
 | `authApi`, `usersApi`, `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/auth`, `/users`, `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
 
 ### 21.2 Divergências conscientes da versão 0.3
@@ -864,4 +868,4 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 - **Front:** Next.js, não Vite (ADR-011).
 - **Autenticação:** simulada no front, com credencial em variável de build. Serve só para demonstração; argon2id e sessão httpOnly vêm com o back-end.
 - **2FA:** a tela existe, mas o código não é validado.
-- **XLSX:** a importação aceita CSV; XLSX entra com o back-end.
+- **XLSX:** lido no navegador com SheetJS (`xlsx` 0.18.5 do npm, carregado sob demanda em `src/lib/spreadsheet.ts`). Essa versão tem alertas de segurança conhecidos (poluição de protótipo e ReDoS ao ler arquivo malicioso; correção só no CDN da SheetJS). O risco fica restrito ao navegador de quem importa o próprio arquivo; no back-end, a leitura deve usar uma versão corrigida ou outra biblioteca.

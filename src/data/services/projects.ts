@@ -59,7 +59,8 @@ export interface ProjectListItem extends Project {
   billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido";
 }
 
-const nextCode = (db: Database, prefix: string) => {
+/** RN-05 — próximo código do prefixo (também usado pela importação da planilha master). */
+export const nextCode = (db: Database, prefix: string) => {
   db.codeSequences[prefix] = (db.codeSequences[prefix] ?? 0) + 1;
   return `${prefix}-${String(db.codeSequences[prefix]).padStart(3, "0")}`;
 };

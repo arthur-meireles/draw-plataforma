@@ -6,7 +6,7 @@ import { dateTime } from "@/lib/format";
 
 type Job = Awaited<ReturnType<typeof importsApi.list>>[number];
 
-const KIND_LABEL: Record<string, string> = { clientes: "Clientes", freelancers: "Freelancers", recebiveis: "Recebíveis", projetos: "Projetos", pagaveis: "Contas a pagar" };
+const KIND_LABEL: Record<string, string> = { clientes: "Clientes", freelancers: "Freelancers", recebiveis: "Recebíveis", planilha_master: "Planilha master" };
 
 const columns: Column<Job>[] = [
   { id: "date", header: "Data", sortValue: (j) => j.createdAt, mobile: "subtitle", cell: (j) => <span className="text-fg-muted">{dateTime(j.createdAt)}</span> },

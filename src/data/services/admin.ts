@@ -1,7 +1,7 @@
 /** Administrativo (M6), usuários e autenticação (M1), e-mail (M11), importação, busca. */
 import { baseFields, loadDb, nowIso, resetDb, transaction } from "../db";
-import type { ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, VaultItem } from "../types";
-import { ApiError, actor, emit, getSessionUserId, latency, read, setSessionUserId, touch, visibleProjects, write } from "./_core";
+import type { ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, User, VaultItem } from "../types";
+import { ApiError, actor, emit, getSessionUserId, latency, read, setSessionUserId, taxOf, touch, visibleProjects, write } from "./_core";
 import { access, canRead, canWriteAll } from "@/lib/permissions";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 
@@ -355,11 +355,21 @@ export const mailApi = {
 /* ───────── Importação (RF-M5-08) ───────── */
 type Row = Record<string, string>;
 
+const SIMPLE_IMPORT_RESOURCE = { clientes: "clients", freelancers: "freelancers", recebiveis: "receivables" } as const;
+
+/** Tipos do assistente simples; a planilha master tem o próprio serviço (`masterImportApi`). */
+function assertSimpleImport(me: User, kind: ImportKind) {
+  const resource = SIMPLE_IMPORT_RESOURCE[kind as keyof typeof SIMPLE_IMPORT_RESOURCE];
+  if (!resource) throw new ApiError(422, "Tipo de importação não suportado aqui. Para a planilha master, use a opção \"Planilha master\".");
+  if (!canWriteAll(me, resource)) throw new ApiError(403, "Seu perfil não pode importar este tipo. Peça a quem administra o cadastro.");
+}
+
 export const importsApi = {
   list: () => read((db) => db.imports.filter((i) => !i.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))),
   /** Dry run: valida linha a linha sem gravar. */
   preview: (kind: ImportKind, rows: Row[]) =>
-    read((db) => {
+    read((db, me) => {
+      assertSimpleImport(me, kind);
       const errors: { line: number; message: string }[] = [];
       rows.forEach((r, i) => {
         const line = i + 2;
@@ -370,7 +380,7 @@ export const importsApi = {
         } else if (kind === "freelancers") {
           if (!r.nome?.trim()) errors.push({ line, message: "Nome vazio" });
           if (!/^\S+@\S+\.\S+$/.test(r.email ?? "")) errors.push({ line, message: `E-mail inválido: ${r.email ?? "(vazio)"}` });
-        } else {
+        } else if (kind === "recebiveis") {
           if (!r.codigo_projeto?.trim()) errors.push({ line, message: "Código do projeto vazio" });
           else if (!db.projects.some((p) => p.code === r.codigo_projeto.trim().toUpperCase())) errors.push({ line, message: `Projeto não encontrado: ${r.codigo_projeto}` });
           if (!r.valor || Number.isNaN(Number(r.valor.replace(/\./g, "").replace(",", ".")))) errors.push({ line, message: `Valor inválido: ${r.valor ?? "(vazio)"}` });
@@ -381,7 +391,7 @@ export const importsApi = {
     }, 500),
   commit: (kind: ImportKind, fileName: string, rows: Row[], report: { total: number; ok: number; errors: { line: number; message: string }[] }) =>
     write((db, me) => {
-      if (!canWriteAll(me, kind === "clientes" ? "clients" : kind === "freelancers" ? "freelancers" : "receivables")) throw new ApiError(403, "Sem permissão para importar.");
+      assertSimpleImport(me, kind);
       const blocking = new Set(report.errors.filter((e) => !e.message.includes("será atualizado")).map((e) => e.line));
       let imported = 0;
       rows.forEach((r, i) => {
@@ -394,7 +404,8 @@ export const importsApi = {
           if (!db.freelancers.some((f) => f.email === r.email.toLowerCase())) db.freelancers.push({ ...baseFields(me.id), userId: null, name: r.nome, email: r.email.toLowerCase(), phone: r.telefone ?? null, jobTitle: r.cargo?.trim() || null, legalName: null, document: null, pixKey: r.pix ?? null, bankName: null, bankAgency: null, bankAccount: null, specialties: [(r.especialidade as "design") || "outro"], status: "ativo", notes: "Importado por planilha", avatarColor: "#0891b2" });
         } else if (kind === "recebiveis") {
           const p = db.projects.find((x) => x.code === r.codigo_projeto.trim().toUpperCase())!;
-          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents: Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100), taxCents: 0, expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "parcela", collectionNote: null });
+          const amountCents = Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100);
+          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents, taxCents: taxOf(db, amountCents), expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "parcela", collectionNote: null });
         }
         imported++;
       });

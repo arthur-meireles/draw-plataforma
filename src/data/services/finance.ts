@@ -252,6 +252,7 @@ export const financeApi = {
       }
       if (req) req.sentAt = nowIso();
       const fl = db.freelancers.find((f) => f.id === p.freelancerId)!;
+      if (!fl.email) throw new ApiError(422, `Cadastre o e-mail de ${fl.name} em Freelancers para reenviar o link. Enquanto isso, use "Copiar link".`);
       const proj = db.projects.find((x) => x.id === p.projectId) ?? null;
       queueSystemEmail(db, { to: [fl.email], subject: "Lembrete: envie sua nota fiscal", template: "nf_freelancer", projectId: p.projectId });
       if (p.status === "aguardando_nf") notify(db, me, { userId: fl.userId, type: "nf_solicitada", title: "Lembrete: envie sua nota fiscal", project: proj, entityType: "payable", entityId: p.id });

@@ -58,7 +58,8 @@ export function createFreelancerPayable(
   db.shareLinks.push(link);
   const req: FreelancerInvoiceRequest = { ...baseFields(me.id), payableId: pay.id, shareLinkId: link.id, sentAt: nowIso(), submittedAt: null, declaredLegalName: null, declaredDocument: null, declaredPixKey: null, declaredInvoiceNumber: null, declaredAmountCents: null, source: null, reissueReason: null, reissueRequestedAt: null };
   db.freelancerInvoiceRequests.push(req);
-  queueSystemEmail(db, { to: [fl.email], subject: `Envie sua nota fiscal — ${p.code}`, template: "nf_freelancer", projectId: p.id });
+  // freelancer importado sem e-mail: o pedido fica no link (copiar/reenviar depois de completar o cadastro)
+  if (fl.email) queueSystemEmail(db, { to: [fl.email], subject: `Envie sua nota fiscal — ${p.code}`, template: "nf_freelancer", projectId: p.id });
   notify(db, me, { userId: fl.userId, type: "nf_solicitada", title: "Envie sua nota fiscal", project: p, entityType: "payable", entityId: pay.id });
   emit(db, me, { type: "payable.created", entityType: "payable", entityId: pay.id, project: p, data: { agreedAmountCents: pay.agreedAmountCents, kind: "freelancer", memberId: m.id, additional: !!opts.additional } });
   return pay;
@@ -250,7 +251,7 @@ export const payablesExtraApi = {
       }
       const fl = db.freelancers.find((f) => f.id === pay.freelancerId);
       if (fl) {
-        queueSystemEmail(db, { to: [fl.email], subject: `Envie uma nova nota fiscal${project ? ` — ${project.code}` : ""}`, template: "nf_freelancer_nova", projectId: pay.projectId });
+        if (fl.email) queueSystemEmail(db, { to: [fl.email], subject: `Envie uma nova nota fiscal${project ? ` — ${project.code}` : ""}`, template: "nf_freelancer_nova", projectId: pay.projectId });
         notify(db, me, { userId: fl.userId, type: "nf_solicitada", title: "A Draw pediu uma nova nota fiscal", body: reason.trim(), project, entityType: "payable", entityId: pay.id });
       }
       emit(db, me, { type: "payable.invoice_rejected", entityType: "payable", entityId: pay.id, project, data: { reason: reason.trim(), previous } });
