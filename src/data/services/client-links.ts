@@ -253,6 +253,11 @@ export const clientLinksApi = {
 
 /* ───────── Página pública /c/[token] (sem sessão) ───────── */
 
+/** Resposta do cliente com comentário vira comentário externo na aba Comentários (autor = nome informado, "via link"). */
+function addClientComment(db: Database, projectId: ID, name: string, body: string) {
+  db.comments.push({ ...baseFields(null), projectId, taskId: null, authorId: null, body, mentions: [], externalAuthorName: name });
+}
+
 function openLink(db: Database, token: string) {
   const l = db.shareLinks.find((s) => s.token === token && !s.deletedAt);
   if (!l || !isClientLink(l)) throw new ApiError(404, "Link inválido. Confira o endereço recebido por e-mail.");
@@ -365,10 +370,12 @@ export const publicClientLinkApi = {
             }
             emit(db, null, { type: "proposal.adjustments_requested", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, comment, respondentName: name, via: "link_cliente" } });
             notifyMany(db, null, [p.ownerId, l.createdBy], { type: "cliente", title: `Cliente pediu ajustes na proposta v${prop.version}`, body: `${name}: "${comment}"`, project: p, entityType: "proposal", entityId: prop.id });
+            addClientComment(db, p.id, name, `Pedido de ajustes na proposta v${prop.version}: ${comment}`);
           }
         } else {
           const a = db.approvals.find((x) => x.id === l.targetId)!;
           decideApprovalTx(db, null, a, input.decision, comment, { via: "link_cliente", name });
+          if (comment) addClientComment(db, p.id, name, `${input.decision === "ajustes" ? "Pedido de ajustes" : "Aprovação"} (${PROJECT_STAGES.find((s) => s.key === a.stageKey)?.label ?? a.stageKey}): ${comment}`);
         }
         return { decision: l.response };
       }),

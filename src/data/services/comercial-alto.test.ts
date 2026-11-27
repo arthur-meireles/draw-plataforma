@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { approvalsApi, financeApi, projectLifecycleApi, projectsApi, proposalsApi, tasksApi } from "./index";
+import { approvalsApi, commentsApi, financeApi, publicClientLinkApi, projectLifecycleApi, projectsApi, proposalsApi, tasksApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -279,5 +279,20 @@ describe("RN-70 — equipe alterada depois da conclusão", () => {
     transaction((d) => { const x = d.payables.find((y) => y.id === pay.id)!; x.status = "pago"; });
     const r2 = await projectsApi.updateMember(m.id, { agreedAmountCents: 40_000 });
     expect(r2.paymentSuggestion).toMatchObject({ amountCents: 15_000, additional: true });
+  });
+});
+
+describe("RN-71 — ajustes pedidos pelo cliente aparecem em Comentários", () => {
+  it("comentário externo com o nome do cliente, sem autor interno", async () => {
+    const { p, prop } = await quoteWithSentProposal();
+    const link = loadDb().shareLinks.find((l) => l.purpose === "proposta" && l.targetId === prop.id)!;
+    setSessionUserId(null);
+    await publicClientLinkApi.respond(link.token, { decision: "ajustes", name: "Maria", comment: "Reduzir o escopo" });
+    as("usr_carlos");
+    const list = await commentsApi.list(p.id);
+    const c = list.find((x) => x.body.includes("Reduzir o escopo"))!;
+    expect(c.external).toBe(true);
+    expect(c.authorName).toBe("Maria");
+    expect(c.authorId).toBeNull();
   });
 });

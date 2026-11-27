@@ -346,9 +346,12 @@ export interface ProjectDeliverableMetric extends BaseEntity {
 export interface Comment extends BaseEntity {
   projectId: ID;
   taskId: ID | null;
-  authorId: ID;
+  /** Nulo quando o comentário veio do cliente pelo link público (RN-71/RN-74). */
+  authorId: ID | null;
   body: string;
   mentions: ID[];
+  /** Nome informado pelo cliente no link público (comentário externo). */
+  externalAuthorName?: string | null;
 }
 
 export type ApprovalDecision = "pendente" | "aprovado" | "ajustes" | "negado";

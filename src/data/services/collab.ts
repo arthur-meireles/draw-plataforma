@@ -219,8 +219,9 @@ export const commentsApi = {
         .filter((c) => c.projectId === p.id && !c.deletedAt && (taskId === undefined || c.taskId === taskId))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .map((c) => {
-          const u = db.users.find((x) => x.id === c.authorId);
-          return { ...c, authorName: u?.name ?? "—", authorColor: u?.avatarColor ?? "#888", taskTitle: c.taskId ? db.tasks.find((t) => t.id === c.taskId)?.title ?? null : null };
+          const u = c.authorId ? db.users.find((x) => x.id === c.authorId) : null;
+          const external = !c.authorId;
+          return { ...c, external, authorName: external ? (c.externalAuthorName ?? "Cliente") : (u?.name ?? "—"), authorColor: u?.avatarColor ?? "#8a8f98", taskTitle: c.taskId ? db.tasks.find((t) => t.id === c.taskId)?.title ?? null : null };
         });
     }),
 

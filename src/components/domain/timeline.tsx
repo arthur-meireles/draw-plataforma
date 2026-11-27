@@ -2,7 +2,7 @@
 /** Linha do tempo de eventos (RF-X-02) e conversa de comentários com menções. */
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Avatar, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
+import { Avatar, Badge, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { commentsApi, eventsApi } from "@/data/services";
 import { APPROVAL_DECISION_LABEL, PAYABLE_STATUS_LABEL, projectStage, quoteStage, taskStatus } from "@/data/reference";
@@ -248,6 +248,7 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
             <div className="min-w-0 flex-1 rounded-xl border border-line bg-layer-2 px-3 py-2 shadow-raised">
               <div className="mb-0.5 flex items-center gap-2">
                 <span className="text-sm font-medium text-fg">{c.authorName}</span>
+                {c.external && <Badge tone="violet" size="xs">Cliente via link</Badge>}
                 <time className="text-2xs text-fg-subtle" title={dateTime(c.createdAt)}>
                   {relative(c.createdAt)}
                 </time>
