@@ -7,7 +7,7 @@
 import { baseFields, nowIso } from "../db";
 import type { Database, Folder, ID, User } from "../types";
 import { ApiError, emit, read, touch, visibleProjects, write } from "./_core";
-import { canWriteAll } from "@/lib/permissions";
+import { canWrite, canWriteAll } from "@/lib/permissions";
 
 export const PROJECTS_ROOT = "fld_projetos";
 
@@ -104,8 +104,8 @@ export const driveApi = {
           folders: [],
           files: { projectId: p.id },
           canCreateFolder: false,
-          canUpload: true,
-          uploadTarget: { projectId: p.id },
+          canUpload: canWrite(me, "files"), // Financeiro (L) só consulta — RN-30
+          uploadTarget: canWrite(me, "files") ? { projectId: p.id } : null,
         };
       }
 

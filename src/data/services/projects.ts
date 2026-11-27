@@ -18,6 +18,7 @@ import type {
 import {
   ApiError,
   assertProjectVisible,
+  requireAccess,
   emit,
   emitValueChange,
   notify,
@@ -322,6 +323,9 @@ export const projectsApi = {
   move: (id: ID, input: { stageKey: ProjectStageKey | QuoteStageKey; position: number }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      if (p.status === "cotacao") requireAccess(me, "commercial", "all", "Só o Comercial, a gestão e a administração movem cotações no funil.");
+      else requireAccess(me, "projects", "write", "Seu perfil só consulta este projeto. Peça ao responsável para mudar a etapa.");
+      if (me.role === "freelancer") throw new ApiError(403, "A etapa do projeto é mudada pela equipe da Draw.");
       if (p.status === "cotacao") {
         const to = input.stageKey as QuoteStageKey;
         if (to === "aprovada") throw new ApiError(422, "Para aprovar, aprove uma proposta do projeto.");
@@ -356,6 +360,7 @@ export const projectsApi = {
   pause: (id: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "projects", "all", "Só a gestão e a administração fazem isso no projeto.");
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser pausados.");
       if (!reason.trim()) throw new ApiError(422, "Informe por que o projeto está parado.", { reason: "Informe o motivo" });
       p.pausedAt = nowIso();
@@ -368,6 +373,7 @@ export const projectsApi = {
   resume: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "projects", "all", "Só a gestão e a administração fazem isso no projeto.");
       if (!p.pausedAt) throw new ApiError(409, "O projeto não está pausado.");
       p.pausedAt = null;
       p.pausedReason = null;
@@ -380,6 +386,7 @@ export const projectsApi = {
   markLost: (id: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "commercial", "all", "Só o Comercial, a gestão e a administração mudam o resultado de uma cotação.");
       if (!reason.trim()) throw new ApiError(422, "Informe o motivo da perda.", { reason: "Informe o motivo da perda" });
       if (p.status !== "cotacao") throw new ApiError(409, "Só cotações podem ser marcadas como perdidas.");
       p.status = "perdido";
@@ -394,6 +401,7 @@ export const projectsApi = {
   reopenQuote: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "commercial", "all", "Só o Comercial, a gestão e a administração mudam o resultado de uma cotação.");
       if (p.status !== "perdido") throw new ApiError(409, "Só cotações perdidas podem ser reabertas.");
       p.status = "cotacao";
       p.quoteStageKey = "negociacao";
@@ -458,6 +466,7 @@ export const projectsApi = {
   archive: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "projects", "all", "Só a gestão e a administração fazem isso no projeto.");
       if (!["concluido", "perdido", "cancelado"].includes(p.status)) throw new ApiError(409, "Só projetos concluídos, perdidos ou cancelados podem ser arquivados.");
       p.status = "arquivado";
       p.archivedAt = nowIso();
@@ -469,6 +478,7 @@ export const projectsApi = {
   unarchive: (id: ID) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
+      requireAccess(me, "projects", "all", "Só a gestão e a administração fazem isso no projeto.");
       if (p.status !== "arquivado") throw new ApiError(409, "Projeto não está arquivado.");
       p.status = p.completedAt ? "concluido" : "perdido";
       p.archivedAt = null;

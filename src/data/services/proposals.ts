@@ -1,7 +1,7 @@
 import { FIRST_PROJECT_STAGE } from "../reference";
 import { baseFields, nowIso } from "../db";
-import type { ID, Proposal } from "../types";
-import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, notify, read, touch, write } from "./_core";
+import type { ID, Proposal, User } from "../types";
+import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, notify, read, requireAccess, touch, write } from "./_core";
 import { generateTasksFromTemplate } from "./projects";
 import { canSeeMoney } from "@/lib/permissions";
 
@@ -9,6 +9,12 @@ export interface InstallmentInput {
   amountCents: number;
   dueRule: string | null;
   dueAt: string | null;
+}
+
+/** RN-30 — criar, editar, enviar, aprovar e recusar propostas: Comercial "T" e acesso a valores (Financeiro só consulta). */
+function requireProposalWrite(me: User) {
+  requireAccess(me, "commercial", "all", "Seu perfil só consulta propostas. Peça ao Comercial para fazer essa alteração.");
+  if (!canSeeMoney(me)) throw new ApiError(403, "Seu perfil não tem acesso a valores e propostas.");
 }
 
 export const proposalsApi = {
@@ -30,7 +36,7 @@ export const proposalsApi = {
   create: (projectId: ID, input: { amountCents: number; paymentTermsNote?: string; installments: InstallmentInput[]; fileId?: ID | null }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
-      if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão.");
+      requireProposalWrite(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível criar propostas para projetos em cotação.");
       const errors: Record<string, string> = {};
       if (input.amountCents <= 0) errors.amountCents = "Informe o valor da proposta";
@@ -55,6 +61,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
+      requireProposalWrite(me);
       if (prop.status !== "rascunho") throw new ApiError(409, "Só rascunhos podem ser editados. Crie uma nova versão.");
       const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
       if (sum !== input.amountCents) throw new ApiError(422, "A soma das parcelas deve ser igual ao valor da proposta", { installments: "A soma das parcelas deve ser igual ao valor da proposta" });
@@ -74,6 +81,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
+      requireProposalWrite(me);
       if (prop.status !== "rascunho") throw new ApiError(409, "Esta proposta já foi enviada.");
       const now = nowIso();
       prop.status = "enviada";
@@ -95,7 +103,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
-      if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão para aprovar propostas.");
+      requireProposalWrite(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Este projeto não está em cotação.");
       if (prop.status !== "enviada") throw new ApiError(409, "Envie a proposta antes de aprová-la.");
       const now = nowIso();
@@ -142,6 +150,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
+      requireProposalWrite(me);
       prop.status = "recusada";
       touch(prop);
       if (p.quoteStageKey === "enviada") p.quoteStageKey = "negociacao";
