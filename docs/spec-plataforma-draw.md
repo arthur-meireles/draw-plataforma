@@ -215,7 +215,7 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 
 | Tabela | Campos principais |
 |---|---|
-| `projects` | `client_id` **NOT NULL**, `project_type_id` **NOT NULL**, `code` (único; RN-05), `title`, `briefing`, `origin` (`cotacao`/`direto`), `status` (`cotacao`/`ativo`/`concluido`/`arquivado`/`perdido`/`cancelado`), `quote_stage_key` (quando `cotacao`), `project_stage_key` (quando `ativo`), `priority_key`, `owner_id`, `billing_contact_id`, datas: `entered_at`, `quote_sent_at`, `approved_at`, `started_at`, `due_at`, `estimated_end_at`, `completed_at`, `archived_at`; `contracted_amount_cents`, `lost_reason`, `is_environment` (futuro, default `false`), `size` (ref. `project_sizes`, nulo), `payment_condition` (nulo), `paused_at` + `paused_reason` ("caso parado"), `legacy_code` (ID da planilha, ex.: `P001`, único por organização quando presente — chave da importação) |
+| `projects` | `client_id` **NOT NULL**, `project_type_id` **NOT NULL**, `code` (único; RN-05), `title`, `briefing`, `origin` (`cotacao`/`direto`), `status` (`cotacao`/`ativo`/`concluido`/`arquivado`/`perdido`/`cancelado`), `quote_stage_key` (quando `cotacao`), `project_stage_key` (quando `ativo`), `priority_key`, `owner_id`, `billing_contact_id`, datas: `entered_at`, `quote_sent_at`, `approved_at`, `started_at`, `due_at`, `estimated_end_at`, `completed_at`, `archived_at`; `contracted_amount_cents`, `lost_reason`, `is_environment` (futuro, default `false`), `size` (ref. `project_sizes`, nulo), `payment_condition` (nulo), `paused_at` + `paused_reason` ("caso parado"), `status_before_archive` (status em que estava ao arquivar; o desarquivar volta a ele — RN-50), `legacy_code` (ID da planilha, ex.: `P001`, único por organização quando presente — chave da importação) |
 | `proposals` | `project_id`, `version`, `amount_cents`, `payment_terms` (parcelas: tabela `proposal_installments`), `status` (`rascunho`/`enviada`/`aprovada`/`recusada`), `sent_at`, `approved_at`, `file_id` |
 | `proposal_installments` | `proposal_id`, `number`, `amount_cents`, `due_rule` ou `due_at` |
 | `tasks` | `project_id` (nulo só para tarefas do módulo Administrativo), `module` (`projeto`/`adm`), `parent_task_id`, `stage_key` (etapa do projeto a que pertence), `title`, `description`, `assignee_user_id` ou `assignee_freelancer_id`, `status_key`, `priority_key`, `start_at`, `due_at`, `estimate_minutes`, `position` (fractional index), `sprint_id`, `completed_at`, `area` (ref. `adm_areas`; só quando `module = adm`) |
@@ -228,11 +228,11 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | Tabela | Campos principais |
 |---|---|
 | `comments` | `project_id`, `task_id` (nulo), `author_id`, `body`, `mentions uuid[]` |
-| `approvals` | `project_id`, `stage_key`, `requested_from`, `decision` (`aprovado`/`ajustes`/`negado`), `reason`, `decided_by`, `decided_at` |
+| `approvals` | `project_id`, `stage_key`, `requested_from`, `decision` (`pendente`/`aprovado`/`ajustes`/`negado`), `reason`, `decided_by` (nulo quando o cliente decide pelo link), `decided_at`, `requested_by` (quem pediu — recebe a decisão), `share_link_id` (link `aprovacao` enviado ao cliente), `decided_via` (`interno`/`link_cliente`), `decided_by_name` (nome informado pelo cliente no link) |
 | `folders` | `parent_id` (nulo = raiz), `name`, `system_key` (raízes fixas), `allowed_roles role[]` (vazio = todos os internos), `order`. Raízes semeadas: `01. Projetos`, `02. Vendas`, `03. Financeiro` (admin/gestão/financeiro), `04. Adm & Operacional`, `05. Marketing`, `06. Design`, `07. Cérebro Draw`, `08. Cérebro Paula` (só admin), `10. Estratégia`, `11. Jurídico & RH`, `Eventos 2026`, `Planilha Projetos Marina e equipe`. Raízes não são renomeadas nem excluídas |
 | `files` | `project_id` (ou `client_id`, ou `module = adm`), `folder_id` (nulo para arquivos de projeto), `task_id` (nulo), `category` (`entrega`/`briefing`/`marca_cliente`/`proposta`/`nf`/`institucional`/`outro`), `name`, `current_version_id`, `released_to_freelancers`. **Em `01. Projetos` as pastas são virtuais**: `<Cliente>/<Código — Título>` montadas pelos relacionamentos (arquivo continua ligado ao projeto — P1) |
 | `file_versions` | `file_id`, `version`, `storage_key`, `size`, `mime`, `sha256`, `uploaded_by`, `note` |
-| `share_links` | `token_hash`, `purpose` (`nf_freelancer`, futuro: `entrega`), `project_id`, `target_id`, `expires_at`, `password_hash`, `max_uses`, `use_count`, `revoked_at` |
+| `share_links` | `token_hash`, `purpose` (`nf_freelancer` → payable; `proposta` → proposal; `aprovacao` → approval; `entrega` → project), `project_id`, `target_id`, `expires_at` (30 dias), `password_hash`, `max_uses`, `use_count`, `revoked_at`, `file_version_ids uuid[]` (arquivos liberados no link), `recipients text[]` (e-mails dos contatos do cliente), `message`, `last_sent_at`, `viewed_at` (primeira abertura), `responded_at`, `response` (`aprovado`/`ajustes`), `response_comment`, `respondent_name`. Status mostrado é derivado: enviado → visto → aprovado / ajustes pedidos; ou expirado, revogado, encerrado (alvo decidido por dentro) — RN-51/52 |
 
 ### 6.6 Financeiro (sempre por projeto)
 
@@ -257,7 +257,7 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | Tabela | Campos principais |
 |---|---|
 | `events` | `entity_type`, `entity_id`, `project_id`, `client_id` (desnormalizados para consulta), `actor_id`, `type` (ex.: `project.stage_changed`), `data jsonb` (antes/depois), `occurred_at`. **Append-only.** |
-| `notifications` | `user_id`, `type`, `project_id`, `entity_type`, `entity_id`, `title`, `read_at` |
+| `notifications` | `user_id`, `type` (`atribuicao`, `mencao`, `prazo`, `atraso`, `aprovacao`, `nf_solicitada`, `nf_recebida`, `etapa`, `projeto`, `comentario`, `cliente`, `revisao`), `project_id`, `entity_type`, `entity_id`, `title`, `body`, `read_at` — destinatários pela RN-53 |
 | `notification_preferences` | `user_id`, `type`, `enabled` (só no app — Caixa de entrada; `mencao` não pode ser desligada) |
 | `imports` | `kind`, `source_file_id`, `status`, `mapping jsonb`, `report jsonb`, `dry_run` |
 | `email_logs` | `channel` (`system` — só transacional para pessoas de fora), `provider` (`brevo`/`resend`/`draw_smtp`), `user_id`, `project_id` (nulo para e-mails do sistema sem projeto), `provider_message_id`, `to`, `cc`, `subject`, `template`, `status` (`queued`/`sent`/`delivered`/`bounced`/`complained`/`failed`), `error`, `sent_at` |
@@ -308,6 +308,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M3-02 | Criar projeto em cotação: cliente (obrigatório; cadastrar na hora se novo), tipo, título, responsável. | R1 |
 | RF-M3-03 | Tarefas da cotação com prazo e responsável (ex.: elaborar proposta). | R1 |
 | RF-M3-04 | Propostas versionadas com valor, parcelas e arquivo; datas de envio e aprovação registradas pelo sistema. | R1 |
+| RF-M3-07 | **Enviar proposta ao cliente** (RN-51): escolher destinatários entre os contatos do cliente (padrão: contato de cobrança/decisor) e um recado; o sistema marca a proposta como enviada, cria o link público `/c/:token` (30 dias, revogável) e envia e-mail transacional. O cliente vê versão, escopo, valor, parcelas e PDF e responde **Aprovar proposta** ou **Pedir ajustes** (comentário obrigatório). "Propostas enviadas ao cliente" no prontuário mostra status (enviado, visto, aprovado, ajustes pedidos, expirado, revogado) com reenviar/revogar. | R1 |
 | RF-M3-05 | Aprovar proposta dispara RN-01; perder exige motivo. | R1 |
 | RF-M3-06 | Filtros por etapa, cliente, responsável, tipo e período. | R1 |
 
@@ -324,7 +325,8 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M4-07 | Prioridade manual por arrastar dentro da etapa. | R1 |
 | RF-M4-08 | "Minhas tarefas": atrasadas, hoje, esta semana, depois. | R1 |
 | RF-M4-09 | Filtro por pessoa, cliente, tipo e prazo. | R1 |
-| RF-M4-10 | Aprovações por etapa; "ajustes" e "negado" exigem motivo **[A VALIDAR]**. | R1 |
+| RF-M4-10 | Aprovações por etapa; "ajustes" e "negado" exigem motivo **[A VALIDAR]**. Uma aprovação é decidida uma vez só (409 se já decidida). | R1 |
+| RF-M4-18 | **Pedir aprovação ao cliente** e **Enviar entrega ao cliente** (aba Aprovações, RN-52): destinatários entre os contatos do cliente, arquivos escolhidos (versão atual; nunca proposta/NF) e recado → link público `/c/:token` (purposes `aprovacao`/`entrega`, 30 dias) + e-mail transacional. Na aprovação o cliente aprova ou pede ajustes, e a decisão fica na Approval (`decided_via = link_cliente`). "Envios ao cliente" lista os links com status, copiar link, reenviar e revogar. "Registrar pedido…" continua para pedidos feitos fora do sistema. | R1 |
 | RF-M4-11 | Materiais de apoio liberados ao freelancer (manual de marca do cliente, tom de voz…). | R1 |
 | RF-M4-12 | Concluir projeto dispara RN-03; arquivar mantém tudo (RN-07). | R1 |
 | RF-M4-13 | Alertas de prazo próximo (padrão 2 dias) e atraso. | R1 |
@@ -392,11 +394,12 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 
 | ID | Requisito | Release |
 |---|---|---|
-| RF-M10-01 | Só no app (Caixa de entrada — **não há e-mail interno**): atribuição, menção (sempre entregue), prazo, atraso, aprovação, NF solicitada/recebida. Cada tipo, exceto menção, pode ser silenciado em Preferências. | R1 |
+| RF-M10-01 | Só no app (Caixa de entrada — **não há e-mail interno**): atribuição, menção (sempre entregue), prazo, atraso, aprovação, NF solicitada/recebida, mudança de etapa, situação do projeto (pausa, retomada, conclusão, cancelamento), comentário, resposta do cliente pelo link e tarefa em revisão. Cada tipo, exceto menção, pode ser silenciado em Preferências. A caixa mostra só o que envolve a pessoa (RN-53) — para todos os perfis, inclusive Administrador — e pode ser agrupada por projeto (`?agrupar=projeto`). | R1 |
+| RF-M10-02 | Menções escolhidas na lista de sugestões (responsável e equipe do projeto, inclusive freelancers com acesso); o comentário guarda os ids escolhidos (RN-54). | R1 |
 
 ### M11 — E-mail transacional do sistema
 
-Não há e-mail interno (decisão da 0.7): a comunicação da equipe acontece na plataforma (comentários, menções, Caixa de entrada). O sistema só envia e-mails **transacionais para pessoas de fora** — convite, recuperação de senha e pedido/lembrete de NF ao freelancer —, em nome da plataforma (ex.: `nao-responda@draw...`). Transporte padrão Brevo + Resend (RNF-12); o admin pode configurar o **SMTP próprio da Draw** como principal.
+Não há e-mail interno (decisão da 0.7): a comunicação da equipe acontece na plataforma (comentários, menções, Caixa de entrada). O sistema só envia e-mails **transacionais para pessoas de fora** — convite, recuperação de senha, pedido/lembrete de NF ao freelancer e os envios ao cliente (proposta, pedido de aprovação, entrega — modelos `proposta_cliente`, `aprovacao_cliente`, `entrega_cliente`, sempre por `queueSystemEmail`) —, em nome da plataforma (ex.: `nao-responda@draw...`). Transporte padrão Brevo + Resend (RNF-12); o admin pode configurar o **SMTP próprio da Draw** como principal.
 
 | ID | Requisito | Release |
 |---|---|---|
@@ -438,6 +441,11 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-14 | **Cobrança adicional** cria recebível `kind = adicional` ligado ao projeto, imposto pela alíquota da organização; não altera `contracted_amount_cents` (margem considera recebíveis adicionais à parte). |
 | RN-15 | **Imposto** de recebível = `amount_cents × organizations.settings.tax_rate_pct / 100` (padrão 6%, como na planilha). |
 | RN-16 | **Pastas**: raízes do sistema não são renomeadas/excluídas; pasta só é excluída vazia; arquivos de projeto não são movidos para fora do projeto; `allowed_roles` da pasta-mãe é herdado ao criar subpasta. |
+| RN-50 | **Arquivar guarda o status anterior** (`status_before_archive`: `concluido`, `perdido` ou `cancelado`); desarquivar volta exatamente a ele (cancelado continua cancelado). Registros antigos sem o campo deduzem pelo último evento (`project.cancelled` → cancelado; `completed_at` → concluído; senão perdido). Arquivar/desarquivar exige `projects = T`. |
+| RN-51 | **Proposta ao cliente por link**: enviar exige `commercial = T` e acesso a valores, projeto em `cotacao` e proposta em rascunho; cria `share_link` `proposta` (30 dias, revogável) e e-mail transacional aos contatos escolhidos do cliente (sem contato com e-mail → 422). No link, **Aprovar** executa a mesma transação da RN-01 (sem ator; evento `proposal.approved` com `via = link_cliente` e o nome informado; sem IP) e avisa responsável, equipe, Financeiro e Gestão; **Pedir ajustes** exige comentário, leva a cotação a `negociacao`, registra `proposal.adjustments_requested` no histórico e avisa o responsável e quem enviou. Uma resposta por link; link de proposta já decidida por dentro fica "encerrado". |
+| RN-52 | **Aprovação/entrega ao cliente por link**: só perfis com escrita em projetos (nunca freelancer); só arquivos do próprio projeto, fora `proposta`/`nf`; aprovação só em projeto `ativo` (reaproveita a pendente da etapa, revogando o link anterior); entrega em `ativo` ou `concluido`. A resposta do cliente decide a Approval (`decided_via = link_cliente`, `decided_by_name`), avisa quem pediu, o responsável e a equipe (com freelancers). Reenviar renova 30 dias; revogar impede abrir. |
+| RN-53 | **Caixa de entrada = o que envolve a pessoa** (todos os perfis, inclusive Administrador; nunca quem agiu): responsável e equipe do projeto (inclusive freelancers com acesso) recebem mudança de etapa, pausa/retomada, conclusão, cancelamento, decisão de aprovação e resposta do cliente; comentário sem menção avisa o responsável do projeto e o responsável/quem criou a tarefa comentada; tarefa atribuída/reatribuída avisa o novo responsável; tarefa em revisão avisa o responsável do projeto e quem criou a tarefa; pedido de aprovação avisa o responsável. Destinatários só ativos, sem repetição. |
+| RN-54 | **Menções** guardam ids escolhidos na sugestão; o serviço descarta quem não enxerga o projeto (só responsável e equipe, inclusive freelancers). Menção sempre chega (ignora preferência) e quem é mencionado não recebe também o aviso de comentário. |
 | RN-17 | Drive (detalhe da RN-16): pastas-raiz da estrutura da Draw não são renomeadas nem excluídas; nome único por pasta-mãe; pasta só é excluída vazia; arquivo de projeto não é movido (fica na pasta do projeto); arquivos de mesmo nome em pastas diferentes são arquivos distintos (só viram versão dentro da mesma pasta ou projeto). |
 
 ---
@@ -500,6 +508,7 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | `/painel` | Indicadores (abas: Visão geral, Comercial, Operação, Financeiro, Equipe, Burndown) |
 | `/configuracoes/usuarios`, `/configuracoes/tipos-de-projeto`, `/configuracoes/preferencias`, `/configuracoes/email` | Admin (inclui SMTP do sistema, RF-M11-01) |
 | `/nf/:token` | Formulário público de NF |
+| `/c/:token` | Página pública do cliente (RN-51/52): proposta, pedido de aprovação ou entrega — ver/baixar e, quando couber, Aprovar / Pedir ajustes. Fora do cache do service worker |
 | `/arquivos` | **Drive** (`?pasta=<id>`; pastas virtuais `cli:<id>` e `prj:<id>` em 01. Projetos) |
 | `/offline` | Página servida pelo service worker sem conexão |
 
@@ -839,13 +848,15 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | Serviço (front) | Endpoint REST sugerido |
 |---|---|
 | `projectsApi.list / get / createQuote / createDirect / update / move / pause / resume / markLost / reopenQuote / complete / archive / unarchive / cancel / members / addMember / updateMember / removeMember / financials` | `GET/POST /projects`, `GET/PATCH /projects/:id`, `POST /projects/:id/{move,pause,resume,lose,reopen,complete,archive,unarchive,cancel}`, `…/members`, `GET /projects/:id/financials` |
-| `proposalsApi.listByProject / create / update / send / approve / reject` | `GET/POST /projects/:id/proposals`, `PATCH /proposals/:id`, `POST /proposals/:id/{send,approve,reject}` (approve com `Idempotency-Key`) |
+| `proposalsApi.listByProject / create / update / send / approve / reject` | `GET/POST /projects/:id/proposals`, `PATCH /proposals/:id`, `POST /proposals/:id/{send,approve,reject}` (send recebe `{contactIds, message}` e cria o link `proposta`; approve com `Idempotency-Key`) |
+| `clientLinksApi.list / recipients / requestApproval / sendDelivery / resend / revoke` | `GET /projects/:id/client-links`, `GET /projects/:id/client-recipients`, `POST /projects/:id/client-links/{approval,delivery}`, `POST /client-links/:id/{resend,revoke}` |
+| `publicClientLinkApi.get / download / respond` | `GET /public/client-links/:token` (registra a 1ª visualização), `GET /public/client-links/:token/files/:versionId`, `POST /public/client-links/:token/respond` (`{decision, name, comment}`) |
 | `tasksApi.list / get / create / update / remove / sprints / createSprint / setSprintStatus` | `/tasks`, `/sprints` |
 | `clientsApi.*`, `freelancersApi.*`, `projectTypesApi.*` | `/clients`, `/client-groups`, `/client-contacts`, `/freelancers`, `/project-types` |
 | `financeApi.receivables / issueInvoice / receive / updateReceivable / addAdditionalCharge / setCollectionNote / cancelReceivable / payables / createExpense / approvePayable / markDivergent / pay / resendInvoiceLink / overview` | `/receivables…`, `/payables…`, `GET /finance/overview` |
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
-| `commentsApi`, `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `/approvals`, `/events`, `/notifications` |
+| `commentsApi` (inclui `mentionables`), `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `GET /projects/:id/mentionables`, `/approvals`, `/events`, `/notifications` |
 | `authApi`, `usersApi`, `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/auth`, `/users`, `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
 
 ### 21.2 Divergências conscientes da versão 0.3

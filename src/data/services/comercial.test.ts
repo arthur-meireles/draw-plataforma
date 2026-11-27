@@ -222,6 +222,14 @@ describe("RN-53/54 — Caixa de entrada do que envolve a pessoa", () => {
     expect(notesOf("usr_julia").some((n) => n.type === "comentario")).toBe(false); // mencionada não recebe em dobro
   });
 
+  it("sugestões de menção = responsável e equipe, com freelancers", async () => {
+    const { p } = await activeProject();
+    const ids = (await commentsApi.mentionables(p.id)).map((x) => x.id);
+    expect(ids).toEqual(expect.arrayContaining(["usr_carlos", "usr_lucas", "usr_julia"]));
+    expect(ids).not.toContain("usr_pedro");
+    expect(ids).not.toContain("usr_paula"); // quem comenta não se menciona
+  });
+
   it("tarefa em revisão avisa responsável do projeto e quem criou a tarefa", async () => {
     const { p } = await activeProject();
     as("usr_beatriz");
