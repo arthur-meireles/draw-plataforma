@@ -97,7 +97,7 @@ export const SECTIONS: NavSection[] = [
     icon: "finance",
     href: "/financeiro/receber",
     match: ["/financeiro"],
-    resource: "receivables",
+    // sem `resource` na seção: cada item filtra; o freelancer vê só "Meus pagamentos" (payables = P)
     roles: ["admin", "gestao", "comercial", "financeiro", "freelancer"],
     description: "Contas a receber, a pagar e notas fiscais.",
     groups: [
@@ -105,7 +105,8 @@ export const SECTIONS: NavSection[] = [
         items: [
           { label: "Visão geral", href: "/financeiro/visao-geral", icon: "chart", resource: "receivables", requireAll: true },
           { label: "A receber", href: "/financeiro/receber", icon: "receivable", resource: "receivables" },
-          { label: "A pagar", href: "/financeiro/pagar", icon: "payable", resource: "payables" },
+          { label: "A pagar", href: "/financeiro/pagar", icon: "payable", resource: "payables", roles: ["admin", "gestao", "comercial", "financeiro"] },
+          { label: "Meus pagamentos", href: "/financeiro/pagar", icon: "payable", roles: ["freelancer"] },
           { label: "Importar planilha", href: "/financeiro/importar", icon: "upload", resource: "receivables", requireAll: true },
         ],
       },
@@ -197,6 +198,7 @@ export const SECTIONS: NavSection[] = [
       {
         title: "Você",
         items: [
+          { label: "Minha conta", href: "/minha-conta", icon: "user" },
           { label: "Preferências", href: "/configuracoes/preferencias", icon: "settings" },
         ],
       },

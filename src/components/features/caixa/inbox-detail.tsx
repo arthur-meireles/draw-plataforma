@@ -15,6 +15,7 @@ export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: s
   if (n.type === "nf_solicitada" && isFreelancer) return { href: "/", label: "Enviar nota fiscal" };
   if (n.type === "nf_solicitada" || n.type === "nf_recebida") return { href: n.entityType === "payable" && n.entityId ? `/financeiro/pagar?aberto=${n.entityId}` : "/financeiro/pagar", label: "Abrir contas a pagar" };
   // RN-34 — avisos da rotina de prazos
+  if (n.entityType === "freelancer" && n.entityId) return { href: `/freelancers/${n.entityId}`, label: "Abrir cadastro do freelancer" };
   if (n.entityType === "document") return { href: "/adm/documentos", label: "Abrir documentos" };
   if (n.entityType === "receivable" && n.entityId) return { href: `/financeiro/receber?aberto=${n.entityId}`, label: "Abrir recebimento" };
   if (n.entityType === "task" && n.entityId && !n.projectCode) return { href: `/adm/tarefas?tarefa=${n.entityId}`, label: "Abrir tarefa" };

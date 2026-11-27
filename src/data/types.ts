@@ -614,7 +614,9 @@ export type NotificationType =
   /** Resposta do cliente pelo link público (aprovou, pediu ajustes). */
   | "cliente"
   /** Tarefa enviada para revisão. */
-  | "revisao";
+  | "revisao"
+  /** Freelancer alterou os próprios dados de pagamento (PIX, banco, documento) — vai ao Financeiro (RN-39). */
+  | "cadastro";
 
 export interface Notification extends BaseEntity {
   userId: ID;

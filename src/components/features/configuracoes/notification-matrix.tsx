@@ -17,6 +17,7 @@ const TYPES: { type: NotificationType; label: string; description: string }[] = 
   { type: "revisao", label: "Revisão de tarefas", description: "Quando uma tarefa do seu projeto ou pedida por você vai para revisão" },
   { type: "nf_solicitada", label: "Pedido de nota fiscal", description: "Quando uma NF é solicitada" },
   { type: "nf_recebida", label: "Nota fiscal recebida", description: "Quando um freelancer envia a NF" },
+  { type: "cadastro", label: "Dados de pagamento de freelancers", description: "Quando um freelancer muda PIX, banco ou documento (Financeiro)" },
 ];
 
 /**

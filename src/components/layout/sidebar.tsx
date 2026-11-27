@@ -29,7 +29,7 @@ export function useNav() {
       ...s,
       groups: s.groups
         .map((g) => ({ ...g, items: g.items.filter(okItem) }))
-        .concat(s.key === "inicio" && perm.isFreelancer ? [{ title: "Você", items: [{ label: "Meus dados e pagamentos", href: `/freelancers/${perm.user.freelancerId}`, icon: "freelancer" as const }] }] : [])
+        .concat(s.key === "inicio" && perm.isFreelancer ? [{ title: "Você", items: [{ label: "Meus pagamentos", href: "/financeiro/pagar", icon: "payable" as const }, { label: "Meus dados de pagamento", href: "/minha-conta?aba=dados", icon: "freelancer" as const }] }] : [])
         .filter((g) => g.items.length > 0),
     })).filter((s) => (!s.resource || (s.requireAll ? perm.canWriteAll(s.resource) : perm.canRead(s.resource))) && (!s.roles || s.roles.includes(perm.role)) && s.groups.length > 0);
   }, [perm]);
@@ -122,6 +122,7 @@ export function UserMenu({ compact }: { compact?: boolean }) {
   const { clearUserCaches } = usePwa();
   const [switcher, setSwitcher] = useState(false);
   const items: MenuItem[] = [
+    { label: "Minha conta", icon: "user", onSelect: () => router.push("/minha-conta") },
     { label: "Preferências e notificações", icon: "notification", onSelect: () => router.push("/configuracoes/preferencias") },
     { label: theme === "dark" ? "Tema claro" : "Tema escuro", icon: theme === "dark" ? "themeLight" : "themeDark", onSelect: () => setTheme(theme === "dark" ? "light" : "dark"), separatorBefore: true },
     { label: "Usar tema do sistema", icon: "themeSystem", onSelect: () => setTheme("system"), hidden: theme === "system" },

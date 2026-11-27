@@ -39,6 +39,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     { label: "Funil comercial", icon: "commercial", href: "/comercial", show: perm.canRead("commercial") },
     { label: "Contas a receber", icon: "receivable", href: "/financeiro/receber", show: perm.canRead("receivables") },
     { label: "Contas a pagar", icon: "payable", href: "/financeiro/pagar", show: perm.canWriteAll("payables") },
+    { label: "Meus pagamentos", icon: "payable", href: "/financeiro/pagar", show: perm.isFreelancer },
+    { label: "Minha conta", icon: "user", href: "/minha-conta", show: true },
     { label: "Clientes", icon: "clients", href: "/clientes", show: perm.canRead("clients") },
     { label: "Painel de indicadores", icon: "dashboard", href: "/painel", show: perm.canRead("metrics") },
   ];

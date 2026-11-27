@@ -6,7 +6,6 @@ import { AppearanceSection } from "./appearance-section";
 import { FeatureFlagsSection } from "./feature-flags-section";
 import { NotificationMatrix } from "./notification-matrix";
 import { OrgSettingsSection } from "./org-settings-section";
-import { SecuritySection } from "./security-section";
 
 /** Preferências pessoais (todos os usuários) + regras da organização (admin; gestão lê). */
 export function PreferencesView() {
@@ -19,7 +18,6 @@ export function PreferencesView() {
           <NotificationMatrix />
           {p.canRead("settings") && <OrgSettingsSection />}
           <AppearanceSection />
-          <SecuritySection />
           {p.canRead("settings") && <FeatureFlagsSection />}
           <AppSection />
         </div>

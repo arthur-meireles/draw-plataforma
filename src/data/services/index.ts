@@ -22,3 +22,4 @@ export { masterImportApi, parseMasterSheet, MASTER_TEMPLATE_HEADERS, MASTER_TEMP
 export { jobsApi, runDueSweepTx, type SweepResult } from "./jobs";
 export { usersExtraApi, userTypeOf } from "./users-extra";
 export { mfaApi, totp, verifyTotp } from "./mfa";
+export { freelancerSelfApi, type MyFreelancerDataInput } from "./freelancer-self";

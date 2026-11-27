@@ -190,3 +190,15 @@ export const projectStage = (key: ProjectStageKey | null | undefined) =>
   PROJECT_STAGES.find((s) => s.key === key);
 export const taskStatus = (key: TaskStatusKey) => TASK_STATUSES.find((s) => s.key === key)!;
 export const priority = (key: PriorityKey) => PRIORITIES.find((s) => s.key === key)!;
+
+/** Cores de avatar que a pessoa escolhe em Minha conta (dado gravado no usuário). */
+export const AVATAR_COLOR_OPTIONS: { value: string; label: string }[] = [
+  { value: "#3f76ff", label: "Azul" },
+  { value: "#0fa37f", label: "Verde" },
+  { value: "#d97706", label: "Âmbar" },
+  { value: "#db2777", label: "Rosa" },
+  { value: "#7c3aed", label: "Violeta" },
+  { value: "#0891b2", label: "Ciano" },
+  { value: "#dc2626", label: "Vermelho" },
+  { value: "#4d7c0f", label: "Oliva" },
+];

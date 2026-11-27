@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { AccountView } from "@/components/features/conta/account-view";
 
-export default function AccountIndex() {
-  redirect("/configuracoes/preferencias");
+export default function AccountPage() {
+  return <AccountView />;
 }

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { setSessionUserId } from "./_core";
-import { authApi, jobsApi, mfaApi, runDueSweepTx, tasksApi, totp, usersApi, usersExtraApi, verifyTotp } from "./index";
+import { authApi, freelancerSelfApi, jobsApi, mfaApi, runDueSweepTx, tasksApi, totp, usersApi, usersExtraApi, verifyTotp } from "./index";
 import { base32Encode } from "./mfa";
 
 const as = (userId: string | null) => setSessionUserId(userId);
@@ -323,5 +323,49 @@ describe("RN-37 — 2FA com cadastro, códigos de recuperação e obrigatório p
     await expect(mfaApi.disable("errada")).rejects.toMatchObject({ status: 422 });
     await mfaApi.disable("draw123");
     expect((await mfaApi.status()).enabled).toBe(false);
+  });
+});
+
+describe("RN-39 — freelancer mantém os próprios dados de pagamento", () => {
+  const julia = () => loadDb().freelancers.find((f) => f.userId === "usr_julia")!;
+
+  it("vê e altera os próprios dados; o Financeiro é avisado e fica no log (sem o valor)", async () => {
+    as("usr_julia");
+    const mine = await freelancerSelfApi.myData();
+    expect(mine.id).toBe(julia().id);
+    await freelancerSelfApi.updateMyData({ ...mine, pixKey: "julia.nova@pix.com", document: "123.456.789-09" });
+    expect(julia().pixKey).toBe("julia.nova@pix.com");
+    const n = loadDb().notifications.filter((x) => x.userId === "usr_fernanda" && x.type === "cadastro");
+    expect(n).toHaveLength(1);
+    const log = logs("bank_data_changed").at(-1)!;
+    expect(log.detail).toContain("chave PIX");
+    expect(log.detail).not.toContain("julia.nova");
+    expect(loadDb().events.some((e) => e.type === "freelancer.bank_data_changed" && e.entityId === julia().id)).toBe(true);
+  });
+
+  it("só telefone não avisa o Financeiro; sem PIX nem banco é recusado", async () => {
+    as("usr_julia");
+    const mine = await freelancerSelfApi.myData();
+    await freelancerSelfApi.updateMyData({ ...mine, phone: "(11) 98888-7777" });
+    expect(loadDb().notifications.some((x) => x.type === "cadastro")).toBe(false);
+    await expect(freelancerSelfApi.updateMyData({ ...mine, pixKey: null, bankName: null, bankAgency: null, bankAccount: null })).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("interno não usa este endpoint", async () => {
+    as("usr_fernanda");
+    await expect(freelancerSelfApi.myData()).rejects.toMatchObject({ status: 404 });
+    await expect(freelancerSelfApi.updateMyData({ phone: null, legalName: null, document: null, pixKey: "x", bankName: null, bankAgency: null, bankAccount: null })).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("Minha conta — perfil", () => {
+  it("a pessoa edita nome, cargo, telefone e cor; não muda o próprio perfil de acesso", async () => {
+    as("usr_lucas");
+    await usersApi.update("usr_lucas", { name: "Lucas S.", jobTitle: "Designer sênior", phone: "(11) 91234-5678", avatarColor: "#0fa37f", role: "admin" });
+    const u = loadDb().users.find((x) => x.id === "usr_lucas")!;
+    expect(u).toMatchObject({ name: "Lucas S.", jobTitle: "Designer sênior", avatarColor: "#0fa37f", role: "operacao" });
+    await expect(usersApi.update("usr_lucas", { name: " " })).rejects.toMatchObject({ status: 422 });
+    await expect(usersApi.update("usr_lucas", { avatarColor: "red" })).rejects.toMatchObject({ status: 422 });
+    expect((await authApi.me())?.id).toBe("usr_lucas");
   });
 });
