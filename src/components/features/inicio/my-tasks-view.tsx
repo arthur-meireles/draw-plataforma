@@ -12,11 +12,12 @@ type Group = "prazo" | "projeto" | "status";
 const GROUP_TO_LIST = { prazo: "due", projeto: "project", status: "status" } as const;
 
 export function MyTasksView() {
-  const [f, set] = useUrlState({ agrupar: "prazo", concluidas: undefined as string | undefined, q: "", tarefa: undefined as string | undefined });
+  const [f, set] = useUrlState({ agrupar: "prazo", concluidas: undefined as string | undefined, encerrados: undefined as string | undefined, q: "", tarefa: undefined as string | undefined });
   const [view, setView] = useTaskView("lista");
   const group = (["prazo", "projeto", "status"].includes(f.agrupar) ? f.agrupar : "prazo") as Group;
   const showDone = f.concluidas === "1";
-  const q = useApiQuery(["tasks", "mine", f.q], () => tasksApi.list({ assignee: "me", q: f.q || undefined }));
+  const showClosed = f.encerrados === "1";
+  const q = useApiQuery(["tasks", "mine", f.q, showClosed], () => tasksApi.list({ assignee: "me", q: f.q || undefined, includeClosedProjects: showClosed }));
 
   const { visible, open, overdue } = useMemo(() => {
     const all = q.data ?? [];
@@ -34,7 +35,12 @@ export function MyTasksView() {
         }
       />
       <Toolbar
-        end={<Checkbox checked={showDone} onCheckedChange={(v) => set({ concluidas: v ? "1" : undefined })} label="Mostrar concluídas" />}
+        end={
+          <span className="flex flex-wrap items-center gap-3">
+            <Checkbox checked={showClosed} onCheckedChange={(v) => set({ encerrados: v ? "1" : undefined })} label="Incluir projetos encerrados" />
+            <Checkbox checked={showDone} onCheckedChange={(v) => set({ concluidas: v ? "1" : undefined })} label="Mostrar concluídas" />
+          </span>
+        }
       >
         <SearchInput value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar nas minhas tarefas…" className="w-64 max-md:w-48" />
         {view === "lista" && (
@@ -49,7 +55,7 @@ export function MyTasksView() {
           ]}
         />
         )}
-        <ClearFiltersButton show={!!f.q || showDone || group !== "prazo"} onClick={() => set({ q: "", concluidas: undefined, agrupar: "prazo" })} />
+        <ClearFiltersButton show={!!f.q || showDone || showClosed || group !== "prazo"} onClick={() => set({ q: "", concluidas: undefined, encerrados: undefined, agrupar: "prazo" })} />
       </Toolbar>
       <PageBody padded={false}>
         <TaskViews

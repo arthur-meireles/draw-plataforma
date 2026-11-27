@@ -1,5 +1,5 @@
 import { baseFields, nowIso } from "../db";
-import type { AdmArea, Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
+import type { AdmArea, Database, ID, PriorityKey, Project, Task, TaskStatusKey, User } from "../types";
 import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { notifyMany } from "./audience";
 import { canRead, canWrite, canWriteAll } from "@/lib/permissions";
@@ -12,6 +12,8 @@ export interface TaskFilters {
   sprintId?: ID | "backlog";
   parentTaskId?: ID | null;
   includeSubtasks?: boolean;
+  /** RN-57 — em `assignee: "me"`, tarefas de projetos concluídos/cancelados/perdidos/arquivados ficam fora por padrão. */
+  includeClosedProjects?: boolean;
   q?: string;
 }
 
@@ -25,7 +27,15 @@ export interface TaskView extends Task {
   subtasksTotal: number;
   commentsCount: number;
   isOverdue: boolean;
+  /** Título da tarefa-pai, quando é subtarefa (Minhas tarefas mostra "↳ pai"). */
+  parentTitle: string | null;
+  projectStatus: Project["status"] | null;
+  /** Projeto pausado ou encerrado: a tarefa não conta como atrasada (RN-13 / RN-57). */
+  projectOnHold: boolean;
 }
+
+/** Status de projeto em que tarefas seguem em andamento. */
+const OPEN_PROJECT_STATUSES: Project["status"][] = ["ativo", "cotacao"];
 
 export function toTaskView(db: Database, t: Task): TaskView {
   const p = t.projectId ? db.projects.find((x) => x.id === t.projectId) : null;
@@ -33,6 +43,7 @@ export function toTaskView(db: Database, t: Task): TaskView {
   const u = t.assigneeUserId ? db.users.find((x) => x.id === t.assigneeUserId) : null;
   const f = t.assigneeFreelancerId ? db.freelancers.find((x) => x.id === t.assigneeFreelancerId) : null;
   const subs = db.tasks.filter((x) => x.parentTaskId === t.id && !x.deletedAt);
+  const onHold = !!p && (!!p.pausedAt || !OPEN_PROJECT_STATUSES.includes(p.status));
   return {
     ...t,
     projectCode: p?.code ?? null,
@@ -43,7 +54,10 @@ export function toTaskView(db: Database, t: Task): TaskView {
     subtasksDone: subs.filter((s) => s.statusKey === "concluida").length,
     subtasksTotal: subs.length,
     commentsCount: db.comments.filter((c) => c.taskId === t.id && !c.deletedAt).length,
-    isOverdue: t.statusKey !== "concluida" && !!t.dueAt && new Date(t.dueAt).getTime() < Date.now(),
+    isOverdue: !onHold && t.statusKey !== "concluida" && !!t.dueAt && new Date(t.dueAt).getTime() < Date.now(),
+    parentTitle: t.parentTaskId ? (db.tasks.find((x) => x.id === t.parentTaskId)?.title ?? null) : null,
+    projectStatus: p?.status ?? null,
+    projectOnHold: onHold,
   };
 }
 
@@ -89,7 +103,12 @@ export const tasksApi = {
           if (f.sprintId === "backlog" && t.sprintId) return false;
           if (f.sprintId && f.sprintId !== "backlog" && t.sprintId !== f.sprintId) return false;
           if (f.parentTaskId !== undefined && t.parentTaskId !== f.parentTaskId) return false;
-          if (!f.includeSubtasks && f.parentTaskId === undefined && t.parentTaskId) return false;
+          // RN-57 — em "Minhas tarefas" as subtarefas atribuídas a mim também aparecem.
+          if (!f.includeSubtasks && f.assignee !== "me" && f.parentTaskId === undefined && t.parentTaskId) return false;
+          if (f.assignee === "me" && !f.includeClosedProjects && t.projectId) {
+            const st = db.projects.find((x) => x.id === t.projectId)?.status;
+            if (st && !OPEN_PROJECT_STATUSES.includes(st)) return false;
+          }
           if (q && !t.title.toLowerCase().includes(q)) return false;
           return true;
         })

@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { projectsApi, proposalsApi } from "./index";
+import { projectsApi, proposalsApi, tasksApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -78,5 +78,33 @@ describe("RN-56 — escopo de edição da Operação", () => {
     await expect(projectsApi.update(p.id, { ownerId: "usr_lucas" })).rejects.toMatchObject({ status: 403 });
     await expect(projectsApi.update(p.id, { paymentCondition: "a_vista" })).rejects.toMatchObject({ status: 403 });
     await expect(projectsApi.update(p.id, { billingContactId: null })).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("RN-57 — Minhas tarefas", () => {
+  it("inclui subtarefas atribuídas a mim, com o título da tarefa-pai", async () => {
+    const p = await directProject();
+    const parent = await tasksApi.create({ projectId: p.id, title: "Peça principal", assigneeUserId: "usr_carlos" });
+    await tasksApi.create({ projectId: p.id, parentTaskId: parent.id, title: "Revisar ícones", assigneeUserId: "usr_lucas" });
+    as("usr_lucas");
+    const mine = await tasksApi.list({ assignee: "me" });
+    const sub = mine.find((t) => t.title === "Revisar ícones");
+    expect(sub?.parentTitle).toBe("Peça principal");
+  });
+  it("projeto pausado não conta como atrasado; encerrado sai da lista por padrão", async () => {
+    const p = await directProject();
+    const past = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    await tasksApi.create({ projectId: p.id, title: "Atrasada", assigneeUserId: "usr_lucas", dueAt: past });
+    await projectsApi.pause(p.id, "Aguardando cliente");
+    as("usr_lucas");
+    let t = (await tasksApi.list({ assignee: "me" })).find((x) => x.title === "Atrasada")!;
+    expect(t.isOverdue).toBe(false);
+    expect(t.projectOnHold).toBe(true);
+    as("usr_paula");
+    await projectsApi.cancel(p.id, "Cliente desistiu");
+    as("usr_lucas");
+    expect((await tasksApi.list({ assignee: "me" })).some((x) => x.title === "Atrasada")).toBe(false);
+    t = (await tasksApi.list({ assignee: "me", includeClosedProjects: true })).find((x) => x.title === "Atrasada")!;
+    expect(t.projectStatus).toBe("cancelado");
   });
 });

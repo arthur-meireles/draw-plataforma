@@ -11,7 +11,7 @@ import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
 import type { AdmArea, ID, PriorityKey, TaskStatusKey } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
-import { ADM_AREAS, projectStage, quoteStage } from "@/data/reference";
+import { ADM_AREAS, PROJECT_STATUS_LABEL, projectStage, quoteStage } from "@/data/reference";
 import { AssigneePill, type PersonRef } from "./pickers";
 import { DoneTitle, DueChip, PriorityPill, ProjectCode, TaskCheck, TaskStatusIcon, TaskStatusPill } from "./badges";
 import { CommentThread, EventTimeline } from "./timeline";
@@ -62,6 +62,7 @@ export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readO
         </span>
         {showProject && (
           <span className="block truncate text-xs text-fg-subtle">
+            {t.parentTitle && <span title={`Subtarefa de ${t.parentTitle}`}>↳ {t.parentTitle} · </span>}
             {t.projectCode ? (
               <>
                 <span className="font-mono md:hidden">{t.projectCode} · </span>
@@ -70,6 +71,7 @@ export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readO
             ) : (
               "Administrativo"
             )}
+            {t.projectOnHold && <span className="text-warning"> · {t.projectStatus === "ativo" ? "projeto parado" : `projeto ${PROJECT_STATUS_LABEL[t.projectStatus!].toLowerCase()}`}</span>}
           </span>
         )}
       </span>
@@ -88,7 +90,7 @@ export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readO
         )}
         <TaskStatusPill value={t.statusKey} onChange={readOnly ? undefined : (v) => update.mutate({ id: t.id, patch: { statusKey: v } })} showLabel={false} />
         <PriorityPill value={t.priorityKey} onChange={readOnly ? undefined : (v) => update.mutate({ id: t.id, patch: { priorityKey: v } })} showLabel={false} />
-        <DueChip date={t.dueAt} done={done} />
+        <DueChip date={t.dueAt} done={done || t.projectOnHold} />
         <AssigneePill
           value={personOf(t)}
           name={t.assigneeName}
@@ -205,6 +207,8 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
     now.setHours(0, 0, 0, 0);
     const day = 86_400_000;
     const bucket = (t: TaskView) => {
+      // RN-57 — projeto parado/encerrado não infla "Atrasadas"
+      if (t.projectOnHold && t.statusKey !== "concluida") return "parados";
       if (!t.dueAt) return "depois";
       const d = new Date(t.dueAt).getTime();
       if (d < now.getTime()) return "atrasadas";
@@ -212,7 +216,7 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
       if (d < now.getTime() + 7 * day) return "semana";
       return "depois";
     };
-    const labels = { atrasadas: "Atrasadas", hoje: "Hoje", semana: "Esta semana", depois: "Depois" } as const;
+    const labels = { atrasadas: "Atrasadas", hoje: "Hoje", semana: "Esta semana", depois: "Depois", parados: "Projetos parados ou encerrados" } as const;
     (Object.keys(labels) as (keyof typeof labels)[]).forEach((k) => {
       const items = tasks.filter((t) => bucket(t) === k);
       if (items.length) groups.push({ key: k, label: labels[k], icon: k === "atrasadas" ? <Icon name="warning" size="sm" className="text-danger" /> : undefined, items });
