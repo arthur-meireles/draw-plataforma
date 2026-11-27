@@ -314,9 +314,14 @@ export const projectsApi = {
         if (!canSeeMoney(me)) throw new ApiError(403, "Sem permissão para alterar valores.");
         emitValueChange(db, me, "project", p.id, p, "contractedAmountCents", p.contractedAmountCents, patch.contractedAmountCents);
       }
+      if (patch.ownerId && patch.ownerId !== p.ownerId) {
+        const owner = db.users.find((u) => u.id === patch.ownerId);
+        if (!owner || owner.status !== "ativo" || owner.role === "freelancer") throw new ApiError(422, "Escolha um responsável ativo da equipe interna.", { ownerId: "Escolha um responsável ativo da equipe interna" });
+      }
       const before = { ...p };
       Object.assign(p, patch);
       touch(p);
+      if (patch.ownerId && patch.ownerId !== before.ownerId) syncOwnerMember(db, me, p, before.ownerId);
       const changed = Object.keys(patch).filter((k) => (before as unknown as Record<string, unknown>)[k] !== (p as unknown as Record<string, unknown>)[k]);
       if (changed.length) emit(db, me, { type: "project.updated", entityType: "project", entityId: p.id, project: p, data: { fields: changed } });
       if (patch.ownerId && patch.ownerId !== before.ownerId) notify(db, me, { userId: patch.ownerId, type: "atribuicao", title: "Você agora é responsável pelo projeto", project: p });
@@ -586,6 +591,28 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
     marginCents: margin,
     marginPct: contracted ? margin / contracted : null,
   };
+}
+
+/**
+ * RN-55 — trocar o responsável coloca o novo na equipe como `responsavel` (criando ou reativando o membro)
+ * e rebaixa o anterior para `apoio` (continua na equipe e vendo o projeto).
+ */
+function syncOwnerMember(db: Database, me: User, p: Project, previousOwnerId: ID) {
+  const members = db.projectMembers.filter((m) => m.projectId === p.id && !m.deletedAt);
+  const prev = members.find((m) => m.userId === previousOwnerId && m.memberRole === "responsavel");
+  if (prev) {
+    prev.memberRole = "apoio";
+    touch(prev);
+  }
+  const next = members.find((m) => m.userId === p.ownerId);
+  if (next) {
+    next.active = true;
+    next.memberRole = "responsavel";
+    touch(next);
+  } else {
+    db.projectMembers.push({ ...baseFields(me.id), projectId: p.id, userId: p.ownerId, freelancerId: null, memberRole: "responsavel", agreedAmountCents: null, active: true });
+  }
+  emit(db, me, { type: "project.owner_changed", entityType: "project", entityId: p.id, project: p, data: { from: previousOwnerId, to: p.ownerId } });
 }
 
 /** Registros antigos sem `statusBeforeArchive`: deduz pelo último evento de encerramento. */

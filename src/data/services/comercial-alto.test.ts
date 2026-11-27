@@ -53,3 +53,18 @@ describe("RN-13 — projeto pausado não muda etapa", () => {
     expect(fresh(p.id).projectStageKey).toBe("design");
   });
 });
+
+describe("RN-55 — trocar o responsável o coloca na equipe", () => {
+  it("novo responsável vira membro `responsavel` e o anterior fica como `apoio`", async () => {
+    const p = await directProject();
+    await projectsApi.update(p.id, { ownerId: "usr_beatriz" });
+    const ms = loadDb().projectMembers.filter((m) => m.projectId === p.id && m.active && !m.deletedAt);
+    expect(ms.find((m) => m.userId === "usr_beatriz")?.memberRole).toBe("responsavel");
+    expect(ms.find((m) => m.userId === "usr_carlos")?.memberRole).toBe("apoio");
+    expect(loadDb().events.some((e) => e.type === "project.owner_changed" && e.projectId === p.id)).toBe(true);
+  });
+  it("responsável precisa ser interno e ativo", async () => {
+    const p = await directProject();
+    await expect(projectsApi.update(p.id, { ownerId: "usr_julia" })).rejects.toMatchObject({ status: 422 });
+  });
+});

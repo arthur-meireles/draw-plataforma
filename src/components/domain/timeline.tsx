@@ -53,6 +53,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "resume", text: <>retomou o projeto</> };
     case "project.member_added":
       return { icon: "invite", text: <>adicionou um membro à equipe</> };
+    case "project.owner_changed":
+      return { icon: "user", text: <>trocou o responsável do projeto (o anterior segue na equipe como apoio)</> };
     case "project.member_removed":
       return { icon: "team", text: <>removeu um membro da equipe</> };
     case "project.tasks_generated":
