@@ -24,3 +24,4 @@ export { reversalsApi } from "./finance-reversals";
 export { freelancerPaymentDataApi } from "./freelancer-payment-data";
 export { clientBillingApi } from "./client-billing";
 export { collectionApi, type CollectionChannel } from "./collection";
+export { projectFinanceImpactApi } from "./project-finance-impact";

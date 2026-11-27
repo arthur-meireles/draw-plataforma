@@ -33,6 +33,7 @@ import { notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 import { effectiveReceivableStatus } from "./finance-rules";
+import { cancellationImpact, notifyCancellationPending } from "./project-finance-impact";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -474,14 +475,17 @@ export const projectsApi = {
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode cancelar projetos. Peça a quem gerencia projetos.");
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser cancelados. Para cotações, use \"Marcar como perdida\".");
       if (!reason.trim()) throw new ApiError(422, "Informe o motivo do cancelamento.", { reason: "Informe o motivo" });
+      // RN-68 — o que fica em aberto no financeiro (NF emitida, contas a pagar) vai para o Financeiro decidir
+      const impact = cancellationImpact(db, p);
       p.status = "cancelado";
       p.lostReason = reason.trim();
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
       db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto").forEach((r) => (r.status = "cancelado"));
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason } });
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, receivablesCancelled: impact.receivablesToCancel, invoicedOpen: impact.invoicedOpen.length, openPayables: impact.openPayables.length } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
+      notifyCancellationPending(db, me, p, impact);
       return p;
     }),
 

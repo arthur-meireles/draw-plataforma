@@ -6,6 +6,7 @@ import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
 import { toast } from "sonner";
 import { CompleteProjectDialog } from "./complete-project-dialog";
+import { CancelImpactNote } from "./cancel-impact";
 import type { ProjectDetail } from "./use-project";
 
 type Pending = "lost" | "cancel" | "complete" | "archive" | "pause" | null;
@@ -99,7 +100,7 @@ export function ProjectActions({ project, onNewProposal }: { project: ProjectDet
         open={pending === "cancel"}
         onOpenChange={(o) => !o && close()}
         title={`Cancelar ${project.code}?`}
-        description="Recebíveis ainda previstos são cancelados. O projeto e todo o histórico continuam consultáveis."
+        description={<CancelImpactNote projectId={project.id} open={pending === "cancel"} />}
         confirmLabel="Cancelar projeto"
         destructive
         reason={{ label: "Motivo do cancelamento", placeholder: "Explique por que o projeto foi cancelado", required: true }}

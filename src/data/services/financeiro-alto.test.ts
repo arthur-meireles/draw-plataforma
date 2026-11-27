@@ -398,3 +398,22 @@ describe("RN-67 — cobrança pronta para copiar e contato do Financeiro", () =>
     expect(info.financeContact.email).toBe("fin@draw.com.br");
   });
 });
+
+describe("RN-68 — cancelar projeto com pendências financeiras", () => {
+  it("prévia lista NF emitida e contas a pagar; Financeiro é avisado", async () => {
+    const { projectFinanceImpactApi } = await import("./index");
+    const db = loadDb();
+    const p = db.projects.find((x) => x.status === "ativo" && !x.deletedAt && db.receivables.some((r) => r.projectId === x.id && r.status === "previsto"))!;
+    const r = db.receivables.find((x) => x.projectId === p.id && x.status === "previsto")!;
+    r.status = "faturado";
+    r.issuedAt = new Date().toISOString();
+    r.invoiceNumber = "500";
+    save(db);
+    const impact = await projectFinanceImpactApi.cancellationImpact(p.id);
+    expect(impact.invoicedOpen.some((x) => x.id === r.id)).toBe(true);
+    await projectsApi.cancel(p.id, "Cliente desistiu");
+    const after = loadDb();
+    expect(after.receivables.find((x) => x.id === r.id)!.status).toBe("faturado");
+    expect(after.notifications.some((n) => n.userId === "usr_fernanda" && n.projectId === p.id && n.title === "Projeto cancelado com pendências financeiras")).toBe(true);
+  });
+});
