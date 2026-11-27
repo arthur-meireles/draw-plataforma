@@ -491,8 +491,10 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
-      db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto").forEach((r) => (r.status = "cancelado"));
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason } });
+      const cancelled = db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto" && !r.deletedAt);
+      cancelled.forEach((r) => (r.status = "cancelado"));
+      // RN-70 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id) } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),

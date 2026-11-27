@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { projectsApi, proposalsApi, tasksApi } from "./index";
+import { financeApi, projectLifecycleApi, projectsApi, proposalsApi, tasksApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -106,5 +106,73 @@ describe("RN-57 — Minhas tarefas", () => {
     expect((await tasksApi.list({ assignee: "me" })).some((x) => x.title === "Atrasada")).toBe(false);
     t = (await tasksApi.list({ assignee: "me", includeClosedProjects: true })).find((x) => x.title === "Atrasada")!;
     expect(t.projectStatus).toBe("cancelado");
+  });
+});
+
+describe("RN-58 — desfazer aprovação", () => {
+  it("volta para cotação/negociação, remove recebíveis previstos e tarefas abertas, proposta volta a enviada", async () => {
+    const { p, prop } = await quoteWithSentProposal();
+    await proposalsApi.approve(prop.id);
+    expect(loadDb().tasks.filter((t) => t.projectId === p.id && !t.deletedAt).length).toBeGreaterThan(0);
+    const preview = await projectLifecycleApi.undoApprovalPreview(p.id);
+    expect(preview.allowed).toBe(true);
+    await expect(projectLifecycleApi.undoApproval(p.id, { reason: "" })).rejects.toMatchObject({ status: 422 });
+    await projectLifecycleApi.undoApproval(p.id, { reason: "Versão errada aprovada" });
+    const db = loadDb();
+    const back = db.projects.find((x) => x.id === p.id)!;
+    expect(back.status).toBe("cotacao");
+    expect(back.quoteStageKey).toBe("negociacao");
+    expect(back.contractedAmountCents).toBeNull();
+    expect(db.proposals.find((x) => x.id === prop.id)!.status).toBe("enviada");
+    expect(db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt)).toHaveLength(0);
+    expect(db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt)).toHaveLength(0);
+    expect(db.events.some((e) => e.type === "proposal.approval_undone" && e.projectId === p.id)).toBe(true);
+    // pode aprovar de novo
+    await proposalsApi.approve(prop.id);
+    expect(loadDb().projects.find((x) => x.id === p.id)!.status).toBe("ativo");
+  });
+  it("bloqueia com recebível faturado e para quem não é Comercial/Projetos T", async () => {
+    const { p, prop } = await quoteWithSentProposal();
+    await proposalsApi.approve(prop.id);
+    as("usr_fernanda");
+    await expect(projectLifecycleApi.undoApproval(p.id, { reason: "x" })).rejects.toMatchObject({ status: 403 });
+    const rec = loadDb().receivables.find((r) => r.projectId === p.id)!;
+    await financeApi.issueInvoice(rec.id, { invoiceNumber: "123", issuedAt: new Date().toISOString() });
+    as("usr_paula");
+    expect((await projectLifecycleApi.undoApprovalPreview(p.id)).allowed).toBe(false);
+    await expect(projectLifecycleApi.undoApproval(p.id, { reason: "x" })).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("RN-59 — reabrir projeto concluído", () => {
+  it("volta a ativo em validação, mantém contas a pagar e registra o motivo", async () => {
+    const p = await directProject();
+    await projectsApi.complete(p.id);
+    await expect(projectLifecycleApi.reopenCompleted(p.id, " ")).rejects.toMatchObject({ status: 422 });
+    await projectLifecycleApi.reopenCompleted(p.id, "Cliente pediu ajuste depois da entrega");
+    const back = fresh(p.id);
+    expect(back.status).toBe("ativo");
+    expect(back.projectStageKey).toBe("validacao_cliente");
+    expect(back.completedAt).toBeNull();
+    const ev = loadDb().events.find((e) => e.type === "project.reopened" && e.projectId === p.id)!;
+    expect(ev.data.kind).toBe("concluido");
+    as("usr_lucas");
+    await expect(projectLifecycleApi.reopenCompleted(p.id, "x")).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("RN-70 — reativar projeto cancelado", () => {
+  it("volta a ativo na mesma etapa e devolve os recebíveis cancelados pelo cancelamento", async () => {
+    const p = await directProject();
+    await projectsApi.move(p.id, { stageKey: "design", position: 1 });
+    await projectsApi.cancel(p.id, "Cliente desistiu");
+    expect(loadDb().receivables.filter((r) => r.projectId === p.id).every((r) => r.status === "cancelado")).toBe(true);
+    await projectLifecycleApi.reactivateCancelled(p.id, "Cliente voltou atrás");
+    const back = fresh(p.id);
+    expect(back.status).toBe("ativo");
+    expect(back.projectStageKey).toBe("design");
+    expect(back.lostReason).toBeNull();
+    expect(loadDb().receivables.filter((r) => r.projectId === p.id).every((r) => r.status === "previsto")).toBe(true);
+    await expect(projectLifecycleApi.reactivateCancelled(p.id, "de novo")).rejects.toMatchObject({ status: 409 });
   });
 });

@@ -44,7 +44,11 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "project.lost":
       return { icon: "stageLost", text: <>marcou a cotação como perdida: {b(String(d.reason ?? ""))}</> };
     case "project.reopened":
-      return { icon: "restore", text: <>reabriu a cotação</> };
+      return { icon: "restore", text: d.kind === "concluido" ? <>reabriu o projeto concluído: {b(String(d.reason ?? ""))}</> : <>reabriu a cotação</> };
+    case "project.reactivated":
+      return { icon: "restore", text: <>reativou o projeto cancelado: {b(String(d.reason ?? ""))}{d.receivablesRestored ? <> ({String(d.receivablesRestored)} recebível(is) de volta a previsto)</> : null}</> };
+    case "proposal.approval_undone":
+      return { icon: "undo", text: <>desfez a aprovação da proposta {b(`v${d.version}`)} — voltou para cotação: {b(String(d.reason ?? ""))}</> };
     case "project.cancelled":
       return { icon: "stageLost", text: <>cancelou o projeto: {b(String(d.reason ?? ""))}</> };
     case "project.paused":
