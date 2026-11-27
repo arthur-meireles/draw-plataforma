@@ -5,18 +5,20 @@ import { EventTimeline, Money, ProjectCode, ReceivableKindBadge, ReceivableStatu
 import { usePermissions } from "@/components/layout/session";
 import { Button, ConfirmDialog, DescriptionList, Section, Sheet } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
-import { financeApi } from "@/data/services";
+import { financeApi, reversalsApi } from "@/data/services";
 import { dateFull, formatCnpj } from "@/lib/format";
 import { CollectionNoteEditor } from "./collection-note-editor";
 import { EditReceivableDialog, IssueInvoiceDialog, ReceiveDialog } from "./receivable-dialogs";
 import type { ReceivableRow } from "./types";
 
-type Dlg = "issue" | "receive" | "edit" | "cancel" | null;
+type Dlg = "issue" | "receive" | "edit" | "cancel" | "cancelInvoice" | "undoReceipt" | null;
 
 export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; onClose: () => void }) {
   const { canWriteAll } = usePermissions();
   const [dlg, setDlg] = useState<Dlg>(null);
   const cancel = useApiMutation((id: string) => financeApi.cancelReceivable(id), { success: "Lançamento cancelado.", onSuccess: () => setDlg(null) });
+  const cancelInvoice = useApiMutation((a: { id: string; reason: string }) => reversalsApi.cancelInvoice(a.id, a.reason), { success: "NF cancelada. O lançamento voltou para Previsto.", onSuccess: () => setDlg(null) });
+  const undoReceipt = useApiMutation((a: { id: string; reason: string }) => reversalsApi.undoReceipt(a.id, a.reason), { success: "Baixa estornada. O lançamento voltou para Faturado.", onSuccess: () => setDlg(null) });
   const writable = canWriteAll("receivables");
   const open = !!row && row.status !== "cancelado" && row.status !== "recebido";
   const issued = !!row?.issuedAt;
@@ -30,15 +32,27 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
         ariaTitle="Detalhe do lançamento a receber"
         title={row ? `${row.projectCode} · A receber` : undefined}
         footer={
-          row && writable && open ? (
+          row && writable && row.status === "recebido" ? (
+            <div className="flex w-full justify-end">
+              <Button variant="secondary" icon="undo" onClick={() => setDlg("undoReceipt")}>
+                Estornar baixa…
+              </Button>
+            </div>
+          ) : row && writable && open ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
                 <Button variant="secondary" icon="edit" onClick={() => setDlg("edit")}>
                   Editar
                 </Button>
-                <Button variant="ghost" onClick={() => setDlg("cancel")} className="text-danger">
-                  Cancelar lançamento…
-                </Button>
+                {issued ? (
+                  <Button variant="ghost" onClick={() => setDlg("cancelInvoice")} className="text-danger">
+                    Cancelar NF…
+                  </Button>
+                ) : (
+                  <Button variant="ghost" onClick={() => setDlg("cancel")} className="text-danger">
+                    Cancelar lançamento…
+                  </Button>
+                )}
               </div>
               {issued ? (
                 <Button variant="primary" icon="success" onClick={() => setDlg("receive")}>
@@ -96,6 +110,30 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
       {row && dlg === "issue" && <IssueInvoiceDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
       {row && dlg === "receive" && <ReceiveDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
       {row && dlg === "edit" && <EditReceivableDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
+      <ConfirmDialog
+        open={!!row && dlg === "cancelInvoice"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Cancelar a NF emitida?"
+        description="O lançamento volta para Previsto, sem número, data e PDF da nota (ficam no histórico). Use quando a NF foi cancelada na prefeitura ou emitida com erro; depois, emita a nota correta."
+        confirmLabel="Cancelar NF"
+        cancelLabel="Voltar"
+        destructive
+        reason={{ label: "Motivo do cancelamento da NF", placeholder: "Ex.: NF emitida com CNPJ errado", required: true }}
+        loading={cancelInvoice.isPending}
+        onConfirm={(reason) => row && cancelInvoice.mutate({ id: row.id, reason: reason ?? "" })}
+      />
+      <ConfirmDialog
+        open={!!row && dlg === "undoReceipt"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Estornar a baixa?"
+        description="O lançamento volta para Faturado (a NF continua emitida) e sai do recebido do mês. O estorno fica no histórico com o motivo."
+        confirmLabel="Estornar baixa"
+        cancelLabel="Voltar"
+        destructive
+        reason={{ label: "Motivo do estorno", placeholder: "Ex.: baixa registrada no lançamento errado", required: true }}
+        loading={undoReceipt.isPending}
+        onConfirm={(reason) => row && undoReceipt.mutate({ id: row.id, reason: reason ?? "" })}
+      />
       <ConfirmDialog
         open={!!row && dlg === "cancel"}
         onOpenChange={(o) => !o && setDlg(null)}

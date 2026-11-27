@@ -7,7 +7,7 @@ import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { commentsApi, eventsApi } from "@/data/services";
 import { APPROVAL_DECISION_LABEL, PAYABLE_STATUS_LABEL, projectStage, quoteStage, taskStatus } from "@/data/reference";
 import type { ID, ProjectStageKey, QuoteStageKey, TaskStatusKey } from "@/data/types";
-import { dateTime, money, relative } from "@/lib/format";
+import { dateFull, dateTime, money, relative } from "@/lib/format";
 import { usePermissions } from "@/components/layout/session";
 import { cn } from "@/lib/cn";
 
@@ -34,6 +34,7 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "proposal.value_changed":
     case "receivable.value_changed":
     case "project_member.value_changed":
+      if (d.field === "expectedAt") return { icon: "due", text: <>alterou o vencimento de {b(d.before ? dateFull(String(d.before)) : "—")} para {b(dateFull(String(d.after)))}</> };
       return { icon: "money", text: <>alterou {FIELD_LABEL[d.field as string] ?? d.field as string} de {b(money(d.before as number))} para {b(money(d.after as number))}</> };
     case "project.completed":
       return { icon: "stageDone", text: <>concluiu o projeto{d.payablesCreated ? <> e gerou {b(`${d.payablesCreated} pedido(s) de NF`)}</> : null}</> };
@@ -99,6 +100,20 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "comment", text: <>atualizou a nota de cobrança</> };
     case "receivable.cancelled":
       return { icon: "close", text: <>cancelou o lançamento a receber</> };
+    case "receivable.invoice_cancelled":
+      return { icon: "close", text: <>cancelou a NF{(d.previous as { invoiceNumber?: string } | undefined)?.invoiceNumber ? <> {b(String((d.previous as { invoiceNumber?: string }).invoiceNumber))}</> : null}: {b(String(d.reason ?? ""))}</> };
+    case "receivable.receipt_reversed":
+      return { icon: "undo", text: <>estornou a baixa de {b(money(d.amountCents as number))}: {b(String(d.reason ?? ""))}</> };
+    case "receivable.overdue_alerted":
+      return { icon: "warning", text: <>sistema avisou o Financeiro e o responsável do vencimento</> };
+    case "receivable.due_soon_alerted":
+      return { icon: "due", text: <>sistema avisou o Financeiro de que o vencimento está próximo</> };
+    case "payable.invoice_reminder_sent":
+      return { icon: "send", text: <>sistema lembrou o freelancer de enviar a NF{d.emailed ? " (e-mail)" : ""}</> };
+    case "payable.approval_reversed":
+      return { icon: "undo", text: <>desfez a aprovação: {b(String(d.reason ?? ""))}</> };
+    case "payable.payment_reversed":
+      return { icon: "undo", text: <>estornou o pagamento de {b(money(d.amountCents as number))}: {b(String(d.reason ?? ""))}</> };
     case "payable.link_resent":
       return { icon: "send", text: <>reenviou o link de envio da NF ao freelancer</> };
     case "payable.created":

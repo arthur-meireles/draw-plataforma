@@ -160,3 +160,60 @@ describe("RN-46 — alertas e avisos financeiros só para quem está envolvido",
     expect(notesOf("usr_fernanda").some((n) => n.type === "nf_recebida" && n.entityId === pay.id)).toBe(true);
   });
 });
+
+describe("RN-47 — estornos com motivo, permissão e histórico", () => {
+  async function receivedReceivable() {
+    const db = loadDb();
+    const r = db.receivables.find((x) => x.status === "previsto" && !x.deletedAt)!;
+    save(db);
+    as("usr_fernanda");
+    await financeApi.issueInvoice(r.id, { invoiceNumber: "77", issuedAt: new Date().toISOString() });
+    await financeApi.receive(r.id, new Date().toISOString());
+    return r.id;
+  }
+
+  it("estornar baixa volta a faturado e cancelar NF volta a previsto", async () => {
+    const { reversalsApi } = await import("./index");
+    const id = await receivedReceivable();
+    await expect(reversalsApi.cancelInvoice(id, "erro")).rejects.toMatchObject({ status: 409 });
+    await expect(reversalsApi.undoReceipt(id, "  ")).rejects.toMatchObject({ status: 422 });
+    await reversalsApi.undoReceipt(id, "baixa no lançamento errado");
+    let r = loadDb().receivables.find((x) => x.id === id)!;
+    expect(r.status).toBe("faturado");
+    expect(r.receivedAt).toBeNull();
+    await reversalsApi.cancelInvoice(id, "CNPJ errado");
+    r = loadDb().receivables.find((x) => x.id === id)!;
+    expect(r.status).toBe("previsto");
+    expect(r.invoiceNumber).toBeNull();
+    const evs = loadDb().events.filter((e) => e.entityId === id).map((e) => e.type);
+    expect(evs).toEqual(expect.arrayContaining(["receivable.receipt_reversed", "receivable.invoice_cancelled"]));
+  });
+
+  it("Comercial não estorna", async () => {
+    const { reversalsApi } = await import("./index");
+    const id = await receivedReceivable();
+    as("usr_carlos");
+    await expect(reversalsApi.undoReceipt(id, "x")).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("desfazer aprovação e estornar pagamento (freelancer avisado)", async () => {
+    const { reversalsApi } = await import("./index");
+    const db = loadDb();
+    const julia = db.freelancers.find((f) => f.userId === "usr_julia")!;
+    const pay = db.payables.find((p) => p.freelancerId === julia.id && p.kind === "freelancer")!;
+    pay.status = "em_conferencia";
+    pay.invoicedAmountCents = pay.agreedAmountCents;
+    save(db);
+    as("usr_fernanda");
+    await financeApi.approvePayable(pay.id);
+    await reversalsApi.undoPayableApproval(pay.id, "conferir banco");
+    expect(loadDb().payables.find((p) => p.id === pay.id)!.status).toBe("em_conferencia");
+    await financeApi.approvePayable(pay.id);
+    await financeApi.pay(pay.id, new Date().toISOString());
+    await reversalsApi.reversePayment(pay.id, "PIX devolvido");
+    const after = loadDb().payables.find((p) => p.id === pay.id)!;
+    expect(after.status).toBe("aprovado");
+    expect(after.paidAt).toBeNull();
+    expect(loadDb().notifications.some((n) => n.userId === "usr_julia" && n.title === "Pagamento estornado")).toBe(true);
+  });
+});
