@@ -18,14 +18,20 @@ export function IssueInvoiceDialog({ row, open, onOpenChange }: { row: Receivabl
   const client = useApiQuery(["client-terms", row.clientId], () => clientsApi.get(row.clientId), { enabled: open, staleTime: 60_000, retry: false });
   const termDays = client.data?.paymentTermDays ?? null;
   const termsNote = client.data?.paymentTermsNote ?? null;
+  // RN-45 — vencimento pré-preenchido com emissão + prazo do cliente; editável e gravado no lançamento
+  const [dueEdited, setDueEdited] = useState<string | null>(null);
+  const suggestedDue = termDays != null && date ? addDaysToDateInput(date, termDays) : toDateInput(row.expectedAt);
+  const due = dueEdited ?? suggestedDue;
   const m = useApiMutation(
-    () => financeExtraApi.issueInvoiceWithFile(row.id, row.projectId, { invoiceNumber: number, issuedAt: fromDateInput(date)!, taxCents: tax, file }),
+    () => financeExtraApi.issueInvoiceWithFile(row.id, row.projectId, { invoiceNumber: number, issuedAt: fromDateInput(date)!, taxCents: tax, expectedAt: fromDateInput(due), file }),
     { success: "NF emitida. O lançamento agora está faturado.", onSuccess: () => onOpenChange(false), onError: (e) => e.fieldErrors && setErrors(e.fieldErrors) },
   );
   const submit = () => {
     const errs: Record<string, string> = {};
     if (!number.trim()) errs.invoiceNumber = "Informe o número da NF";
     if (!date) errs.date = "Informe a data de emissão";
+    if (!due) errs.due = "Informe o vencimento da cobrança";
+    else if (date && due < date) errs.due = "O vencimento não pode ser antes da emissão";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     m.mutate(undefined);
@@ -69,6 +75,14 @@ export function IssueInvoiceDialog({ row, open, onOpenChange }: { row: Receivabl
             )}
           </p>
         )}
+        <DateField
+          label="Vencimento da cobrança"
+          required
+          value={due}
+          onChange={(e) => setDueEdited(e.target.value)}
+          error={errors.due}
+          hint={termDays != null ? (dueEdited ? "Você alterou o vencimento sugerido. A mudança fica no histórico." : "Calculado pela emissão + prazo do cliente. O atraso conta a partir desta data.") : "O cliente não tem prazo cadastrado: confira a data. O atraso conta a partir dela."}
+        />
         <MoneyField label="Impostos retidos" value={tax} onChange={setTax} hint="Opcional. Aparece na coluna Impostos." />
         <FileDropzone
           label="PDF da nota fiscal"

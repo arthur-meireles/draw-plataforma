@@ -52,7 +52,7 @@ import type {
 import { PROJECT_STAGES } from "./reference";
 import { CLIENT_LINK_DEFAULTS } from "./defaults";
 
-export const SEED_VERSION = 14;
+export const SEED_VERSION = 15;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -1043,7 +1043,7 @@ export function createSeed(): Database {
   });
 
   const notificationPreferences: NotificationPreference[] = [];
-  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida", "etapa", "projeto", "comentario", "cliente", "revisao", "cadastro"];
+  const nTypes: NotificationType[] = ["atribuicao", "mencao", "prazo", "atraso", "aprovacao", "nf_solicitada", "nf_recebida", "etapa", "projeto", "comentario", "cliente", "revisao", "cadastro", "vencimento", "pagamento"];
   for (const u of users) {
     for (const t of nTypes) {
       notificationPreferences.push({ ...base("npf", -200), userId: u.id, type: t, enabled: true });

@@ -18,8 +18,10 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <IndicatorCard loading={q.isLoading} icon="money" label="Contratado" value={<Money cents={f?.contractedTotal} compact />} formula="Valor contratado dos projetos no filtro" />
-        <IndicatorCard loading={q.isLoading} icon="margin" tone="success" label="Margem" value={<Money cents={f?.marginTotal} compact />} hint={marginPct != null ? `${fmtPct(marginPct)} do contratado` : undefined} formula="Contratado − custos, por projeto" />
+        <IndicatorCard loading={q.isLoading} icon="money" label="Contratado" value={<Money cents={f?.contractedTotal} compact />} formula="Valor contratado dos projetos aprovados no período (tipo e responsável do filtro)" />
+        <IndicatorCard loading={q.isLoading} icon="margin" tone="success" label="Margem" value={<Money cents={f?.marginTotal} compact />} hint={marginPct != null ? `${fmtPct(marginPct)} do contratado` : undefined} formula="Receita (contratado + adicionais) − impostos − custos dos projetos aprovados no período (RN-65)" />
+        <IndicatorCard loading={q.isLoading} icon="invoice" label="Faturado no período" value={<Money cents={f?.invoicedInPeriod} compact />} formula="NFs emitidas no período (data de emissão)" />
+        <IndicatorCard loading={q.isLoading} icon="receivable" tone="success" label="Recebido no período" value={<Money cents={f?.receivedInPeriod} compact />} formula="Baixas registradas no período (data do recebimento)" />
         <IndicatorCard loading={q.isLoading} icon="target" tone="info" label="Ticket médio" value={<Money cents={ticketAvg} compact />} formula="Contratado médio por projeto" />
         <IndicatorCard loading={q.isLoading} icon="client" tone="violet" label="Clientes recorrentes" value={cl ? number(cl.recurring) : "—"} hint={cl ? `${cl.projectsPerClient.toFixed(1).replace(".", ",")} projetos por cliente · ${plural(cl.total, "cliente", "clientes")}` : undefined} formula="Clientes com mais de um projeto" />
       </div>
@@ -27,9 +29,9 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
       <ChartSection
         {...common}
         title="Receita por mês"
-        formula="Contratado (aprovação), faturado (emissão) e recebido (pagamento) por mês"
+        formula="Contratado (aprovação), faturado (emissão) e recebido (pagamento), meses do período"
         empty={!f?.revenueByMonth.some((m) => m.contratado || m.faturado || m.recebido)}
-        emptyText="Sem movimentação nos últimos 12 meses"
+        emptyText="Sem movimentação no período"
         csv={{ filename: "receita-por-mes", headers: ["Mês", "Contratado (R$)", "Faturado (R$)", "Recebido (R$)"], rows: (f?.revenueByMonth ?? []).map((m) => [m.month, reais(m.contratado), reais(m.faturado), reais(m.recebido)]) }}
       >
         <BarSeriesChart data={f?.revenueByMonth ?? []} xKey="month" xFormat={monthLabel} format="money" height={t.chart.height.lg} series={[{ key: "contratado", label: "Contratado" }, { key: "faturado", label: "Faturado" }, { key: "recebido", label: "Recebido", color: t.color.success }]} />
@@ -39,7 +41,7 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
         <ChartSection
           {...common}
           title="Margem por tipo"
-          formula="(Contratado − custos) por tipo de projeto"
+          formula="Margem (RN-65) dos projetos aprovados no período, por tipo"
           empty={!f?.marginByType.length}
           csv={{ filename: "margem-por-tipo", headers: ["Tipo", "Projetos", "Contratado (R$)", "Margem (R$)", "Margem (%)"], rows: (f?.marginByType ?? []).map((r) => [r.label, r.count, reais(r.contracted), reais(r.margin), Math.round(r.marginPct * 100)]) }}
         >
@@ -66,7 +68,7 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
         <ChartSection
           {...common}
           title="Custo de freelancers"
-          formula="Soma das contas a pagar de freelancers, por pessoa"
+          formula="Contas a pagar de freelancers dos projetos aprovados no período, por pessoa"
           empty={!f?.freelancerCost.length}
           emptyText="Nenhum custo de freelancer"
           csv={{ filename: "custo-de-freelancers", headers: ["Freelancer", "Pagamentos", "Total (R$)"], rows: (f?.freelancerCost ?? []).map((r) => [r.label, r.count, reais(r.total)]) }}

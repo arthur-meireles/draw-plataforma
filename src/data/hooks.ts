@@ -3,10 +3,10 @@
  * Hooks de dados (TanStack Query) sobre a "API" de `src/data/services`.
  * Telas usam SOMENTE estes hooks — nunca chamam services nem localStorage diretamente.
  */
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useEffect } from "react";
-import { ApiError, authApi, clientsApi, jobsApi, notificationsApi, peopleApi, projectTypesApi, usersApi } from "./services";
+import { ApiError, authApi, clientsApi, jobsApi, notificationsApi, peopleApi, projectTypesApi, usersApi, routinesApi } from "./services";
 
 export function useApiQuery<T>(key: QueryKey, fn: () => Promise<T>, opts?: Omit<UseQueryOptions<T, ApiError>, "queryKey" | "queryFn">) {
   return useQuery<T, ApiError>({ queryKey: key, queryFn: fn, ...opts });
@@ -78,4 +78,20 @@ export function useDueSweep(enabled: boolean) {
       window.clearInterval(id);
     };
   }, [enabled, qc]);
+}
+
+/** Mock do job diário do financeiro (RN-46): roda uma vez por abertura do app e atualiza a Caixa se avisou algo. */
+export function useDailyRoutines() {
+  const qc = useQueryClient();
+  const ran = useRef(false);
+  useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+    routinesApi
+      .runDaily()
+      .then((r) => {
+        if (r.alerts > 0) qc.invalidateQueries({ queryKey: ["notifications"] });
+      })
+      .catch(() => undefined);
+  }, [qc]);
 }

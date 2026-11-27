@@ -5,6 +5,7 @@ import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, req
 import { notifyMany, projectAudience } from "./audience";
 import { createClientLink, resolveRecipients } from "./client-links";
 import { closeQuoteTasks, generateTasksFromTemplate } from "./projects";
+import { installmentDue } from "./finance-rules";
 import { canSeeMoney } from "@/lib/permissions";
 
 /** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
@@ -40,7 +41,8 @@ export function approveProposalTx(db: Database, me: User | null, prop: Proposal,
   touch(p);
   const insts = db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt).sort((a, b) => a.number - b.number);
   insts.forEach((i) => {
-    const expected = i.dueAt ?? (i.dueRule === "Na aprovação" ? new Date(Date.now() + 5 * 86_400_000).toISOString() : (p.dueAt ?? new Date(Date.now() + 45 * 86_400_000).toISOString()));
+    // RN-45 — sem data na parcela: gatilho + prazo do cliente (regra aplicada fica no lançamento)
+    const due = installmentDue(db, p, i, now);
     db.receivables.push({
       ...baseFields(me?.id ?? null),
       projectId: p.id,
@@ -51,7 +53,8 @@ export function approveProposalTx(db: Database, me: User | null, prop: Proposal,
       taxCents: taxOf(db, i.amountCents),
       kind: "parcela",
       collectionNote: null,
-      expectedAt: expected,
+      expectedAt: due.expectedAt,
+      dueBasis: due.basis,
       invoiceNumber: null,
       invoiceFileId: null,
       issuedAt: null,

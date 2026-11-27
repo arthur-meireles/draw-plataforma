@@ -34,6 +34,7 @@ import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
+import { effectiveReceivableStatus } from "./finance-rules";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -60,7 +61,7 @@ export interface ProjectListItem extends Project {
   tasksOpen: number;
   isOverdue: boolean;
   pendingApproval: boolean;
-  billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido";
+  billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido" | "vencido";
 }
 
 /** RN-05 — próximo código do prefixo (também usado pela importação da planilha master). */
@@ -86,7 +87,9 @@ export function toListItem(db: Database, p: Project, me: User): ProjectListItem 
   const billingStatus: ProjectListItem["billingStatus"] =
     recs.length === 0
       ? "sem_faturamento"
-      : recs.every((r) => r.status === "recebido")
+      : recs.some((r) => effectiveReceivableStatus(r) === "vencido")
+        ? "vencido"
+        : recs.every((r) => r.status === "recebido")
         ? "recebido"
         : recs.every((r) => r.status !== "previsto")
           ? "faturado"
@@ -601,7 +604,14 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
   const invoiced = recs.filter((r) => r.issuedAt).reduce((a, r) => a + r.amountCents, 0);
   const received = recs.filter((r) => r.status === "recebido").reduce((a, r) => a + r.amountCents, 0);
   const expected = recs.reduce((a, r) => a + r.amountCents, 0);
-  const margin = contracted - freelancerCost - otherCost;
+  // RN-65 — receita = contratado + adicionais (RN-14); impostos (RN-15) saem da margem
+  const parcels = recs.filter((r) => r.kind !== "adicional");
+  const additional = recs.filter((r) => r.kind === "adicional").reduce((a, r) => a + r.amountCents, 0);
+  const additionalTax = recs.filter((r) => r.kind === "adicional").reduce((a, r) => a + r.taxCents, 0);
+  const contractTax = parcels.length ? parcels.reduce((a, r) => a + r.taxCents, 0) : taxOf(db, contracted);
+  const revenue = contracted + additional;
+  const tax = contractTax + additionalTax;
+  const margin = revenue - tax - freelancerCost - otherCost;
   return {
     projectId,
     contractedCents: contracted,
@@ -611,8 +621,11 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
     toReceiveCents: expected - received,
     freelancerCostCents: freelancerCost,
     otherCostCents: otherCost,
+    additionalCents: additional,
+    revenueCents: revenue,
+    taxCents: tax,
     marginCents: margin,
-    marginPct: contracted ? margin / contracted : null,
+    marginPct: revenue ? margin / revenue : null,
   };
 }
 

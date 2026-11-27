@@ -25,14 +25,14 @@ function assertPdf(file: File) {
 
 export const financeExtraApi = {
   /** RF-M5-02 — anexa o PDF (categoria `nf`) e emite a NF do recebível numa única chamada. */
-  issueInvoiceWithFile: async (receivableId: ID, projectId: ID, input: { invoiceNumber: string; issuedAt: string; taxCents?: number; file?: File | null }) => {
+  issueInvoiceWithFile: async (receivableId: ID, projectId: ID, input: { invoiceNumber: string; issuedAt: string; taxCents?: number; expectedAt?: string | null; file?: File | null }) => {
     requireAccessNow("receivables", "all", "Só o Financeiro e a administração emitem notas fiscais."); // antes de enviar o PDF
     let invoiceFileId: ID | null = null;
     if (input.file) {
       assertPdf(input.file);
       invoiceFileId = (await filesApi.upload({ projectId, category: "nf", file: input.file })).fileId;
     }
-    return financeApi.issueInvoice(receivableId, { invoiceNumber: input.invoiceNumber, issuedAt: input.issuedAt, taxCents: input.taxCents, invoiceFileId });
+    return financeApi.issueInvoice(receivableId, { invoiceNumber: input.invoiceNumber, issuedAt: input.issuedAt, taxCents: input.taxCents, expectedAt: input.expectedAt ?? null, invoiceFileId });
   },
 
   /** RN-41 — registra a NF do freelancer recebida fora do formulário, com PDF opcional (recomendado). */

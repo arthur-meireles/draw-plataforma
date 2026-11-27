@@ -26,8 +26,16 @@ export interface Organization extends Omit<BaseEntity, "organizationId"> {
   name: string;
   slug: string;
   /** taxRatePct: alíquota padrão sobre faturamento (planilha atual: 6%). */
-  /** requireMfaForAdmins (RN-37): administradores só entram depois de cadastrar o 2FA. Ausente = true. */
-  settings: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct: number; requireMfaForAdmins?: boolean };
+  settings: {
+    freelancerPaymentDay: number;
+    dueSoonDays: number;
+    taxRatePct: number;
+    /** Contato do Financeiro nas páginas públicas (RN-67). Ausente = e-mail do primeiro usuário Financeiro. */
+    financeContactEmail?: string | null;
+    financeContactPhone?: string | null;
+    /** RN-37: administradores só entram depois de cadastrar o 2FA. Ausente = true. */
+    requireMfaForAdmins?: boolean;
+  };
 }
 
 export interface User extends BaseEntity {
@@ -501,6 +509,8 @@ export interface Receivable extends BaseEntity {
   kind: "parcela" | "adicional";
   /** Histórico curto de cobrança (planilha: Status/Comentários Cobrança). */
   collectionNote: string | null;
+  /** Regra que definiu o vencimento (RN-45), ex.: "Aprovação + 30 dias (prazo do cliente)". Ausente = informado à mão. */
+  dueBasis?: string | null;
 }
 
 export type PayableKind = "freelancer" | "despesa_projeto" | "despesa_adm";
@@ -551,7 +561,15 @@ export interface ProjectFinancials {
   toReceiveCents: number;
   freelancerCostCents: number;
   otherCostCents: number;
+  /** Cobranças adicionais não canceladas (RN-14) — somam à receita, fora do contratado. */
+  additionalCents: number;
+  /** Receita = contratado + adicionais (RN-65). */
+  revenueCents: number;
+  /** Impostos sobre faturamento da receita (RN-15), deduzidos da margem (RN-65). */
+  taxCents: number;
+  /** Margem = receita − impostos − freelancers − outras despesas do projeto (RN-65). */
   marginCents: number;
+  /** Margem sobre a receita. */
   marginPct: number | null;
 }
 
@@ -621,7 +639,11 @@ export type NotificationType =
   /** Tarefa enviada para revisão. */
   | "revisao"
   /** Freelancer alterou os próprios dados de pagamento (PIX, banco, documento) — vai ao Financeiro (RN-39). */
-  | "cadastro";
+  | "cadastro"
+  /** Recebível vencido ou a vencer, NF de freelancer pendente perto do vencimento (Financeiro envolvido — RN-46). */
+  | "vencimento"
+  /** Andamento do seu pagamento (freelancer): NF divergente, aprovada, paga ou estornada (RN-46). */
+  | "pagamento";
 
 export interface Notification extends BaseEntity {
   userId: ID;

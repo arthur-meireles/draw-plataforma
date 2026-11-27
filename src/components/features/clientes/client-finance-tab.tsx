@@ -9,6 +9,7 @@ type Row = ClientDetail["receivables"][number];
 
 export function ClientFinanceTab({ client: c }: { client: ClientDetail }) {
   const open = c.receivables.filter((r) => r.status !== "recebido" && r.status !== "cancelado").reduce((a, r) => a + r.amountCents, 0);
+  const overdue = c.receivables.filter((r) => r.status === "vencido").reduce((a, r) => a + r.amountCents, 0);
   const columns: Column<Row>[] = [
     { id: "desc", header: "Descrição", mobile: "title", sortValue: (r) => r.description, cell: (r) => <span className="font-medium text-fg">{r.description}</span> },
     { id: "project", header: "Projeto", mobile: "subtitle", sortValue: (r) => r.projectCode, cell: (r) => <ProjectCode code={r.projectCode} /> },
@@ -23,13 +24,18 @@ export function ClientFinanceTab({ client: c }: { client: ClientDetail }) {
       rows={c.receivables}
       columns={columns}
       getRowId={(r) => r.id}
+      rowHref={(r) => `/financeiro/receber?aberto=${r.id}`}
       initialSort={{ id: "expected", dir: "asc" }}
       empty={{ icon: "receivable", title: "Sem lançamentos a receber", description: "Os recebíveis nascem das parcelas das propostas aprovadas." }}
       footer={
         c.receivables.length ? (
           <tr>
             <td colSpan={6} className="px-4 py-2 text-xs font-medium text-fg-subtle">
-              Em aberto
+              Em aberto{overdue > 0 && (
+                <span className="ml-2 font-semibold text-danger">
+                  · vencido <Money cents={overdue} />
+                </span>
+              )}
             </td>
             <td className="px-4 py-2 text-right text-sm font-semibold text-fg">
               <Money cents={open} />

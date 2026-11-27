@@ -7,14 +7,13 @@
  *  - Tarefa (projeto ou Administrativo) a até `dueSoonDays` do prazo → "prazo" ao responsável; vencida → "atraso".
  *  - Projeto ativo (não parado) perto do prazo / vencido → "prazo" / "atraso" ao responsável do projeto.
  *  - Documento institucional: D-30, D-7 e vencido → "prazo" / "atraso" a quem gerencia o Administrativo (admin, gestão).
- *  - Recebível vencido (previsto/faturado há mais de 1 dia) → "atraso" ao Financeiro e ao responsável do projeto
- *    (se ele enxerga contas a receber). Sem ninguém do Financeiro ativo, vai a quem gerencia contas a receber.
+ *  - Recebíveis e NF de freelancer: ver `finance-routines.ts` (RN-46), chamada junto pelo chassi.
  */
 import { baseFields, nowIso, transaction } from "../db";
 import type { Database, ID, NotificationType, Project, Task, User } from "../types";
 import { actor, latency, notify } from "./_core";
 import { freelancerUserId } from "./audience";
-import { canRead, canWriteAll } from "@/lib/permissions";
+import { canWriteAll } from "@/lib/permissions";
 import { toDateInput } from "@/lib/format";
 
 const DAY = 86_400_000;
@@ -95,18 +94,7 @@ export function runDueSweepTx(db: Database, now: Date = new Date()): SweepResult
     admManagers.forEach((uid) => emit(`doc:${doc.id}:${doc.validUntil}:${milestone}`, uid, { ...n, entityType: "document", entityId: doc.id }));
   }
 
-  /* recebíveis vencidos (mesma regra de "vencido" das contas a receber: mais de 1 dia após o previsto) */
-  const finance = db.users.filter((u) => u.status === "ativo" && !u.deletedAt && u.role === "financeiro").map((u) => u.id);
-  const fallback = finance.length ? finance : db.users.filter((u) => u.status === "ativo" && !u.deletedAt && canWriteAll(u, "receivables")).map((u) => u.id);
-  for (const r of db.receivables) {
-    if (r.deletedAt || !(r.status === "previsto" || r.status === "faturado")) continue;
-    if (new Date(r.expectedAt).getTime() >= now.getTime() - DAY) continue;
-    const p = db.projects.find((x) => x.id === r.projectId) ?? null;
-    const owner = p ? activeUser(db, p.ownerId) : null;
-    const who = [...fallback, ...(owner && canRead(owner, "receivables") ? [owner.id] : [])];
-    const d = daysBetween(now, r.expectedAt);
-    new Set(who).forEach((uid) => emit(`atraso:receivable:${r.id}:${r.expectedAt}`, uid, { type: "atraso", title: `Recebimento vencido: ${r.description}`, body: `Previsto para ${lateText(d)} atrás — cobre o cliente ou atualize a previsão`, project: p, entityType: "receivable", entityId: r.id }));
-  }
+  /* recebíveis vencidos/a vencer ficam com a rotina do Financeiro (RN-46, `routinesApi.runDaily`), que avisa só o Financeiro envolvido */
 
   return { created };
 }

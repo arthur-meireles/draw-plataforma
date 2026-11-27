@@ -1,9 +1,11 @@
 /** Cadastros: clientes, contatos, grupos, freelancers, tipos de projeto (M2). */
 import { baseFields, nowIso } from "../db";
-import type { Address, Client, ClientContact, Freelancer, ID, MemberRole, ProjectStageKey, ProjectType, Specialty } from "../types";
+import type { Address, Client, Freelancer, ID, MemberRole, ProjectStageKey, ProjectType, Specialty } from "../types";
 import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { issueUserInvite } from "./admin";
 import { toListItem, computeFinancials } from "./projects";
+import { effectiveReceivableStatus } from "./finance-rules";
+import { clientBillingApi, type ContactInput } from "./client-billing";
 import { canRead, canSeeMoney, canWriteAll, access } from "@/lib/permissions";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 
@@ -86,7 +88,8 @@ export const clientsApi = {
         contacts: db.clientContacts.filter((x) => x.clientId === c.id && !x.deletedAt),
         projects: projects.map((p) => toListItem(db, p, me)),
         proposals: money ? db.proposals.filter((pr) => projects.some((p) => p.id === pr.projectId) && !pr.deletedAt).map((pr) => ({ ...pr, projectCode: projects.find((p) => p.id === pr.projectId)!.code })) : [],
-        receivables: receivables.map((r) => ({ ...r, projectCode: db.projects.find((p) => p.id === r.projectId)?.code ?? "" })),
+        // RN-45 — mesmo status efetivo da lista de contas a receber (vencido derivado)
+        receivables: receivables.map((r) => ({ ...r, status: effectiveReceivableStatus(r), projectCode: db.projects.find((p) => p.id === r.projectId)?.code ?? "" })),
         indicators: {
           projects: projects.length,
           active: projects.filter((p) => p.status === "ativo").length,
@@ -150,31 +153,11 @@ export const clientsApi = {
       return db.clientContacts.filter((c) => c.clientId === clientId && !c.deletedAt);
     }),
 
-  saveContact: (clientId: ID, input: Omit<ClientContact, keyof ReturnType<typeof baseFields> | "clientId">, id?: ID) =>
-    write((db, me) => {
-      if (!canWriteAll(me, "clients")) throw new ApiError(403, "Sem permissão.");
-      if (!db.clients.some((c) => c.id === clientId && !c.deletedAt)) throw new ApiError(404, "Cliente não encontrado.");
-      if (id && !db.clientContacts.some((c) => c.id === id && c.clientId === clientId)) throw new ApiError(404, "Contato não encontrado neste cliente.");
-      if (!input.name.trim()) throw new ApiError(422, "Informe o nome do contato.", { name: "Informe o nome do contato" });
-      if (!/^\S+@\S+\.\S+$/.test(input.email)) throw new ApiError(422, "E-mail inválido.", { email: "Informe um e-mail válido, ex.: nome@empresa.com.br" });
-      if (input.isBillingContact) db.clientContacts.filter((c) => c.clientId === clientId).forEach((c) => (c.isBillingContact = false));
-      if (id) {
-        const c = db.clientContacts.find((x) => x.id === id)!;
-        Object.assign(c, input);
-        touch(c);
-        return c;
-      }
-      const c: ClientContact = { ...baseFields(me.id), clientId, ...input };
-      db.clientContacts.push(c);
-      return c;
-    }),
+  /** RN-49 — regras de contato e cobrança em `client-billing.ts` (Financeiro edita o contato de cobrança). */
+  saveContact: (clientId: ID, input: ContactInput, id?: ID) => clientBillingApi.saveContact(clientId, input, id),
 
-  removeContact: (id: ID) =>
-    write((db, me) => {
-      if (!canWriteAll(me, "clients")) throw new ApiError(403, "Sem permissão.");
-      const c = db.clientContacts.find((x) => x.id === id);
-      if (c) c.deletedAt = nowIso();
-    }),
+  /** RN-49 — remover contato usado em projetos exige quem assume (`replacementId`) quando houver outro contato. */
+  removeContact: (id: ID, replacementId?: ID | null) => clientBillingApi.removeContact(id, replacementId),
 
   segments: () => read((db, me) => (requireAccess(me, "clients", "read"), [...new Set(db.clients.filter((c) => !c.deletedAt).map((c) => c.segment))].sort())),
 };
@@ -290,6 +273,20 @@ export const freelancersApi = {
         delete patch.bankName;
         delete patch.bankAgency;
         delete patch.bankAccount;
+      }
+      // E-mail único entre freelancers e usuários; com login, o e-mail de acesso acompanha (pedido de NF e login no mesmo endereço)
+      const email = input.email.trim().toLowerCase();
+      patch.email = email;
+      if (email !== f.email.toLowerCase()) {
+        if (db.freelancers.some((x) => x.id !== f.id && !x.deletedAt && x.email.toLowerCase() === email)) throw new ApiError(409, "Já existe um freelancer com este e-mail.", { email: "E-mail já cadastrado em outro freelancer" });
+        if (db.users.some((u) => u.id !== f.userId && !u.deletedAt && u.email.toLowerCase() === email)) throw new ApiError(409, "Este e-mail já é o acesso de outra pessoa na plataforma.", { email: "E-mail já usado por outro usuário" });
+        const u = f.userId ? db.users.find((x) => x.id === f.userId) : null;
+        if (u) {
+          emit(db, me, { type: "user.email_changed", entityType: "user", entityId: u.id, data: { before: u.email, after: email, via: "freelancer" } });
+          u.email = email;
+          touch(u);
+        }
+        emit(db, me, { type: "freelancer.email_changed", entityType: "freelancer", entityId: f.id, data: { before: f.email, after: email, loginSynced: !!u } });
       }
       Object.assign(f, patch);
       touch(f);

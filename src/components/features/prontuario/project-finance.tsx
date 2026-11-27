@@ -60,10 +60,12 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
           <Stat label="Faturado" icon="invoice" value={<Money cents={f?.invoicedCents} />} loading={fin.isLoading} hint={f ? `de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format((f.expectedCents ?? 0) / 100)} previstos` : undefined} />
           <Stat label="Recebido" icon="receivable" tone="success" value={<Money cents={f?.receivedCents} />} loading={fin.isLoading} />
           <Stat label="A receber" icon="time" value={<Money cents={f?.toReceiveCents} />} loading={fin.isLoading} />
+          <Stat label="Cobranças adicionais" icon="add" value={<Money cents={f?.additionalCents} />} loading={fin.isLoading} hint="fora do contratado (RN-14)" />
+          <Stat label="Impostos" icon="invoice" value={<Money cents={f?.taxCents} />} loading={fin.isLoading} hint="sobre o faturamento (RN-15)" />
           <Stat label="Custo de freelancers" icon="freelancer" value={<Money cents={f?.freelancerCostCents} />} loading={fin.isLoading} />
           <Stat label="Outros custos" icon="payable" value={<Money cents={f?.otherCostCents} />} loading={fin.isLoading} />
           <Stat label="Margem" icon="margin" tone={marginTone} value={<Money cents={f?.marginCents} />} loading={fin.isLoading} />
-          <Stat label="Margem %" icon="chartPie" tone={marginTone} value={f?.marginPct != null ? percent(f.marginPct, 1) : "—"} loading={fin.isLoading} hint="sobre o valor contratado" />
+          <Stat label="Margem %" icon="chartPie" tone={marginTone} value={f?.marginPct != null ? percent(f.marginPct, 1) : "—"} loading={fin.isLoading} hint="receita − impostos − custos, sobre a receita" />
         </div>
       )}
 

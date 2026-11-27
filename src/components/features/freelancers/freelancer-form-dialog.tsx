@@ -108,7 +108,7 @@ export function FreelancerFormDialog({ open, onOpenChange, freelancer }: { open:
         }}
       >
         <TextField id="fl-name" label="Nome" required autoFocus containerClassName="sm:col-span-2" value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} autoComplete="off" />
-        <TextField id="fl-email" label="E-mail" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} error={errors.email} autoComplete="off" />
+        <TextField id="fl-email" label="E-mail" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} error={errors.email} autoComplete="off" hint={freelancer?.userId ? "Também é o e-mail de acesso à plataforma: mudar aqui muda o login." : "Recebe os pedidos de nota fiscal. Não pode repetir o de outro freelancer ou usuário."} />
         <TextField id="fl-phone" label="Telefone" inputMode="tel" placeholder="(11) 99999-0000" value={form.phone ?? ""} onChange={(e) => set("phone", formatPhone(e.target.value))} />
         <TextField id="fl-jobTitle" label="Cargo" required hint="O que a pessoa faz. Ajuda a encontrar quem chamar para cada projeto." placeholder="Ex.: Designer gráfico" suggestions={FREELANCER_JOB_TITLES} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} error={errors.jobTitle} autoComplete="off" />
         <MultiSelectField label="Especialidades" required options={SPECIALTY_OPTIONS} value={form.specialties} onChange={(v) => set("specialties", v)} placeholder="Escolha uma ou mais" error={errors.specialties} />

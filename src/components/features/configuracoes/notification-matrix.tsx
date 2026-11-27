@@ -16,8 +16,10 @@ const TYPES: { type: NotificationType; label: string; description: string }[] = 
   { type: "comentario", label: "Comentários", description: "Comentários no seu projeto ou na sua tarefa, mesmo sem menção" },
   { type: "revisao", label: "Revisão de tarefas", description: "Quando uma tarefa do seu projeto ou pedida por você vai para revisão" },
   { type: "nf_solicitada", label: "Pedido de nota fiscal", description: "Quando uma NF é solicitada" },
-  { type: "nf_recebida", label: "Nota fiscal recebida", description: "Quando um freelancer envia a NF" },
+  { type: "nf_recebida", label: "Nota fiscal recebida", description: "Quando um freelancer de um projeto seu envia a NF" },
   { type: "cadastro", label: "Dados de pagamento de freelancers", description: "Quando um freelancer muda PIX, banco ou documento (Financeiro)" },
+  { type: "vencimento", label: "Vencimentos financeiros", description: "Recebíveis vencidos ou a vencer e NFs de freelancer pendentes, nos projetos que você acompanha" },
+  { type: "pagamento", label: "Seus pagamentos", description: "Quando sua NF é aprovada, fica divergente, é paga ou o pagamento é estornado" },
 ];
 
 /**

@@ -4,6 +4,7 @@ import { Section, Stat, DescriptionList } from "@/components/ui";
 import { EventTimeline, Money } from "@/components/domain";
 import { percent } from "@/lib/format";
 import type { ClientDetail } from "./use-clients";
+import { ClientBillingSection } from "./client-billing";
 
 export function ClientOverviewTab({ client: c }: { client: ClientDetail }) {
   const i = c.indicators;
@@ -39,11 +40,10 @@ export function ClientOverviewTab({ client: c }: { client: ClientDetail }) {
                 { label: "Segmento", value: c.segment },
                 { label: "Grupo econômico", value: c.group?.name ?? "Sem grupo" },
                 { label: "Endereço", value: address || "Não informado" },
-                { label: "Política de pagamento", value: c.paymentTermsNote || "Não informada" },
-                { label: "Prazo após a NF", value: c.paymentTermDays != null ? `${c.paymentTermDays} dias` : "Não informado" },
               ]}
             />
           </Section>
+          <ClientBillingSection client={c} />
           <Section title="Observações" icon="comment">
             {c.notes ? <p className="whitespace-pre-wrap text-sm text-fg-muted">{c.notes}</p> : <p className="text-sm text-fg-placeholder">Nenhuma observação. Use “Editar cliente” para registrar combinados e preferências.</p>}
           </Section>

@@ -33,7 +33,7 @@ const invitesOf = (db: Database) => (db.userInvites ??= []);
 /** Nunca sai do serviço: senha e segredos do 2FA (RN-37). */
 const safeUser = (u: User) => {
   const { passwordMock: _pw, mfaSecret: _s, mfaPendingSecret: _p, mfaRecoveryCodes: _r, ...rest } = u;
-  void _pw, void _s, void _p, void _r;
+  void [_pw, _s, _p, _r];
   return rest;
 };
 
@@ -370,13 +370,17 @@ export const usersApi = {
   /** Parâmetros da organização: todos leem (prazos e alíquota aparecem nas telas); só admin altera. */
   organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
 
-  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number; requireMfaForAdmins?: boolean }) =>
+  updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number; financeContactEmail?: string | null; financeContactPhone?: string | null; requireMfaForAdmins?: boolean }) =>
     write((db, me) => {
       requireAccess(me, "settings", "all", "Só administradores alteram as regras da organização.");
       const settings = { ...db.organizations[0].settings, ...patch };
       if (settings.taxRatePct < 0 || settings.taxRatePct > 30) throw new ApiError(422, "Use uma alíquota entre 0% e 30%.", { taxRatePct: "Use uma alíquota entre 0% e 30%" });
       if (settings.freelancerPaymentDay < 1 || settings.freelancerPaymentDay > 28) throw new ApiError(422, "Escolha um dia entre 1 e 28.", { freelancerPaymentDay: "Escolha um dia entre 1 e 28" });
       if (!Number.isInteger(settings.dueSoonDays) || settings.dueSoonDays < 1 || settings.dueSoonDays > 30) throw new ApiError(422, "Use de 1 a 30 dias de alerta.", { dueSoonDays: "Use de 1 a 30 dias" });
+      // RN-67 — contato do Financeiro mostrado nas páginas públicas
+      settings.financeContactEmail = settings.financeContactEmail?.trim().toLowerCase() || null;
+      settings.financeContactPhone = settings.financeContactPhone?.trim() || null;
+      if (settings.financeContactEmail && !/^\S+@\S+\.\S+$/.test(settings.financeContactEmail)) throw new ApiError(422, "Informe um e-mail válido para o Financeiro.", { financeContactEmail: "Informe um e-mail válido, ex.: financeiro@draw.com.br" });
       db.organizations[0].settings = settings;
       emit(db, me, { type: "organization.settings_changed", entityType: "organization", entityId: db.organizations[0].id, data: settings });
     }),
@@ -565,6 +569,9 @@ export const importsApi = {
           if (!r.codigo_projeto?.trim()) errors.push({ line, message: "Código do projeto vazio" });
           else if (!db.projects.some((p) => p.code === r.codigo_projeto.trim().toUpperCase())) errors.push({ line, message: `Projeto não encontrado: ${r.codigo_projeto}` });
           if (!r.valor || Number.isNaN(Number(r.valor.replace(/\./g, "").replace(",", ".")))) errors.push({ line, message: `Valor inválido: ${r.valor ?? "(vazio)"}` });
+          // RN-69 — estado do histórico: recebido exige emissão; emissão exige nº da NF
+          if (r.recebido_em?.trim() && !r.emissao?.trim()) errors.push({ line, message: "Recebido sem data de emissão da NF: informe a coluna emissao" });
+          if (r.emissao?.trim() && !r.nf_numero?.trim()) errors.push({ line, message: "Emissão sem número da NF: informe a coluna nf_numero" });
         }
       });
       const blocking = new Set(errors.filter((e) => !e.message.includes("será atualizado")).map((e) => e.line));
@@ -586,7 +593,11 @@ export const importsApi = {
         } else if (kind === "recebiveis") {
           const p = db.projects.find((x) => x.code === r.codigo_projeto.trim().toUpperCase())!;
           const amountCents = Math.round(Number(r.valor.replace(/\./g, "").replace(",", ".")) * 100);
-          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents, taxCents: taxOf(db, amountCents), expectedAt: r.vencimento ? new Date(r.vencimento).toISOString() : nowIso(), invoiceNumber: null, invoiceFileId: null, issuedAt: null, receivedAt: null, status: "previsto", kind: "parcela", collectionNote: null });
+          // RN-69 — preserva o estado do histórico: nº + emissão → faturado; + recebido_em → recebido
+          const at = (v?: string) => (v?.trim() ? new Date(`${v.trim()}T20:00:00.000Z`).toISOString() : null);
+          const issuedAt = r.nf_numero?.trim() ? at(r.emissao) : null;
+          const receivedAt = issuedAt ? at(r.recebido_em) : null;
+          db.receivables.push({ ...baseFields(me.id), projectId: p.id, clientId: p.clientId, proposalInstallmentId: null, description: r.descricao || "Importado", amountCents, taxCents: taxOf(db, amountCents), expectedAt: at(r.vencimento) ?? nowIso(), invoiceNumber: issuedAt ? r.nf_numero.trim() : null, invoiceFileId: null, issuedAt, receivedAt, status: receivedAt ? "recebido" : issuedAt ? "faturado" : "previsto", kind: "parcela", collectionNote: null, dueBasis: "Importado de planilha" });
         }
         imported++;
       });

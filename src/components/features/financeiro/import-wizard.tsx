@@ -143,10 +143,12 @@ export function ImportWizard() {
     const rows = table!.rows.map((r, i) => {
       if (kind !== "recebiveis") return r;
       const n: Record<string, string> = { ...r, valor: normalizeMoney(r.valor ?? "") };
-      if (r.vencimento) {
-        const d = normalizeDate(r.vencimento);
-        if (d) n.vencimento = d;
-        else local.push({ line: i + 2, message: `Vencimento inválido: ${r.vencimento} (use dd/mm/aaaa)` });
+      // vencimento, emissão da NF e recebimento (RN-69): dd/mm/aaaa → aaaa-mm-dd
+      for (const [col, label] of [["vencimento", "Vencimento"], ["emissao", "Emissão da NF"], ["recebido_em", "Recebido em"]] as const) {
+        if (!r[col]) continue;
+        const d = normalizeDate(r[col]);
+        if (d) n[col] = d;
+        else local.push({ line: i + 2, message: `${label} inválido: ${r[col]} (use dd/mm/aaaa)` });
       }
       return n;
     });

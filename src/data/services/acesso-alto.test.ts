@@ -72,7 +72,7 @@ describe("RN-34 — rotina de prazos", () => {
     expect(notifs("usr_fernanda", docId)).toHaveLength(0); // Financeiro só lê o Administrativo
   });
 
-  it("recebível vencido avisa o Financeiro e o responsável do projeto (se vê contas a receber)", () => {
+  it("recebível vencido fica com a rotina do Financeiro (RN-46), não com a de prazos", () => {
     const { recId, ownerId } = transaction((db) => {
       const r = db.receivables.find((x) => !x.deletedAt && x.status === "previsto")!;
       r.expectedAt = iso(-5);
@@ -81,9 +81,8 @@ describe("RN-34 — rotina de prazos", () => {
       return { recId: r.id, ownerId: p.ownerId };
     });
     transaction((db) => runDueSweepTx(db));
-    expect(notifs("usr_fernanda", recId)).toHaveLength(1);
-    expect(notifs(ownerId, recId)).toHaveLength(1);
-    expect(notifs("usr_lucas", recId)).toHaveLength(0);
+    expect(notifs("usr_fernanda", recId)).toHaveLength(0);
+    expect(notifs(ownerId, recId)).toHaveLength(0);
   });
 
   it("respeita a preferência da pessoa e exige sessão", async () => {

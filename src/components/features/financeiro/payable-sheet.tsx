@@ -6,13 +6,14 @@ import { usePermissions } from "@/components/layout/session";
 import { toast } from "sonner";
 import { Badge, Button, Callout, ConfirmDialog, DateField, DescriptionList, Dialog, Section, Sheet, copyText } from "@/components/ui";
 import { useApiMutation, useOrganization } from "@/data/hooks";
-import { financeApi, payablesExtraApi } from "@/data/services";
+import { financeApi, payablesExtraApi, reversalsApi } from "@/data/services";
 import { dateFull, fromDateInput, money, toDateInput } from "@/lib/format";
 import { PAYABLE_KIND_LABEL, PayableAmount, payableDiff } from "./payable-bits";
 import { RegisterInvoiceDialog } from "./register-invoice-dialog";
+import { DeclaredDataSection, PayeeSummary } from "./payee-data";
 import type { PayableRow } from "./types";
 
-type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | null;
+type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | "undoApproval" | "reversePayment" | null;
 
 const linkUrl = (token: string) => `${typeof window === "undefined" ? "" : window.location.origin}/nf/${token}`;
 
@@ -46,7 +47,10 @@ function PayDialog({ row, open, onOpenChange }: { row: PayableRow; open: boolean
         </>
       }
     >
-      <DateField label="Data do pagamento" required autoFocus value={date} onChange={(e) => setDate(e.target.value)} error={error} />
+      <div className="space-y-4">
+        {row.kind === "freelancer" && <PayeeSummary payableId={row.id} />}
+        <DateField label="Data do pagamento" required autoFocus value={date} onChange={(e) => setDate(e.target.value)} error={error} />
+      </div>
     </Dialog>
   );
 }
@@ -59,12 +63,17 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
   const divergent = useApiMutation((a: { id: string; note: string }) => financeApi.markDivergent(a.id, a.note), { success: "Marcada como divergente.", onSuccess: () => setDlg(null) });
   const resend = useApiMutation((id: string) => financeApi.resendInvoiceLink(id), { success: "Link reenviado ao freelancer por e-mail, válido por mais 30 dias." });
   const reissue = useApiMutation((a: { id: string; reason: string }) => payablesExtraApi.requestNewInvoice(a.id, a.reason), { success: "Pedido de nova NF enviado ao freelancer, com o motivo.", onSuccess: () => setDlg(null) });
+  const undoApproval = useApiMutation((a: { id: string; reason: string }) => reversalsApi.undoPayableApproval(a.id, a.reason), { success: "Aprovação desfeita. A NF voltou para conferência.", onSuccess: () => setDlg(null) });
+  const reversePayment = useApiMutation((a: { id: string; reason: string }) => reversalsApi.reversePayment(a.id, a.reason), { success: "Pagamento estornado. A conta voltou para Aprovado.", onSuccess: () => setDlg(null) });
   const org = useOrganization();
   const payDay = org.data?.org.settings.freelancerPaymentDay ?? 20;
 
   const diff = row ? payableDiff(row) : null;
   const canReview = !!row && writable && (row.status === "em_conferencia" || row.status === "divergente");
   const canPay = !!row && writable && row.status === "aprovado";
+  // RN-47 — ações reversas (motivo obrigatório, ficam no histórico)
+  const canUndoApproval = canPay && row?.kind === "freelancer" && row.invoicedAmountCents != null;
+  const canReversePayment = !!row && writable && row.status === "pago";
   const isFl = row?.kind === "freelancer";
   // RN-41: NF chegou por outro canal · RN-42: NF em conferência/divergente volta ao freelancer
   const canRegister = !!row && writable && isFl && (row.status === "aguardando_nf" || row.status === "divergente");
@@ -82,9 +91,19 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         ariaTitle="Detalhe da conta a pagar"
         title={row ? `${row.projectCode ?? "Administrativo"} · A pagar` : undefined}
         footer={
-          row && (canReview || canPay || canRegister) ? (
+          row && (canReview || canPay || canRegister || canReversePayment) ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
+                {canUndoApproval && (
+                  <Button variant="ghost" icon="undo" onClick={() => setDlg("undoApproval")}>
+                    Desfazer aprovação…
+                  </Button>
+                )}
+                {canReversePayment && (
+                  <Button variant="secondary" icon="undo" onClick={() => setDlg("reversePayment")}>
+                    Estornar pagamento…
+                  </Button>
+                )}
                 {canReissue && (
                   <Button variant="ghost" className="text-danger" onClick={() => setDlg("reissue")}>
                     Recusar e pedir nova NF…
@@ -173,16 +192,34 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
 
             {req?.submittedAt && (
               <Section title={req.source === "manual" ? "NF registrada pelo Financeiro" : "Dados declarados pelo freelancer"} description={`${req.source === "manual" ? "Registrada" : "Enviados"} em ${dateFull(req.submittedAt)}`} icon="freelancers">
-                <DescriptionList
-                  columns={1}
-                  items={[
-                    { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
-                    { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
-                    { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
-                    { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
-                    { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
-                  ]}
-                />
+                {req.source === "manual" ? (
+                    <DescriptionList
+                      columns={1}
+                      items={[
+                        { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
+                        { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
+                        { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
+                        { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
+                        { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
+                      ]}
+                    />
+                ) : (
+                  <DeclaredDataSection
+                    payableId={row.id}
+                    fallback={
+                      <DescriptionList
+                        columns={1}
+                        items={[
+                          { label: "Razão social / nome", value: req.declaredLegalName, copy: req.declaredLegalName },
+                          { label: "CPF / CNPJ", value: req.declaredDocument, copy: req.declaredDocument },
+                          { label: "Chave PIX", value: req.declaredPixKey, copy: req.declaredPixKey },
+                          { label: "Nº da NF", value: req.declaredInvoiceNumber, copy: req.declaredInvoiceNumber },
+                          { label: "Valor declarado", value: <PayableAmount cents={req.declaredAmountCents} /> },
+                        ]}
+                      />
+                    }
+                  />
+                )}
               </Section>
             )}
 
@@ -242,12 +279,35 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         open={!!row && dlg === "divergent"}
         onOpenChange={(o) => !o && setDlg(null)}
         title="Marcar NF como divergente"
-        description="Registra a divergência para a conferência interna; o freelancer não é avisado. Para devolver a nota ao freelancer, use “Recusar e pedir nova NF…”."
+        description="Registra a divergência e avisa o freelancer com o motivo (Caixa de entrada, se tiver login, e e-mail). A nota continua com a Draw; para devolvê-la ao freelancer, use “Recusar e pedir nova NF…”."
         confirmLabel="Marcar divergente"
         destructive
         reason={{ label: "Motivo da divergência", placeholder: "Ex.: valor da NF difere do combinado em reunião", required: true }}
         loading={divergent.isPending}
         onConfirm={(note) => row && divergent.mutate({ id: row.id, note: note ?? "" })}
+      />
+      <ConfirmDialog
+        open={!!row && dlg === "undoApproval"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Desfazer a aprovação?"
+        description="A conta volta para Em conferência (ou Divergente, se o valor da NF difere do acordado) e deixa de poder ser paga até nova aprovação."
+        confirmLabel="Desfazer aprovação"
+        cancelLabel="Voltar"
+        reason={{ label: "Motivo", placeholder: "Ex.: aprovada antes de conferir os dados bancários", required: true }}
+        loading={undoApproval.isPending}
+        onConfirm={(reason) => row && undoApproval.mutate({ id: row.id, reason: reason ?? "" })}
+      />
+      <ConfirmDialog
+        open={!!row && dlg === "reversePayment"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Estornar o pagamento?"
+        description="A conta volta para Aprovado, sem data de pagamento. O freelancer é avisado do estorno com o motivo (Caixa de entrada e e-mail)."
+        confirmLabel="Estornar pagamento"
+        cancelLabel="Voltar"
+        destructive
+        reason={{ label: "Motivo do estorno", placeholder: "Ex.: PIX devolvido pelo banco", required: true }}
+        loading={reversePayment.isPending}
+        onConfirm={(reason) => row && reversePayment.mutate({ id: row.id, reason: reason ?? "" })}
       />
       <ConfirmDialog
         open={!!row && dlg === "approve"}
