@@ -526,7 +526,15 @@ export interface ProjectFinancials {
   toReceiveCents: number;
   freelancerCostCents: number;
   otherCostCents: number;
+  /** Cobranças adicionais não canceladas (RN-14) — somam à receita, fora do contratado. */
+  additionalCents: number;
+  /** Receita = contratado + adicionais (RN-65). */
+  revenueCents: number;
+  /** Impostos sobre faturamento da receita (RN-15), deduzidos da margem (RN-65). */
+  taxCents: number;
+  /** Margem = receita − impostos − freelancers − outras despesas do projeto (RN-65). */
   marginCents: number;
+  /** Margem sobre a receita. */
   marginPct: number | null;
 }
 

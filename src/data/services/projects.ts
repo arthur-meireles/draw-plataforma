@@ -574,7 +574,14 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
   const invoiced = recs.filter((r) => r.issuedAt).reduce((a, r) => a + r.amountCents, 0);
   const received = recs.filter((r) => r.status === "recebido").reduce((a, r) => a + r.amountCents, 0);
   const expected = recs.reduce((a, r) => a + r.amountCents, 0);
-  const margin = contracted - freelancerCost - otherCost;
+  // RN-65 — receita = contratado + adicionais (RN-14); impostos (RN-15) saem da margem
+  const parcels = recs.filter((r) => r.kind !== "adicional");
+  const additional = recs.filter((r) => r.kind === "adicional").reduce((a, r) => a + r.amountCents, 0);
+  const additionalTax = recs.filter((r) => r.kind === "adicional").reduce((a, r) => a + r.taxCents, 0);
+  const contractTax = parcels.length ? parcels.reduce((a, r) => a + r.taxCents, 0) : taxOf(db, contracted);
+  const revenue = contracted + additional;
+  const tax = contractTax + additionalTax;
+  const margin = revenue - tax - freelancerCost - otherCost;
   return {
     projectId,
     contractedCents: contracted,
@@ -584,8 +591,11 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
     toReceiveCents: expected - received,
     freelancerCostCents: freelancerCost,
     otherCostCents: otherCost,
+    additionalCents: additional,
+    revenueCents: revenue,
+    taxCents: tax,
     marginCents: margin,
-    marginPct: contracted ? margin / contracted : null,
+    marginPct: revenue ? margin / revenue : null,
   };
 }
 

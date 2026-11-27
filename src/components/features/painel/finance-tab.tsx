@@ -19,7 +19,7 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
     <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <IndicatorCard loading={q.isLoading} icon="money" label="Contratado" value={<Money cents={f?.contractedTotal} compact />} formula="Valor contratado dos projetos no filtro" />
-        <IndicatorCard loading={q.isLoading} icon="margin" tone="success" label="Margem" value={<Money cents={f?.marginTotal} compact />} hint={marginPct != null ? `${fmtPct(marginPct)} do contratado` : undefined} formula="Contratado − custos, por projeto" />
+        <IndicatorCard loading={q.isLoading} icon="margin" tone="success" label="Margem" value={<Money cents={f?.marginTotal} compact />} hint={marginPct != null ? `${fmtPct(marginPct)} do contratado` : undefined} formula="Receita (contratado + adicionais) − impostos − custos, por projeto (RN-65)" />
         <IndicatorCard loading={q.isLoading} icon="target" tone="info" label="Ticket médio" value={<Money cents={ticketAvg} compact />} formula="Contratado médio por projeto" />
         <IndicatorCard loading={q.isLoading} icon="client" tone="violet" label="Clientes recorrentes" value={cl ? number(cl.recurring) : "—"} hint={cl ? `${cl.projectsPerClient.toFixed(1).replace(".", ",")} projetos por cliente · ${plural(cl.total, "cliente", "clientes")}` : undefined} formula="Clientes com mais de um projeto" />
       </div>

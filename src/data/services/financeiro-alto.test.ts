@@ -217,3 +217,18 @@ describe("RN-47 — estornos com motivo, permissão e histórico", () => {
     expect(loadDb().notifications.some((n) => n.userId === "usr_julia" && n.title === "Pagamento estornado")).toBe(true);
   });
 });
+
+describe("RN-65 — margem com adicionais e impostos", () => {
+  it("adicional soma à receita e impostos saem da margem", async () => {
+    as("usr_fernanda");
+    const db = loadDb();
+    const p = db.projects.find((x) => x.status === "ativo" && x.contractedAmountCents && !x.deletedAt)!;
+    const before = await projectsApi.financials(p.id);
+    await financeApi.addAdditionalCharge(p.id, { description: "Extra", amountCents: 100_000, expectedAt: new Date().toISOString() });
+    const after = await projectsApi.financials(p.id);
+    expect(after.additionalCents - before.additionalCents).toBe(100_000);
+    expect(after.revenueCents).toBe(after.contractedCents + after.additionalCents);
+    expect(after.marginCents - before.marginCents).toBe(100_000 - 6_000);
+    expect(after.marginCents).toBe(after.revenueCents - after.taxCents - after.freelancerCostCents - after.otherCostCents);
+  });
+});
