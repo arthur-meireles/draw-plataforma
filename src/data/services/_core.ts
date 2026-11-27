@@ -4,7 +4,7 @@
  */
 import { baseFields, loadDb, nowIso, transaction } from "../db";
 import type { Database, DomainEvent, ID, Notification, NotificationType, Project, User } from "../types";
-import { canSeeMoney, isScopedToMembership } from "@/lib/permissions";
+import { canRead, canSeeMoney, canWrite, canWriteAll, isScopedToMembership, type Resource } from "@/lib/permissions";
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +17,8 @@ export class ApiError extends Error {
 }
 
 const SESSION_KEY = "draw:session";
+/** Versão das sessões do usuário no momento do login (RN-31: redefinir senha derruba sessões abertas). */
+const SESSION_VERSION_KEY = "draw:session:v";
 
 export function getSessionUserId(): ID | null {
   if (typeof window === "undefined") return null;
@@ -27,22 +29,102 @@ export function getSessionUserId(): ID | null {
   }
 }
 
+/** Grava a sessão (mock do cookie httpOnly). Guarda também a versão de sessão atual do usuário. */
 export function setSessionUserId(id: ID | null) {
   if (typeof window === "undefined") return;
   try {
-    if (id) window.localStorage.setItem(SESSION_KEY, id);
-    else window.localStorage.removeItem(SESSION_KEY);
+    if (id) {
+      const version = loadDb().users.find((u) => u.id === id)?.sessionVersion ?? 0;
+      window.localStorage.setItem(SESSION_KEY, id);
+      window.localStorage.setItem(SESSION_VERSION_KEY, String(version));
+    } else {
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(SESSION_VERSION_KEY);
+    }
   } catch {
     /* ignore */
   }
 }
 
-/** Usuário autenticado (lança 401 se não houver). */
-export function actor(db: Database = loadDb()): User {
+function sessionVersion(): number {
+  try {
+    return Number(window.localStorage.getItem(SESSION_VERSION_KEY) ?? "0") || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Usuário da sessão, se ela ainda vale: usuário ativo e sessão não revogada (RN-31). */
+export function sessionUser(db: Database = loadDb()): User | null {
   const id = getSessionUserId();
   const u = id ? db.users.find((x) => x.id === id && x.status === "ativo") : undefined;
+  if (!u || (u.sessionVersion ?? 0) !== sessionVersion()) return null;
+  return u;
+}
+
+/** Usuário autenticado (lança 401 se não houver). */
+export function actor(db: Database = loadDb()): User {
+  const u = sessionUser(db);
   if (!u) throw new ApiError(401, "Sessão expirada. Entre novamente.");
   return u;
+}
+
+/* ───────── autorização no serviço (P7 / RF-M1-04 / RN-30) ───────── */
+
+export type AccessLevel = "read" | "write" | "all";
+
+const RESOURCE_LABEL: Record<Resource, string> = {
+  settings: "às configurações",
+  users: "aos usuários",
+  clients: "aos clientes",
+  freelancers: "aos freelancers",
+  freelancerBank: "aos dados bancários de freelancers",
+  projects: "aos projetos",
+  projectValues: "aos valores e propostas",
+  tasks: "às tarefas",
+  receivables: "às contas a receber",
+  payables: "às contas a pagar",
+  files: "aos arquivos",
+  vault: "ao cofre",
+  metrics: "aos indicadores",
+  commercial: "ao comercial",
+  adm: "ao Administrativo",
+};
+
+/**
+ * Garante a matriz da seção 9 no serviço: `read` (L, P ou T), `write` (P ou T — o escopo "P"
+ * é aplicado por quem chama, ex.: `assertProjectVisible`) e `all` (só T). Lança 403 orientando o que fazer.
+ */
+export function requireAccess(me: User, resource: Resource, level: AccessLevel = "read", message?: string): void {
+  const ok = level === "read" ? canRead(me, resource) : level === "write" ? canWrite(me, resource) : canWriteAll(me, resource);
+  if (ok) return;
+  const what = RESOURCE_LABEL[resource];
+  throw new ApiError(
+    403,
+    message ?? (level === "read" || !canRead(me, resource) ? `Seu perfil não tem acesso ${what}. Peça acesso à administração da Draw.` : `Seu perfil só consulta o acesso ${what}. Peça a um administrador para fazer essa alteração.`),
+  );
+}
+
+/** Mesma checagem, para composições assíncronas que precisam validar ANTES de enviar arquivos. */
+export function requireAccessNow(resource: Resource, level: AccessLevel = "read", message?: string): User {
+  const me = actor();
+  requireAccess(me, resource, level, message);
+  return me;
+}
+
+/* ───────── tokens de uso único (convite, recuperação de senha) ───────── */
+
+/** Token aleatório e imprevisível (256 bits, hex). */
+export function secureToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** SHA-256 em hex — o banco guarda só o hash do token (RN-31/RN-32). */
+export async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Latência simulada de rede para exercitar estados de carregamento. */

@@ -6,9 +6,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AuthHeading, AuthLayout } from "@/components/layout/auth-layout";
 import { Button, Icon, PasswordField, TextField, showSplash } from "@/components/ui";
 import { ApiError, authApi } from "@/data/services";
+import { isDemoMode } from "@/lib/demo";
 
 /** Atalhos de demonstração: visíveis em desenvolvimento ou com NEXT_PUBLIC_DEMO_LOGIN=1. */
-const SHOW_DEMO = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_DEMO_LOGIN === "1";
+const SHOW_DEMO = isDemoMode();
+
+/** Só aceita voltar para rota interna (evita redirecionar para outro site). */
+const safeNext = (next: string | null) => (next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/");
 
 const DEMO = [
   { email: "paula@draw.com.br", label: "Paula · Admin" },
@@ -25,7 +29,8 @@ function LoginForm() {
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mfa, setMfa] = useState(false);
+  /** Desafio pré-2FA (RN-30): sem sessão até o código ser confirmado. */
+  const [mfa, setMfa] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -34,7 +39,7 @@ function LoginForm() {
   const finish = () => {
     qc.clear();
     showSplash();
-    router.replace(params.get("next") || "/");
+    router.replace(safeNext(params.get("next")));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -51,7 +56,11 @@ function LoginForm() {
     setLoading(true);
     try {
       const r = await authApi.login(email, password);
-      if (r.mfaRequired) setMfa(true);
+      if (r.mfaRequired) {
+        setCode("");
+        setFieldErrors({});
+        setMfa(r.mfaChallenge);
+      }
       else finish();
     } catch (err) {
       setError((err as ApiError).message);
@@ -62,12 +71,18 @@ function LoginForm() {
 
   const submitMfa = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!mfa) return;
     setLoading(true);
     try {
-      await authApi.verifyMfa(code);
+      await authApi.verifyMfa(mfa, code);
       finish();
     } catch (err) {
-      setFieldErrors({ code: (err as ApiError).message });
+      const apiErr = err as ApiError;
+      if (apiErr.status === 401) {
+        // desafio expirou: volta ao e-mail e senha
+        setMfa(null);
+        setError(apiErr.message);
+      } else setFieldErrors({ code: apiErr.message });
     } finally {
       setLoading(false);
     }
@@ -81,7 +96,16 @@ function LoginForm() {
         <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">
           Verificar e entrar
         </Button>
-        <Button variant="ghost" size="sm" className="w-full" onClick={() => setMfa(false)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            void authApi.cancelMfa(mfa);
+            setMfa(null);
+            setPassword("");
+          }}
+        >
           Voltar
         </Button>
       </form>

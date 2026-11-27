@@ -1,27 +1,80 @@
 /** Administrativo (M6), usuários e autenticação (M1), e-mail (M11), importação, busca. */
 import { baseFields, loadDb, nowIso, resetDb, transaction } from "../db";
-import type { ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, VaultItem } from "../types";
-import { ApiError, actor, emit, getSessionUserId, latency, read, setSessionUserId, touch, visibleProjects, write } from "./_core";
-import { access, canRead, canWriteAll } from "@/lib/permissions";
+import type { AccessLogAction, Database, ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, User, VaultItem } from "../types";
+import { ApiError, actor, emit, getSessionUserId, latency, queueSystemEmail, read, requireAccess, secureToken, sessionUser, setSessionUserId, sha256Hex, touch, visibleProjects, write } from "./_core";
+import { ROLE_LABEL } from "../reference";
+import { visibleTasks } from "./tasks";
+import { access, canRead, canWriteAll, type Resource as PermResource } from "@/lib/permissions";
+import { isDemoMode } from "@/lib/demo";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 
 /* ───────── Autenticação (mock) ───────── */
 const failures = new Map<string, number>();
 
+const MFA_CHALLENGE_TTL_MS = 5 * 60_000;
+const RESET_TTL_MS = 60 * 60_000; // RN-31: 1 hora
+const INVITE_TTL_MS = 7 * 86_400_000; // RN-32: 7 dias
+
+/**
+ * RN-30 — desafio pré-2FA. O login com senha correta NÃO cria sessão quando o usuário tem 2FA;
+ * devolve um desafio de curta duração que só vira sessão em `verifyMfa`. No back-end: token
+ * assinado de 5 minutos, sem cookie de sessão. Aqui fica em memória (sair da tela descarta).
+ */
+const mfaChallenges = new Map<string, { userId: ID; expiresAt: number }>();
+
+const log = (db: Database, userId: ID | null, action: AccessLogAction, detail: string | null = null) =>
+  db.accessLogs.push({ ...baseFields(userId), userId, action, detail, at: nowIso() });
+
+const resetsOf = (db: Database) => (db.passwordResets ??= []);
+const invitesOf = (db: Database) => (db.userInvites ??= []);
+
+const safeUser = (u: User) => {
+  const { passwordMock: _pw, ...rest } = u;
+  void _pw;
+  return rest;
+};
+
+/** RN-32 — emite um convite novo (revoga os pendentes) e registra o e-mail transacional. Devolve o token em claro uma única vez. */
+export async function issueUserInvite(userId: ID, opts: { email: boolean; event?: string }) {
+  const token = secureToken();
+  const tokenHash = await sha256Hex(token);
+  return write((db, me) => {
+    requireAccess(me, "users", "all", "Só administradores convidam usuários e geram links de convite.");
+    const u = db.users.find((x) => x.id === userId && x.status === "convidado" && !x.deletedAt);
+    if (!u) throw new ApiError(404, "Convite não encontrado. A pessoa pode já ter aceitado.");
+    const now = nowIso();
+    invitesOf(db).filter((i) => i.userId === u.id && !i.usedAt && !i.revokedAt).forEach((i) => (i.revokedAt = now));
+    invitesOf(db).push({ ...baseFields(me.id), userId: u.id, tokenHash, expiresAt: new Date(Date.now() + INVITE_TTL_MS).toISOString(), usedAt: null, revokedAt: null });
+    if (opts.email) queueSystemEmail(db, { to: [u.email], subject: "Convite para a plataforma Draw", template: "convite" });
+    if (opts.event) emit(db, me, { type: opts.event, entityType: "user", entityId: u.id, data: {} });
+    return { id: u.id, inviteToken: token };
+  }, 120);
+}
+
+/** Convite válido pelo token (hash, não expirado, não usado, não revogado) — RN-32. */
+function findInvite(db: Database, tokenHash: string) {
+  const inv = invitesOf(db).find((i) => i.tokenHash === tokenHash);
+  if (!inv || inv.revokedAt || inv.usedAt) throw new ApiError(404, "Convite inválido ou já utilizado. Peça um novo convite à administração da Draw.");
+  if (new Date(inv.expiresAt).getTime() < Date.now()) throw new ApiError(404, "Este convite expirou (vale 7 dias). Peça um novo convite à administração da Draw.");
+  const u = db.users.find((x) => x.id === inv.userId && x.status === "convidado" && !x.deletedAt);
+  if (!u) throw new ApiError(404, "Convite inválido ou já utilizado. Peça um novo convite à administração da Draw.");
+  return { inv, u };
+}
+
 export const authApi = {
   me: async () => {
     await latency(30);
     const db = loadDb();
-    const id = getSessionUserId();
-    const u = id ? db.users.find((x) => x.id === id && x.status === "ativo") : null;
+    const u = sessionUser(db);
     if (!u) return null;
-    const { passwordMock: _pw, ...safe } = u;
-    void _pw;
-    return { ...safe, freelancerId: db.freelancers.find((f) => f.userId === u.id)?.id ?? null };
+    return { ...safeUser(u), freelancerId: db.freelancers.find((f) => f.userId === u.id)?.id ?? null };
   },
 
-  /** RF-M1-01 / RNF-01 — bloqueio progressivo após falhas. */
-  login: async (email: string, password: string) => {
+  /**
+   * RF-M1-01 / RNF-01 — bloqueio progressivo após falhas.
+   * RN-30 — com 2FA, devolve `mfaChallenge` e NÃO cria sessão; sem 2FA, entra direto.
+   */
+  login: async (email: string, password: string): Promise<{ id: ID; mfaRequired: false } | { id: ID; mfaRequired: true; mfaChallenge: string }> => {
     await latency(500);
     const key = email.trim().toLowerCase();
     const fails = failures.get(key) ?? 0;
@@ -30,91 +83,175 @@ export const authApi = {
       const u = db.users.find((x) => x.email.toLowerCase() === key);
       if (!u || u.passwordMock !== password || u.status !== "ativo") {
         failures.set(key, fails + 1);
-        db.accessLogs.push({ ...baseFields(null), userId: u?.id ?? null, action: "login_failed", detail: key, at: nowIso() });
+        log(db, u?.id ?? null, "login_failed", key);
         if (u?.status === "inativo") throw new ApiError(403, "Este usuário está inativo. Fale com a administração.");
         throw new ApiError(401, "E-mail ou senha incorretos.");
       }
       failures.delete(key);
+      if (u.mfaEnabled) {
+        const mfaChallenge = secureToken();
+        mfaChallenges.set(mfaChallenge, { userId: u.id, expiresAt: Date.now() + MFA_CHALLENGE_TTL_MS });
+        setSessionUserId(null); // nenhuma sessão até o código ser confirmado
+        return { id: u.id, mfaRequired: true as const, mfaChallenge };
+      }
       u.lastLoginAt = nowIso();
-      db.accessLogs.push({ ...baseFields(u.id), userId: u.id, action: "login", detail: null, at: nowIso() });
+      log(db, u.id, "login");
       setSessionUserId(u.id);
-      return { id: u.id, mfaRequired: u.mfaEnabled };
+      return { id: u.id, mfaRequired: false as const };
     });
   },
 
-  verifyMfa: async (code: string) => {
+  /** RN-30 — confirma o código do desafio e só então cria a sessão. Demonstração: qualquer 6 dígitos. */
+  verifyMfa: async (mfaChallenge: string, code: string) => {
     await latency(300);
-    if (!/^\d{6}$/.test(code)) throw new ApiError(422, "Digite os 6 números do aplicativo autenticador.", { code: "Digite os 6 números" });
-    return true;
+    const ch = mfaChallenges.get(mfaChallenge);
+    if (!ch || ch.expiresAt < Date.now()) {
+      mfaChallenges.delete(mfaChallenge);
+      throw new ApiError(401, "A verificação expirou. Entre com e-mail e senha de novo.");
+    }
+    if (!/^\d{6}$/.test(code)) {
+      transaction((db) => log(db, ch.userId, "mfa_failed"));
+      throw new ApiError(422, "Digite os 6 números do aplicativo autenticador.", { code: "Digite os 6 números" });
+    }
+    mfaChallenges.delete(mfaChallenge);
+    return transaction((db) => {
+      const u = db.users.find((x) => x.id === ch.userId && x.status === "ativo");
+      if (!u) throw new ApiError(401, "Este usuário não pode entrar agora. Fale com a administração.");
+      u.lastLoginAt = nowIso();
+      log(db, u.id, "login", "2FA");
+      setSessionUserId(u.id);
+      return true;
+    });
+  },
+
+  /** Descarta um desafio de 2FA (botão "Voltar" da tela de código). */
+  cancelMfa: async (mfaChallenge: string) => {
+    mfaChallenges.delete(mfaChallenge);
   },
 
   logout: async () => {
     await latency(80);
     const id = getSessionUserId();
-    if (id) transaction((db) => db.accessLogs.push({ ...baseFields(id), userId: id, action: "logout", detail: null, at: nowIso() }));
+    if (id) transaction((db) => log(db, id, "logout"));
     setSessionUserId(null);
   },
 
-  /** Troca de perfil para demonstração (só no mock). */
+  /** Usuários disponíveis em "Trocar perfil" — só no modo de demonstração (RN-33). */
+  demoProfiles: () =>
+    read((db) => {
+      if (!isDemoMode()) throw new ApiError(403, "A troca de perfil só existe na versão de demonstração.");
+      return db.users
+        .filter((u) => u.status === "ativo" && !u.deletedAt)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, avatarColor: u.avatarColor }));
+    }, 60),
+
+  /** RN-33 — troca de perfil da demonstração: só com o modo demo ligado, sempre registrada no log de acessos. */
   impersonate: async (userId: ID) => {
     await latency(80);
-    setSessionUserId(userId);
+    if (!isDemoMode()) throw new ApiError(403, "A troca de perfil só existe na versão de demonstração.");
+    transaction((db) => {
+      const me = actor(db);
+      const target = db.users.find((u) => u.id === userId && u.status === "ativo" && !u.deletedAt);
+      if (!target) throw new ApiError(404, "Usuário não encontrado ou inativo.");
+      log(db, me.id, "impersonate", `${me.name} → ${target.name} (${ROLE_LABEL[target.role]})`);
+      setSessionUserId(target.id);
+    });
   },
 
-  requestPasswordReset: async (email: string) => {
+  /**
+   * RF-M1-01 / RN-31 — cria token de uso único (1 h, só o hash fica no banco) e envia o e-mail
+   * transacional. Resposta sempre igual (não revela se o e-mail existe); convidado, inativo ou
+   * desconhecido não recebem token. `demoLink` só existe no modo de demonstração (o e-mail não sai de verdade).
+   */
+  requestPasswordReset: async (email: string): Promise<{ demoLink: string | null }> => {
     await latency(500);
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) throw new ApiError(422, "Informe um e-mail válido.", { email: "Informe um e-mail válido" });
-    transaction((db) => {
-      const u = db.users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-      if (u) db.emailLogs.push({ ...baseFields(null), channel: "system", provider: "brevo", userId: null, projectId: null, to: [u.email], cc: [], subject: "Recuperação de senha", template: "recuperar_senha", status: "sent", error: null, sentAt: nowIso() });
+    const token = secureToken();
+    const tokenHash = await sha256Hex(token);
+    const issued = transaction((db) => {
+      const key = email.trim().toLowerCase();
+      const u = db.users.find((x) => x.email.toLowerCase() === key && !x.deletedAt);
+      log(db, u?.id ?? null, "password_reset_requested", key);
+      if (!u || u.status !== "ativo") return false;
+      const now = nowIso();
+      resetsOf(db).filter((r) => r.userId === u.id && !r.usedAt).forEach((r) => (r.usedAt = now)); // só o link mais recente vale
+      resetsOf(db).push({ ...baseFields(null), userId: u.id, tokenHash, expiresAt: new Date(Date.now() + RESET_TTL_MS).toISOString(), usedAt: null });
+      queueSystemEmail(db, { to: [u.email], subject: "Recuperação de senha", template: "recuperar_senha" });
+      return true;
     });
-    return true; // nunca revela se o e-mail existe
+    return { demoLink: issued && isDemoMode() ? `/recuperar-senha?token=${token}` : null };
   },
 
+  /** RN-31 — valida o token (existe, não expirou, não foi usado), grava a senha, consome o token e derruba as sessões abertas. */
   resetPassword: async (token: string, password: string) => {
     await latency(400);
     if (password.length < 8) throw new ApiError(422, "A senha precisa de pelo menos 8 caracteres.", { password: "Use pelo menos 8 caracteres" });
-    if (!token) throw new ApiError(409, "Link inválido ou expirado.");
-    return true;
+    const tokenHash = token ? await sha256Hex(token) : "";
+    return transaction((db) => {
+      const r = tokenHash ? resetsOf(db).find((x) => x.tokenHash === tokenHash) : undefined;
+      if (!r || r.usedAt) throw new ApiError(409, "Este link de recuperação é inválido ou já foi usado.");
+      if (new Date(r.expiresAt).getTime() < Date.now()) throw new ApiError(409, "Este link de recuperação expirou (vale 1 hora).");
+      const u = db.users.find((x) => x.id === r.userId && x.status === "ativo");
+      if (!u) throw new ApiError(409, "Este link de recuperação é inválido ou já foi usado.");
+      u.passwordMock = password;
+      u.sessionVersion = (u.sessionVersion ?? 0) + 1;
+      touch(u);
+      r.usedAt = nowIso();
+      touch(r);
+      failures.delete(u.email.toLowerCase());
+      log(db, u.id, "password_reset_done");
+      if (getSessionUserId() === u.id) setSessionUserId(null);
+      return true;
+    });
   },
 
-  /** RF-M1-02 — aceite de convite. */
+  /** RF-M1-02 / RN-32 — aceite de convite. */
   getInvite: async (token: string) => {
     await latency(200);
-    const db = loadDb();
-    const u = db.users.find((x) => x.status === "convidado" && (x.id === token || `convite-${x.id}` === token));
-    if (!u) throw new ApiError(404, "Convite inválido ou já utilizado.");
-    return { name: u.name, email: u.email, role: u.role };
+    const tokenHash = await sha256Hex(token);
+    const { u, inv } = findInvite(loadDb(), tokenHash);
+    return { name: u.name, email: u.email, role: u.role, expiresAt: inv.expiresAt };
   },
 
   acceptInvite: async (token: string, input: { name: string; password: string }) => {
     await latency(500);
     if (input.password.length < 8) throw new ApiError(422, "A senha precisa de pelo menos 8 caracteres.", { password: "Use pelo menos 8 caracteres" });
+    const tokenHash = await sha256Hex(token);
     return transaction((db) => {
-      const u = db.users.find((x) => x.status === "convidado" && (x.id === token || `convite-${x.id}` === token));
-      if (!u) throw new ApiError(404, "Convite inválido ou já utilizado.");
+      const { u, inv } = findInvite(db, tokenHash);
       u.name = input.name.trim() || u.name;
       u.passwordMock = input.password;
       u.status = "ativo";
       u.lastLoginAt = nowIso();
       touch(u);
+      inv.usedAt = nowIso();
+      touch(inv);
+      log(db, u.id, "invite_accepted");
+      emit(db, null, { type: "user.invite_accepted", entityType: "user", entityId: u.id, data: { email: u.email } });
       setSessionUserId(u.id);
       return u.id;
     });
   },
 
+  /** RN-33 — restaurar a seed: só administrador e só no modo de demonstração. */
   resetDemo: async () => {
     await latency(300);
-    const id = getSessionUserId();
+    if (!isDemoMode()) throw new ApiError(403, "Restaurar dados só existe na versão de demonstração.");
+    const me = actor();
+    requireAccess(me, "settings", "all", "Só administradores restauram os dados de demonstração.");
     resetDb();
-    setSessionUserId(id);
+    transaction((db) => log(db, me.id, "demo_reset"));
+    setSessionUserId(me.id);
   },
 };
 
 /* ───────── Usuários (RF-M1-02/03) ───────── */
 export const usersApi = {
+  /** RN-30 — só quem lê Usuários (admin, gestão); nunca devolve token de convite nem senha. */
   list: (f: { q?: string; role?: Role; status?: string; includeFreelancers?: boolean } = {}) =>
-    read((db) => {
+    read((db, me) => {
+      requireAccess(me, "users", "read");
       const q = f.q?.trim().toLowerCase();
       return db.users
         .filter((u) => !u.deletedAt)
@@ -123,31 +260,37 @@ export const usersApi = {
         .filter((u) => !f.status || u.status === f.status)
         .filter((u) => !q || `${u.name} ${u.email}`.toLowerCase().includes(q))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map(({ passwordMock: _pw, ...u }) => {
-          void _pw;
-          return { ...u, inviteToken: u.status === "convidado" ? `convite-${u.id}` : null };
+        .map((u) => {
+          const { sessionVersion: _v, ...rest } = safeUser(u);
+          void _v;
+          const pending = u.status === "convidado" ? invitesOf(db).filter((i) => i.userId === u.id && !i.usedAt && !i.revokedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] : undefined;
+          return { ...rest, inviteExpiresAt: pending?.expiresAt ?? null };
         });
     }, 100),
 
-  invite: (input: { name: string; email: string; role: Role }) =>
-    write((db, me) => {
-      if (!canWriteAll(me, "users")) throw new ApiError(403, "Só administradores convidam usuários.");
+  invite: async (input: { name: string; email: string; role: Role }) => {
+    const created = await write((db, me) => {
+      requireAccess(me, "users", "all", "Só administradores convidam usuários.");
       const email = input.email.trim().toLowerCase();
       const errors: Record<string, string> = {};
       if (!input.name.trim()) errors.name = "Informe o nome";
       if (!/^\S+@\S+\.\S+$/.test(email)) errors.email = "Informe um e-mail válido";
       if (db.users.some((u) => u.email.toLowerCase() === email)) errors.email = "Já existe um usuário com este e-mail";
       if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
-      const u = { ...baseFields(me.id), email, name: input.name.trim(), userType: input.role === "freelancer" ? ("freelancer" as const) : ("internal" as const), role: input.role, status: "convidado" as const, avatarColor: ["#3f76ff", "#0fa37f", "#d97706", "#db2777", "#7c3aed"][db.users.length % 5], jobTitle: null, phone: null, mfaEnabled: false, lastLoginAt: null, passwordMock: "" };
+      const u: User = { ...baseFields(me.id), email, name: input.name.trim(), userType: input.role === "freelancer" ? "freelancer" : "internal", role: input.role, status: "convidado", avatarColor: ["#3f76ff", "#0fa37f", "#d97706", "#db2777", "#7c3aed"][db.users.length % 5], jobTitle: null, phone: null, mfaEnabled: false, lastLoginAt: null, passwordMock: "" };
       db.users.push(u);
-      db.emailLogs.push({ ...baseFields(null), channel: "system", provider: "brevo", userId: null, projectId: null, to: [email], cc: [], subject: "Convite para a plataforma Draw", template: "convite", status: "sent", error: null, sentAt: nowIso() });
       emit(db, me, { type: "user.invited", entityType: "user", entityId: u.id, data: { email, role: input.role } });
-      return { id: u.id, inviteToken: `convite-${u.id}` };
-    }),
+      return u.id;
+    });
+    return issueUserInvite(created, { email: true });
+  },
+
+  /** RN-32 — "Copiar link do convite" (só admin): gera um link novo e invalida o anterior. Não reenvia e-mail. */
+  inviteLink: (id: ID) => issueUserInvite(id, { email: false, event: "user.invite_link_created" }),
 
   update: (id: ID, patch: { name?: string; role?: Role; jobTitle?: string | null; phone?: string | null }) =>
     write((db, me) => {
-      if (!canWriteAll(me, "users") && id !== me.id) throw new ApiError(403, "Sem permissão.");
+      if (!canWriteAll(me, "users") && id !== me.id) throw new ApiError(403, "Você só pode editar o seu próprio perfil. Peça a um administrador para alterar outras pessoas.");
       const u = db.users.find((x) => x.id === id);
       if (!u) throw new ApiError(404, "Usuário não encontrado.");
       if (patch.role && id === me.id && patch.role !== "admin" && me.role === "admin" && db.users.filter((x) => x.role === "admin" && x.status === "ativo").length === 1) throw new ApiError(409, "Você é o único administrador. Promova outra pessoa antes.");
@@ -161,7 +304,7 @@ export const usersApi = {
 
   setStatus: (id: ID, status: "ativo" | "inativo") =>
     write((db, me) => {
-      if (!canWriteAll(me, "users")) throw new ApiError(403, "Sem permissão.");
+      requireAccess(me, "users", "all", "Só administradores inativam ou reativam usuários.");
       if (id === me.id) throw new ApiError(409, "Você não pode inativar a si mesmo.");
       const u = db.users.find((x) => x.id === id);
       if (!u) throw new ApiError(404, "Usuário não encontrado.");
@@ -170,13 +313,10 @@ export const usersApi = {
       emit(db, me, { type: status === "inativo" ? "user.deactivated" : "user.reactivated", entityType: "user", entityId: u.id, data: {} });
     }),
 
-  resendInvite: (id: ID) =>
-    write((db, me) => {
-      const u = db.users.find((x) => x.id === id && x.status === "convidado");
-      if (!u) throw new ApiError(404, "Convite não encontrado.");
-      db.emailLogs.push({ ...baseFields(null), channel: "system", provider: "brevo", userId: null, projectId: null, to: [u.email], cc: [], subject: "Convite para a plataforma Draw", template: "convite", status: "sent", error: null, sentAt: nowIso() });
-      emit(db, me, { type: "user.invite_resent", entityType: "user", entityId: u.id, data: {} });
-    }),
+  /** RN-32 — reenviar gera token novo (o link anterior deixa de valer) e registra o e-mail. */
+  resendInvite: async (id: ID) => {
+    await issueUserInvite(id, { email: true, event: "user.invite_resent" });
+  },
 
   setMfa: (enabled: boolean) =>
     write((db, me) => {
@@ -197,15 +337,16 @@ export const usersApi = {
 
   accessLogs: () =>
     read((db, me) => {
-      if (!canWriteAll(me, "users")) throw new ApiError(403, "Sem permissão.");
+      requireAccess(me, "users", "all", "Só administradores veem o log de acessos.");
       return db.accessLogs.slice(-100).reverse().map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? l.detail ?? "—" }));
     }),
 
+  /** Parâmetros da organização: todos leem (prazos e alíquota aparecem nas telas); só admin altera. */
   organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
 
   updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number }) =>
     write((db, me) => {
-      if (!canWriteAll(me, "settings")) throw new ApiError(403, "Sem permissão.");
+      requireAccess(me, "settings", "all", "Só administradores alteram as regras da organização.");
       const settings = { ...db.organizations[0].settings, ...patch };
       if (settings.taxRatePct < 0 || settings.taxRatePct > 30) throw new ApiError(422, "Use uma alíquota entre 0% e 30%.", { taxRatePct: "Use uma alíquota entre 0% e 30%" });
       if (settings.freelancerPaymentDay < 1 || settings.freelancerPaymentDay > 28) throw new ApiError(422, "Escolha um dia entre 1 e 28.", { freelancerPaymentDay: "Escolha um dia entre 1 e 28" });
@@ -287,10 +428,18 @@ export const admApi = {
       const v = db.vaultItems.find((x) => x.id === id);
       if (v) v.deletedAt = nowIso();
     }),
+  /** Log do cofre: use `admExtraApi.vaultLogs` (com a regra por item). Mantido aqui só para o administrador. */
   vaultLogs: (id?: ID) =>
-    read((db) => db.vaultAccessLogs.filter((l) => !id || l.vaultItemId === id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100).map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? "—", itemTitle: db.vaultItems.find((v) => v.id === l.vaultItemId)?.title ?? "—" }))),
+    read((db, me) => {
+      if (me.role !== "admin") throw new ApiError(403, "Só administradores veem o log geral do cofre.");
+      return db.vaultAccessLogs.filter((l) => !id || l.vaultItemId === id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100).map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? "—", itemTitle: db.vaultItems.find((v) => v.id === l.vaultItemId)?.title ?? "—" }));
+    }),
 
-  resources: () => read((db) => db.resources.filter((r) => !r.deletedAt).sort((a, b) => a.title.localeCompare(b.title))),
+  resources: () =>
+    read((db, me) => {
+      requireAccess(me, "adm", "read");
+      return db.resources.filter((r) => !r.deletedAt).sort((a, b) => a.title.localeCompare(b.title));
+    }),
   saveResource: (input: Pick<Resource, "title" | "url" | "category" | "description">, id?: ID) =>
     write((db, me) => {
       if (!canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão.");
@@ -344,7 +493,9 @@ export const mailApi = {
       return s;
     }),
   sendSystemTest: (to: string) =>
-    write((db) => {
+    write((db, me) => {
+      requireAccess(me, "settings", "all", "Só administradores enviam e-mail de teste.");
+      if (!/^\S+@\S+\.\S+$/.test(to.trim())) throw new ApiError(422, "Informe um e-mail válido.", { to: "Informe um e-mail válido" });
       const s = db.systemMailSettings[0];
       if (s.transport === "draw_smtp" && !s.smtpHost) throw new ApiError(422, "Salve a configuração SMTP antes de testar.");
       db.emailLogs.push({ ...baseFields(null), channel: "system", provider: s.transport === "draw_smtp" ? "draw_smtp" : "brevo", userId: null, projectId: null, to: [to], cc: [], subject: "E-mail de teste da plataforma Draw", template: "teste", status: "delivered", error: null, sentAt: nowIso() });
@@ -355,11 +506,19 @@ export const mailApi = {
 /* ───────── Importação (RF-M5-08) ───────── */
 type Row = Record<string, string>;
 
+const IMPORT_RESOURCE: Record<ImportKind, PermResource> = { clientes: "clients", freelancers: "freelancers", projetos: "projects", recebiveis: "receivables", pagaveis: "payables" };
+const requireImport = (me: User, kind: ImportKind) => requireAccess(me, IMPORT_RESOURCE[kind], "all", "Seu perfil não pode importar este tipo de planilha. Peça a quem cuida do cadastro.");
+
 export const importsApi = {
-  list: () => read((db) => db.imports.filter((i) => !i.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt))),
+  list: () =>
+    read((db, me) => {
+      if (!(canWriteAll(me, "clients") || canWriteAll(me, "freelancers") || canWriteAll(me, "receivables"))) throw new ApiError(403, "Seu perfil não importa planilhas. Peça a um administrador.");
+      return db.imports.filter((i) => !i.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }),
   /** Dry run: valida linha a linha sem gravar. */
   preview: (kind: ImportKind, rows: Row[]) =>
-    read((db) => {
+    read((db, me) => {
+      requireImport(me, kind);
       const errors: { line: number; message: string }[] = [];
       rows.forEach((r, i) => {
         const line = i + 2;
@@ -381,7 +540,7 @@ export const importsApi = {
     }, 500),
   commit: (kind: ImportKind, fileName: string, rows: Row[], report: { total: number; ok: number; errors: { line: number; message: string }[] }) =>
     write((db, me) => {
-      if (!canWriteAll(me, kind === "clientes" ? "clients" : kind === "freelancers" ? "freelancers" : "receivables")) throw new ApiError(403, "Sem permissão para importar.");
+      requireImport(me, kind);
       const blocking = new Set(report.errors.filter((e) => !e.message.includes("será atualizado")).map((e) => e.line));
       let imported = 0;
       rows.forEach((r, i) => {
@@ -412,19 +571,19 @@ export const searchApi = {
       const term = q.trim().toLowerCase();
       if (term.length < 2) return { projects: [], clients: [], freelancers: [], tasks: [] };
       const projects = visibleProjects(db, me);
-      const projectIds = new Set(projects.map((p) => p.id));
       return {
         projects: projects.filter((p) => `${p.code} ${p.title}`.toLowerCase().includes(term)).slice(0, 6).map((p) => ({ id: p.id, code: p.code, title: p.title, status: p.status, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
         clients: canRead(me, "clients") ? db.clients.filter((c) => !c.deletedAt && `${c.tradeName} ${c.legalName} ${c.cnpj}`.toLowerCase().includes(term)).slice(0, 5).map((c) => ({ id: c.id, name: c.tradeName, cnpj: c.cnpj })) : [],
         freelancers: canRead(me, "freelancers") && me.role !== "freelancer" ? db.freelancers.filter((f) => !f.deletedAt && f.name.toLowerCase().includes(term)).slice(0, 5).map((f) => ({ id: f.id, name: f.name, color: f.avatarColor })) : [],
-        tasks: db.tasks.filter((t) => !t.deletedAt && (!t.projectId || projectIds.has(t.projectId)) && (t.module !== "adm" || canRead(me, "adm")) && t.title.toLowerCase().includes(term)).slice(0, 6).map((t) => ({ id: t.id, title: t.title, projectCode: db.projects.find((p) => p.id === t.projectId)?.code ?? null, statusKey: t.statusKey })),
+        tasks: visibleTasks(db, me).filter((t) => t.title.toLowerCase().includes(term)).slice(0, 6).map((t) => ({ id: t.id, title: t.title, projectCode: db.projects.find((p) => p.id === t.projectId)?.code ?? null, statusKey: t.statusKey })),
       };
     }, 80),
 };
 
 /** Lista leve de pessoas para seletores (responsável, equipe, menções). */
 export const peopleApi = {
-  internal: () => read((db) => db.users.filter((u) => u.status === "ativo" && u.userType === "internal").map((u) => ({ id: u.id, name: u.name, color: u.avatarColor, role: u.role, email: u.email })), 60),
+  /** Freelancer não recebe o e-mail da equipe interna (só nome para menções). */
+  internal: () => read((db, me) => db.users.filter((u) => u.status === "ativo" && u.userType === "internal").map((u) => ({ id: u.id, name: u.name, color: u.avatarColor, role: u.role, email: me.role === "freelancer" ? "" : u.email })), 60),
   all: () =>
     read((db) => [
       ...db.users.filter((u) => u.status === "ativo" && u.userType === "internal").map((u) => ({ kind: "user" as const, id: u.id, name: u.name, color: u.avatarColor, sub: u.jobTitle ?? "" })),

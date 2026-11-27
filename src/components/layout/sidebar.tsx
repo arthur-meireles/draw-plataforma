@@ -15,6 +15,10 @@ import { isActive, SECTIONS, sectionOf, type NavGroup, type NavItem, type NavSec
 import { usePermissions } from "./session";
 import { useLayout } from "./layout-context";
 import { ProfileSwitcherDialog } from "./profile-switcher";
+import { isDemoMode } from "@/lib/demo";
+
+/** "Trocar perfil" só existe no modo de demonstração (RN-33). */
+const DEMO = isDemoMode();
 
 /** Seções e itens visíveis para o perfil atual. */
 export function useNav() {
@@ -121,7 +125,7 @@ export function UserMenu({ compact }: { compact?: boolean }) {
     { label: "Preferências e notificações", icon: "notification", onSelect: () => router.push("/configuracoes/preferencias") },
     { label: theme === "dark" ? "Tema claro" : "Tema escuro", icon: theme === "dark" ? "themeLight" : "themeDark", onSelect: () => setTheme(theme === "dark" ? "light" : "dark"), separatorBefore: true },
     { label: "Usar tema do sistema", icon: "themeSystem", onSelect: () => setTheme("system"), hidden: theme === "system" },
-    { label: "Trocar perfil (demonstração)", icon: "team", onSelect: () => setSwitcher(true), separatorBefore: true },
+    { label: "Trocar perfil (demonstração)", icon: "team", onSelect: () => setSwitcher(true), separatorBefore: true, hidden: !DEMO },
     {
       label: "Sair",
       icon: "logout",
@@ -154,7 +158,7 @@ export function UserMenu({ compact }: { compact?: boolean }) {
           </button>
         }
       />
-      <ProfileSwitcherDialog open={switcher} onOpenChange={setSwitcher} />
+      {DEMO && <ProfileSwitcherDialog open={switcher} onOpenChange={setSwitcher} />}
     </>
   );
 }

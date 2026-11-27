@@ -59,7 +59,7 @@ export function AcceptInvite() {
         </div>
       ) : invite.error || !invite.data ? (
         <div className="space-y-4">
-          <EmptyState compact icon="lock" title="Convite inválido ou já utilizado" description="O link pode ter sido usado ou cancelado. Peça um novo convite à administração da Draw ou entre, se já tem conta." />
+          <EmptyState compact icon="lock" title="Convite inválido, expirado ou já utilizado" description={invite.error?.message ?? "O link pode ter sido usado, substituído por um novo ou expirado (vale 7 dias). Peça um novo convite à administração da Draw ou entre, se já tem conta."} />
           <Button asChild variant="primary" size="lg" className="w-full">
             <Link href="/login">Ir para o login</Link>
           </Button>

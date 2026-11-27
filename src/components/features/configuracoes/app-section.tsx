@@ -5,10 +5,15 @@ import { usePwa } from "@/components/pwa/pwa-provider";
 import { Badge, Button, ConfirmDialog, Section } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { authApi } from "@/data/services";
+import { usePermissions } from "@/components/layout/session";
+import { isDemoMode } from "@/lib/demo";
 
 /** Instalação do app (PWA) e restauração dos dados de demonstração. */
 export function AppSection() {
   const { canInstall, isIos, isStandalone } = usePwa();
+  const { canWriteAll } = usePermissions();
+  /** RN-33: restaurar só existe na demonstração e só para administradores (o serviço também recusa). */
+  const canReset = isDemoMode() && canWriteAll("settings");
   const [confirm, setConfirm] = useState(false);
   const reset = useApiMutation(authApi.resetDemo, { success: false, onSuccess: () => window.location.reload() });
   return (
@@ -22,6 +27,7 @@ export function AppSection() {
             </div>
             {isStandalone ? <Badge tone="success" dot>Instalado</Badge> : <InstallAppButton variant="button" />}
           </div>
+          {canReset && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
             <div>
               <p className="text-sm font-medium text-fg">Dados de demonstração</p>
@@ -31,6 +37,7 @@ export function AppSection() {
               Restaurar dados de demonstração…
             </Button>
           </div>
+          )}
         </div>
       </Section>
       <ConfirmDialog

@@ -1,7 +1,8 @@
 /** Cadastros: clientes, contatos, grupos, freelancers, tipos de projeto (M2). */
 import { baseFields, nowIso } from "../db";
 import type { Address, Client, ClientContact, Freelancer, ID, ProjectStageKey, ProjectType, Specialty } from "../types";
-import { ApiError, emit, freelancerIdOf, read, touch, visibleProjects, write } from "./_core";
+import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
+import { issueUserInvite } from "./admin";
 import { toListItem, computeFinancials } from "./projects";
 import { canRead, canSeeMoney, canWriteAll, access } from "@/lib/permissions";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
@@ -132,21 +133,28 @@ export const clientsApi = {
       emit(db, me, { type: "client.deleted", entityType: "client", entityId: c.id, data: {} });
     }),
 
-  groups: () => read((db) => db.clientGroups.filter((g) => !g.deletedAt).map((g) => ({ ...g, clients: db.clients.filter((c) => c.groupId === g.id && !c.deletedAt).length }))),
+  groups: () => read((db, me) => (requireAccess(me, "clients", "read"), db.clientGroups.filter((g) => !g.deletedAt).map((g) => ({ ...g, clients: db.clients.filter((c) => c.groupId === g.id && !c.deletedAt).length })))),
 
   createGroup: (name: string) =>
     write((db, me) => {
+      requireAccess(me, "clients", "all", "Seu perfil só consulta clientes. Peça ao Comercial ou à gestão para criar o grupo.");
       if (!name.trim()) throw new ApiError(422, "Dê um nome ao grupo.", { name: "Dê um nome ao grupo" });
       const g = { ...baseFields(me.id), name: name.trim() };
       db.clientGroups.push(g);
       return g;
     }),
 
-  contacts: (clientId: ID) => read((db) => db.clientContacts.filter((c) => c.clientId === clientId && !c.deletedAt)),
+  contacts: (clientId: ID) =>
+    read((db, me) => {
+      requireAccess(me, "clients", "read");
+      return db.clientContacts.filter((c) => c.clientId === clientId && !c.deletedAt);
+    }),
 
   saveContact: (clientId: ID, input: Omit<ClientContact, keyof ReturnType<typeof baseFields> | "clientId">, id?: ID) =>
     write((db, me) => {
       if (!canWriteAll(me, "clients")) throw new ApiError(403, "Sem permissão.");
+      if (!db.clients.some((c) => c.id === clientId && !c.deletedAt)) throw new ApiError(404, "Cliente não encontrado.");
+      if (id && !db.clientContacts.some((c) => c.id === id && c.clientId === clientId)) throw new ApiError(404, "Contato não encontrado neste cliente.");
       if (!input.name.trim()) throw new ApiError(422, "Informe o nome do contato.", { name: "Informe o nome do contato" });
       if (!/^\S+@\S+\.\S+$/.test(input.email)) throw new ApiError(422, "E-mail inválido.", { email: "Informe um e-mail válido, ex.: nome@empresa.com.br" });
       if (input.isBillingContact) db.clientContacts.filter((c) => c.clientId === clientId).forEach((c) => (c.isBillingContact = false));
@@ -168,7 +176,7 @@ export const clientsApi = {
       if (c) c.deletedAt = nowIso();
     }),
 
-  segments: () => read((db) => [...new Set(db.clients.filter((c) => !c.deletedAt).map((c) => c.segment))].sort()),
+  segments: () => read((db, me) => (requireAccess(me, "clients", "read"), [...new Set(db.clients.filter((c) => !c.deletedAt).map((c) => c.segment))].sort())),
 };
 
 function validateClient(input: ClientInput) {
@@ -289,18 +297,22 @@ export const freelancersApi = {
       return f;
     }),
 
-  invite: (id: ID) =>
-    write((db, me) => {
+  /** Convite de acesso do freelancer: mesmo convite de Usuários (RN-32 — token aleatório, 7 dias, uso único, e-mail transacional). */
+  invite: async (id: ID) => {
+    const userId = await write((db, me) => {
       if (!canWriteAll(me, "users")) throw new ApiError(403, "Só administradores convidam usuários.");
       const f = db.freelancers.find((x) => x.id === id);
       if (!f) throw new ApiError(404, "Freelancer não encontrado.");
       if (f.userId) throw new ApiError(409, "Este freelancer já tem acesso.");
+      if (db.users.some((u) => u.email.toLowerCase() === f.email.toLowerCase())) throw new ApiError(409, "Já existe um usuário com o e-mail deste freelancer.");
       const u = { ...baseFields(me.id), email: f.email, name: f.name, userType: "freelancer" as const, role: "freelancer" as const, status: "convidado" as const, avatarColor: f.avatarColor, jobTitle: "Freelancer", phone: f.phone, mfaEnabled: false, lastLoginAt: null, passwordMock: "" };
       db.users.push(u);
       f.userId = u.id;
       emit(db, me, { type: "user.invited", entityType: "user", entityId: u.id, data: { email: u.email, role: "freelancer" } });
-      return u;
-    }),
+      return u.id;
+    });
+    return issueUserInvite(userId, { email: true });
+  },
 };
 
 function validateFreelancer(input: FreelancerInput) {

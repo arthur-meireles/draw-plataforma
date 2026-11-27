@@ -1083,6 +1083,8 @@ export function createSeed(): Database {
       { ...base("ff", -400), key: "login_google", enabled: false },
     ],
     accessLogs: [],
+    passwordResets: [],
+    userInvites: [],
     clientGroups,
     clients,
     clientContacts,

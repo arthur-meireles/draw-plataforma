@@ -1,9 +1,8 @@
 "use client";
 import { Suspense, useState } from "react";
-import { toast } from "sonner";
 import { AccessGate } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Avatar, Badge, Button, Callout, ClearFiltersButton, ConfirmDialog, DataTable, Fab, FilterSelect, Icon, PageBody, PageHeader, RowActions, SearchInput, Tabs, Toolbar, copyText, type Column } from "@/components/ui";
+import { Avatar, Badge, Button, Callout, ClearFiltersButton, ConfirmDialog, DataTable, Dialog, Fab, FilterSelect, Icon, PageBody, PageHeader, RowActions, SearchInput, Tabs, Toolbar, type Column } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { ROLE_LABEL } from "@/data/reference";
 import { usersApi } from "@/data/services";
@@ -12,7 +11,7 @@ import { relative } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
 import { AccessLogTable } from "./access-log-table";
 import { EditRoleDialog } from "./edit-role-dialog";
-import { InviteUserDialog, inviteLink } from "./invite-user-dialog";
+import { InviteLinkBox, InviteUserDialog } from "./invite-user-dialog";
 import { PermissionMatrix } from "./permission-matrix";
 import { INVITABLE_ROLES } from "./roles";
 
@@ -39,7 +38,13 @@ function Content() {
     onSuccess: () => setToggling(null),
     onError: () => setToggling(null),
   });
-  const resend = useApiMutation(usersApi.resendInvite, { success: "Convite reenviado por e-mail" });
+  const resend = useApiMutation(usersApi.resendInvite, { success: "Convite reenviado por e-mail. O link anterior deixou de valer." });
+  /** RN-32: o link só existe na hora em que é gerado (o banco guarda o hash). */
+  const [link, setLink] = useState<{ name: string; token: string } | null>(null);
+  const genLink = useApiMutation((u: Row) => usersApi.inviteLink(u.id).then((r) => ({ ...r, name: u.name })), {
+    success: false,
+    onSuccess: (r) => setLink({ name: r.name, token: r.inviteToken }),
+  });
 
   const term = f.q.trim().toLowerCase();
   const rows = users.data?.filter((u) => (!f.perfil || u.role === f.perfil) && (!f.status || u.status === f.status) && (!term || `${u.name} ${u.email}`.toLowerCase().includes(term)));
@@ -86,7 +91,7 @@ function Content() {
             label={`Ações de ${u.name}`}
             items={[
               { label: "Alterar perfil", icon: "user", onSelect: () => setEditing(u), hidden: u.status === "inativo" },
-              { label: "Copiar link do convite", icon: "link", hidden: u.status !== "convidado", onSelect: async () => ((await copyText(inviteLink(u.inviteToken!))) ? toast.success("Link do convite copiado") : toast.error("Não foi possível copiar o link.")) },
+              { label: "Gerar link do convite…", icon: "link", hidden: u.status !== "convidado", onSelect: () => genLink.mutate(u) },
               { label: "Reenviar convite", icon: "send", hidden: u.status !== "convidado", onSelect: () => resend.mutate(u.id) },
               { label: "Inativar…", icon: "lock", destructive: true, separatorBefore: true, hidden: u.status === "inativo" || u.status === "convidado" || u.id === p.user.id, onSelect: () => setToggling(u) },
               { label: "Reativar…", icon: "restore", hidden: u.status !== "inativo", separatorBefore: true, onSelect: () => setToggling(u) },
@@ -141,6 +146,20 @@ function Content() {
       {canEdit && aba === "usuarios" && <Fab label="Convidar usuário" icon="invite" onClick={() => setInvite(true)} />}
       <InviteUserDialog open={invite} onOpenChange={setInvite} />
       <EditRoleDialog user={editing} onClose={() => setEditing(null)} />
+      <Dialog
+        open={!!link}
+        onOpenChange={(o) => !o && setLink(null)}
+        title="Link do convite"
+        description={link ? `Envie para ${link.name}. Quem recebe define a senha ao aceitar.` : undefined}
+        footer={<Button variant="primary" onClick={() => setLink(null)}>Concluir</Button>}
+      >
+        {link && (
+          <div className="space-y-3">
+            <InviteLinkBox token={link.token} />
+            <Callout tone="info">Este link vale por 7 dias e só pode ser usado uma vez. O link enviado antes deixou de valer.</Callout>
+          </div>
+        )}
+      </Dialog>
       <ConfirmDialog
         open={!!toggling}
         onOpenChange={(o) => !o && setToggling(null)}

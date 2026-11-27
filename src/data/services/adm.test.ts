@@ -38,7 +38,7 @@ describe("RF-M6-03 — cofre", () => {
 describe("RF-M1-02 — convite", () => {
   it("convida, aceita com senha e consome o convite", async () => {
     const r = await usersApi.invite({ name: "Nova Pessoa", email: "nova@draw.com.br", role: "operacao" });
-    expect(r.inviteToken).toBe(`convite-${r.id}`);
+    expect(r.inviteToken).toMatch(/^[0-9a-f]{64}$/); // RN-32: aleatório, não deriva do id
     const inv = await authApi.getInvite(r.inviteToken);
     expect(inv.email).toBe("nova@draw.com.br");
     await expect(authApi.acceptInvite(r.inviteToken, { name: "Nova Pessoa", password: "curta" })).rejects.toThrow();
