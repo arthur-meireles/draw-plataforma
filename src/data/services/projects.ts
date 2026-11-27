@@ -494,7 +494,7 @@ export const projectsApi = {
       touch(p);
       const cancelled = db.receivables.filter((r) => r.projectId === p.id && r.status === "previsto" && !r.deletedAt);
       cancelled.forEach((r) => (r.status = "cancelado"));
-      // RN-70 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
+      // RN-59 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
       emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id) } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
@@ -695,7 +695,7 @@ export function generateTasksFromTemplate(db: Database, me: User | null, p: Proj
   emit(db, me, { type: "project.tasks_generated", entityType: "project", entityId: p.id, project: p, data: { count: tpl.length, exceedsDeadline, templateDays: totalDays } });
 }
 
-/** RF-M3-03 / RN-73 — tarefas da cotação para o responsável (diagnóstico, proposta, follow-up). */
+/** RF-M3-03 / RN-72 — tarefas da cotação para o responsável (diagnóstico, proposta, follow-up). */
 export function generateQuoteTasks(db: Database, me: User, p: Project) {
   const now = Date.now();
   QUOTE_TASK_TEMPLATE.forEach((t, i) => {
@@ -722,7 +722,7 @@ export function generateQuoteTasks(db: Database, me: User, p: Project) {
   });
 }
 
-/** RN-73 — ao aprovar, as tarefas da cotação ainda abertas são encerradas (a proposta foi aceita). */
+/** RN-72 — ao aprovar, as tarefas da cotação ainda abertas são encerradas (a proposta foi aceita). */
 export function closeQuoteTasks(db: Database, p: Project) {
   const quoteStages = new Set<string>(QUOTE_TASK_TEMPLATE.map((t) => t.stageKey));
   const now = nowIso();

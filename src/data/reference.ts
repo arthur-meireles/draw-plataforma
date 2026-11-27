@@ -52,7 +52,7 @@ export const STAGE_DEFAULT_ROLE: Record<ProjectStageKey, MemberRole> = {
   concluido: "responsavel",
 };
 
-/** RF-M3-03 / RN-73 — tarefas da cotação, criadas para o responsável ao abrir a cotação (prazo em dias corridos). */
+/** RF-M3-03 / RN-72 — tarefas da cotação, criadas para o responsável ao abrir a cotação (prazo em dias corridos). */
 export const QUOTE_TASK_TEMPLATE: { stageKey: QuoteStageKey; title: string; dueInDays: number }[] = [
   { stageKey: "diagnostico", title: "Diagnóstico com o cliente", dueInDays: 2 },
   { stageKey: "elaboracao", title: "Elaborar proposta", dueInDays: 5 },

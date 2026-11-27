@@ -161,7 +161,7 @@ describe("RN-59 — reabrir projeto concluído", () => {
   });
 });
 
-describe("RN-70 — reativar projeto cancelado", () => {
+describe("RN-59 — reativar projeto cancelado", () => {
   it("volta a ativo na mesma etapa e devolve os recebíveis cancelados pelo cancelamento", async () => {
     const p = await directProject();
     await projectsApi.move(p.id, { stageKey: "design", position: 1 });
@@ -193,7 +193,7 @@ describe("RN-71 — recusa só de enviada; rascunho é descartado", () => {
   });
 });
 
-describe("RN-72/73 — tarefas do modelo por papel e no prazo; cotação com tarefas", () => {
+describe("RN-72 — tarefas do modelo por papel e no prazo; cotação com tarefas", () => {
   it("cotação nasce com tarefas do responsável; ao aprovar elas são encerradas", async () => {
     const { p, prop } = await quoteWithSentProposal();
     const quoteTasks = loadDb().tasks.filter((t) => t.projectId === p.id && !t.deletedAt);

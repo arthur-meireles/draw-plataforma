@@ -1,6 +1,6 @@
 /**
  * Reversões do ciclo de vida do projeto (furos altos da onda 2):
- * desfazer aprovação (RN-58), reabrir concluído (RN-59) e reativar cancelado (RN-70).
+ * desfazer aprovação (RN-58), reabrir concluído e reativar cancelado (RN-59).
  * Cada ação exige motivo, registra evento e avisa responsável e equipe (RN-53).
  */
 import { nowIso } from "../db";
@@ -114,7 +114,7 @@ export const projectLifecycleApi = {
       return p;
     }),
 
-  /** RN-70 — reativa projeto cancelado: volta a `ativo` na mesma etapa e devolve a `previsto` os recebíveis que o cancelamento derrubou. */
+  /** RN-59 — reativa projeto cancelado: volta a `ativo` na mesma etapa e devolve a `previsto` os recebíveis que o cancelamento derrubou. */
   reactivateCancelled: (projectId: ID, reason: string) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
