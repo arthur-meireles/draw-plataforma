@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { PayableStatusBadge, ProjectCode } from "@/components/domain";
+import { FreelancerPaymentDialog, PayableStatusBadge, ProjectCode } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { Button, ClearFiltersButton, DataTable, Fab, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, Tooltip, type Column } from "@/components/ui";
 import { useApiQuery } from "@/data/hooks";
@@ -21,7 +21,7 @@ const KINDS = (Object.keys(PAYABLE_KIND_LABEL) as PayableKind[]).map((k) => ({ v
 const columns: Column<PayableRow>[] = [
   {
     id: "due",
-    header: <Tooltip content="Freelancers vencem no dia 20 do mês seguinte à conclusão do projeto (RN-06)."><span className="cursor-help underline decoration-dotted underline-offset-2">Vencimento</span></Tooltip>,
+    header: <Tooltip content="Freelancers vencem no dia de pagamento (Configurações) do mês seguinte à conclusão do projeto (RN-06)."><span className="cursor-help underline decoration-dotted underline-offset-2">Vencimento</span></Tooltip>,
     sortValue: (r) => r.dueAt,
     mobile: "subtitle",
     cell: (r) => <span className={r.isOverdue ? "text-danger" : "text-fg-muted"}>{dateFull(r.dueAt)}</span>,
@@ -39,6 +39,7 @@ export function PayablesView() {
   const { canWriteAll, isFreelancer } = usePermissions();
   const [f, set, activeCount] = useUrlState({ status: "todos", tipo: undefined as string | undefined, mes: undefined as string | undefined, q: "", aberto: undefined as string | undefined });
   const [expense, setExpense] = useState(false);
+  const [flPayment, setFlPayment] = useState(false);
   const q = useApiQuery(["finance", "payables", f.tipo, f.mes, f.q], () => financeApi.payables({ kind: f.tipo as PayableKind | undefined, month: f.mes, q: f.q }));
   const all = q.data;
   const rows = useMemo(() => (f.status === "todos" ? all : all?.filter((r) => r.status === f.status)), [all, f.status]);
@@ -57,9 +58,15 @@ export function PayablesView() {
         count={rows?.length}
         actions={
           writable && (
-            <Button variant="primary" size="sm" icon="add" onClick={() => setExpense(true)} className="max-md:hidden">
-              Nova despesa
-            </Button>
+            <>
+              <Button variant="secondary" size="sm" icon="freelancers" onClick={() => setFlPayment(true)}>
+                <span className="max-md:hidden">Novo pagamento a freelancer…</span>
+                <span className="md:hidden">Pagar freelancer…</span>
+              </Button>
+              <Button variant="primary" size="sm" icon="add" onClick={() => setExpense(true)} className="max-md:hidden">
+                Nova despesa
+              </Button>
+            </>
           )
         }
       />
@@ -94,7 +101,7 @@ export function PayablesView() {
           empty={{
             icon: "payable",
             title: filtered ? "Nenhuma conta com esses filtros" : isFreelancer ? "Você não tem pagamentos por aqui" : "Nenhuma conta a pagar",
-            description: filtered ? "Ajuste ou limpe os filtros para ver mais resultados." : isFreelancer ? "Quando um projeto seu for concluído, o pedido de NF aparece aqui." : "Contas de freelancers nascem ao concluir um projeto (RN-03). Despesas você lança manualmente.",
+            description: filtered ? "Ajuste ou limpe os filtros para ver mais resultados." : isFreelancer ? "Quando um projeto seu for concluído, o pedido de NF aparece aqui." : "Contas de freelancers nascem ao concluir um projeto (RN-03) ou pelo \"Novo pagamento a freelancer…\". Despesas você lança manualmente.",
             action: writable && !filtered ? { label: "Nova despesa", onClick: () => setExpense(true), icon: "add" } : undefined,
           }}
           footer={
@@ -119,6 +126,7 @@ export function PayablesView() {
       {writable && <Fab label="Nova despesa" onClick={() => setExpense(true)} />}
       <PayableSheet row={open} onClose={() => set({ aberto: undefined })} />
       {expense && <ExpenseDialog open onOpenChange={setExpense} />}
+      {writable && <FreelancerPaymentDialog open={flPayment} onOpenChange={setFlPayment} />}
     </>
   );
 }

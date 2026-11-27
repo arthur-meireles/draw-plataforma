@@ -24,6 +24,8 @@
 > **Mudança da 0.6:** qualidade percebida — micro-interações discretas (mudança de status, concluir tarefa, arrastar no kanban, confirmação de envio, entrada de listas, números e transição de página) e *skeletons* estruturais em todas as telas (seção 10.5). Sem impacto em modelo, regras ou contrato da API.
 
 > **Mudança da 0.7:** **não há e-mail interno.** Saem do escopo: conectar a caixa do usuário (Gmail/SMTP), assinatura, aba **E-mails** do projeto e envio de e-mail pelo projeto (antigos RF-M11-02 a 07, RNF-14, ADR-009, tabelas `mail_accounts`, `mail_signatures`, `project_emails`) e notificações por e-mail/resumo diário (RF-M10-02/03). A **Caixa de entrada** é só dentro do sistema: menções (sempre entregues), comentários e eventos ligados a você, e o que interessa ao administrador. Ficam apenas os e-mails **transacionais** para pessoas de fora: convite, recuperação de senha e pedido de NF ao freelancer (RF-M11-01). Também: dados de cadastro (e-mail, telefone, CNPJ/CPF, chave PIX, dados bancários, nº de NF) copiáveis com um clique onde aparecem (RF-X-07). Freelancer ganha **cargo** (`job_title`, obrigatório no cadastro, com sugestões) exibido na lista, na ficha, na equipe do projeto e no seletor de pessoas; busca por cargo; coluna `cargo` na importação de freelancers.
+
+> **Mudança da 0.8 (furos críticos do mapa de fluxos):** (1) **Acesso:** sessão só depois do 2FA; recuperação de senha real com token (hash, 1 h, uso único) e convites com token aleatório (7 dias, uso único, nunca o id); "Trocar perfil" e "Restaurar dados" só em modo de demonstração e registrados no log; **toda função da API aplica a matriz da seção 9** (RN-30 a RN-33; tabelas `password_resets`, `user_invites`). (2) **Comercial:** desarquivar volta ao status anterior (RN-50); **proposta, pedido de aprovação e entrega vão ao cliente por link público `/c/:token`** com e-mail transacional, e o cliente aprova ou pede ajustes por lá (RN-51, RN-52); a Caixa de entrada de cada perfil, inclusive o admin, mostra o que envolve a pessoa (RN-53) e menções guardam ids (RN-54). (3) **Financeiro:** registrar NF recebida por fora, recusar e pedir nova NF, decidir na conclusão o pagamento de freelancer sem valor e gerar pagamento avulso a freelancer (RN-40 a RN-43); importação da planilha master (XLSX/CSV, idempotente por `legacy_code`, RN-44).
 ---
 
 ## 0. Como usar este documento
@@ -183,7 +185,7 @@ erDiagram
 | `sessions` | sessões (cookie httpOnly) criadas **só depois do 2FA** (RN-30); revogadas ao redefinir a senha (RN-31). Mock: `users.session_version` (a sessão guardada com versão antiga deixa de valer) |
 | `password_resets` | `user_id`, `token_hash` (SHA-256; o token em claro só vai no e-mail), `expires_at` (1 h), `used_at` — RN-31 |
 | `user_invites` | `user_id`, `token_hash` (SHA-256, token aleatório de 256 bits), `expires_at` (7 dias), `used_at`, `revoked_at` (reenviar/gerar link novo revoga o anterior) — RN-32 |
-| `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active` |
+| `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active`, `payment_waived` (bool, default `false`: freelancer marcado "sem pagamento" na conclusão — RN-40) |
 | `feature_flags` | `organization_id`, `key`, `enabled` |
 | `access_logs` | `action`: `login`, `login_failed`, `mfa_failed`, `logout`, `secret_revealed`, `sensitive_access`, `password_reset_requested`, `password_reset_done`, `invite_accepted`, `impersonate` (só demonstração: quem → qual perfil), `demo_reset`; `detail` |
 
@@ -241,8 +243,8 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | Tabela | Campos principais |
 |---|---|
 | `receivables` | `project_id` **NOT NULL**, `client_id`, `proposal_installment_id` (nulo em projeto direto ou adicional), `kind` (`parcela`/`adicional`), `description`, `amount_cents`, `tax_cents` (= `amount × tax_rate_pct`), `expected_at`, `invoice_number`, `invoice_file_id`, `issued_at`, `received_at`, `status` (`previsto`/`faturado`/`recebido`/`vencido`/`cancelado`), `collection_note` (comentário de cobrança) |
-| `payables` | `project_id` (nulo só em despesa administrativa), `kind` (`freelancer`/`despesa_projeto`/`despesa_adm`), `freelancer_id`, `project_member_id`, `description`, `agreed_amount_cents`, `invoiced_amount_cents`, `invoice_file_id`, `due_at`, `paid_at`, `status` (`aguardando_nf`/`em_conferencia`/`divergente`/`aprovado`/`pago`), `divergence_note` |
-| `freelancer_invoice_requests` | `payable_id`, `share_link_id`, `sent_at`, `submitted_at`, dados declarados (colunas) |
+| `payables` | `project_id` (nulo só em despesa administrativa), `kind` (`freelancer`/`despesa_projeto`/`despesa_adm`), `freelancer_id`, `project_member_id`, `description`, `agreed_amount_cents`, `invoiced_amount_cents`, `invoice_file_id`, `due_at`, `paid_at`, `status` (`aguardando_nf`/`em_conferencia`/`divergente`/`aprovado`/`pago`), `divergence_note`, `invoice_issued_at` (data de emissão da NF quando registrada manualmente — RN-41). Freelancer pode ter mais de um pagável no mesmo projeto só como pagamento adicional explícito (RN-43) |
+| `freelancer_invoice_requests` | `payable_id`, `share_link_id`, `sent_at`, `submitted_at`, dados declarados (colunas), `source` (`formulario`/`manual`, nulo enquanto aguarda), `reissue_reason` + `reissue_requested_at` (último pedido de nova NF — RN-42; o histórico completo fica em `events`) |
 | `v_project_financials` (view) | por projeto: contratado, previsto, faturado, recebido, a receber, custo com freelancers, outras despesas, **margem** e **margem %** |
 
 ### 6.7 Administrativo
@@ -261,7 +263,7 @@ Cada linha tem `key`, `label`, `order`, `category` (`open`/`waiting`/`done`/`los
 | `events` | `entity_type`, `entity_id`, `project_id`, `client_id` (desnormalizados para consulta), `actor_id`, `type` (ex.: `project.stage_changed`), `data jsonb` (antes/depois), `occurred_at`. **Append-only.** |
 | `notifications` | `user_id`, `type` (`atribuicao`, `mencao`, `prazo`, `atraso`, `aprovacao`, `nf_solicitada`, `nf_recebida`, `etapa`, `projeto`, `comentario`, `cliente`, `revisao`), `project_id`, `entity_type`, `entity_id`, `title`, `body`, `read_at` — destinatários pela RN-53 |
 | `notification_preferences` | `user_id`, `type`, `enabled` (só no app — Caixa de entrada; `mencao` não pode ser desligada) |
-| `imports` | `kind`, `source_file_id`, `status`, `mapping jsonb`, `report jsonb`, `dry_run` |
+| `imports` | `kind` (`clientes`/`freelancers`/`recebiveis`/`planilha_master`), `source_file_id`, `status`, `mapping jsonb`, `report jsonb` (total, ok, erros por linha, `summary` com contagens por entidade), `dry_run` |
 | `email_logs` | `channel` (`system` — só transacional para pessoas de fora), `provider` (`brevo`/`resend`/`draw_smtp`), `user_id`, `project_id` (nulo para e-mails do sistema sem projeto), `provider_message_id`, `to`, `cc`, `subject`, `template`, `status` (`queued`/`sent`/`delivered`/`bounced`/`complained`/`failed`), `error`, `sent_at` |
 | `email_provider_usage` | `provider`, `date`, `sent_count` (base do limite diário e do fallback) |
 | `system_mail_settings` | `transport` (`brevo_resend`/`draw_smtp`), `smtp_host`, `smtp_port`, `smtp_security`, `smtp_user`, `smtp_password` (cifrado), `from_name`, `from_address` — um registro por organização |
@@ -349,6 +351,9 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M5-06 | **Financeiro do projeto:** contratado, faturado, recebido, custos e margem (`v_project_financials`). | R1 |
 | RF-M5-07 | Visões consolidadas: a receber, a pagar, por mês, por cliente, por tipo de projeto. | R1 |
 | RF-M5-08 | Importação e exportação de planilha (XLSX/CSV) com pré-visualização e relatório de erros. | R1 |
+| RF-M5-09 | **NF recebida fora do formulário:** em `aguardando_nf` ou `divergente`, o Financeiro registra nº, valor, data de emissão e PDF (opcional, recomendado); segue a conferência pela RN-04 (RN-41). | R1 |
+| RF-M5-10 | **Pedir nova NF:** NF em conferência ou divergente é recusada com motivo; o pagável volta a `aguardando_nf`, o link é renovado e o freelancer é avisado por e-mail e na Caixa de entrada; o formulário público aceita o novo envio e mostra o motivo (RN-42). | R1 |
+| RF-M5-11 | **Pagamento a freelancer sem depender da conclusão:** "Novo pagamento a freelancer…" (A pagar) e "Gerar pagamento / pedido de NF…" (prontuário › Equipe) criam o pagável `aguardando_nf` + link + e-mail, idempotente por membro (RN-43). Na conclusão, freelancer sem valor ou removido da equipe é decidido no diálogo (RN-40). | R1 |
 
 ### M6 — Administrativo
 
@@ -453,6 +458,11 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-53 | **Caixa de entrada = o que envolve a pessoa** (todos os perfis, inclusive Administrador; nunca quem agiu): responsável e equipe do projeto (inclusive freelancers com acesso) recebem mudança de etapa, pausa/retomada, conclusão, cancelamento, decisão de aprovação e resposta do cliente; comentário sem menção avisa o responsável do projeto e o responsável/quem criou a tarefa comentada; tarefa atribuída/reatribuída avisa o novo responsável; tarefa em revisão avisa o responsável do projeto e quem criou a tarefa; pedido de aprovação avisa o responsável. Destinatários só ativos, sem repetição. |
 | RN-54 | **Menções** guardam ids escolhidos na sugestão; o serviço descarta quem não enxerga o projeto (só responsável e equipe, inclusive freelancers). Menção sempre chega (ignora preferência) e quem é mencionado não recebe também o aviso de comentário. |
 | RN-17 | Drive (detalhe da RN-16): pastas-raiz da estrutura da Draw não são renomeadas nem excluídas; nome único por pasta-mãe; pasta só é excluída vazia; arquivo de projeto não é movido (fica na pasta do projeto); arquivos de mesmo nome em pastas diferentes são arquivos distintos (só viram versão dentro da mesma pasta ou projeto). |
+| RN-40 | **Conclusão não pula freelancer.** Todo membro freelancer sem pagável — ativo, ou removido da equipe com valor acordado — precisa de decisão: com valor acordado e ativo, gera o pagável (RN-03); sem valor ou removido, o diálogo de conclusão pede o valor (vira `agreed_amount_cents`, evento antes/depois — RN-09) ou "sem pagamento" (`project_members.payment_waived = true`, evento `project.member_payment_waived`). Faltando decisão, `complete` responde 422 e nada é gravado. |
+| RN-41 | **NF registrada manualmente** (recebida por e-mail/WhatsApp): só em `aguardando_nf` ou `divergente`, por quem tem `payables = T`; exige nº, valor e data de emissão; PDF opcional. Aplica a RN-04 (valor ≠ acordado → `divergente` com nota; igual → `em_conferencia`), marca o pedido com `source = manual` e o formulário público deixa de aceitar envio. Evento `payable.invoice_registered` com os valores anteriores. |
+| RN-42 | **Pedir nova NF** (recusar): só em `em_conferencia` ou `divergente`, motivo obrigatório. O pagável volta a `aguardando_nf` e perde nº/valor/arquivo/nota de divergência (o anterior fica no evento `payable.invoice_rejected`); o link é renovado (30 dias, `use_count = 0`, `revoked_at = null`); o pedido guarda `reissue_reason`; e-mail transacional `nf_freelancer_nova` ao freelancer e `nf_solicitada` na Caixa de entrada se ele tiver login. O formulário público só aceita envio com o pagável em `aguardando_nf` (o servidor recusa reenvio fora disso com 409). "Reenviar link" também zera `use_count` de link esgotado. NF aprovada ou paga não volta. |
+| RN-43 | **Pagamento avulso a freelancer** (sem concluir ou depois dela): por quem tem `payables = T`, para membro freelancer da equipe (ativo ou não) de projeto que não seja cotação/perdido; cria pagável `aguardando_nf` + `share_link` + pedido + e-mail, como na RN-03 (vencimento padrão RN-06, editável). Idempotente por membro: se já houver pagável, responde 409, salvo `additional = true` (não altera o valor acordado); sem adicional, o valor informado vira `agreed_amount_cents` (RN-09). |
+| RN-44 | **Importação da planilha master** (aba "Projetos & Pagamentos", seção 20.3, ordem da 20.6): só quem tem `projects`, `receivables` e `payables` = T (Administrador e Gestão). *Dry run* aplica numa cópia e devolve relatório por linha (cria / atualiza / erro + observações); a gravação pula linhas com erro. Idempotente: projeto por `legacy_code` (reimportar atualiza, não duplica; mudar o cliente de projeto com NF emitida no sistema é erro — RN-12), cliente por CNPJ e depois pelo nome, freelancer pelo nome (criado sem e-mail quando novo), membro por projeto+freelancer, parcela pela descrição `Parcela n (planilha)`, adicional por `Cobrança adicional (planilha)`, pagável por membro (reimportar só avança o status). Tipo de projeto não cadastrado bloqueia a linha. Nenhum e-mail é enviado; pagável importado em `aguardando_nf` ganha link de NF para "Copiar/Reenviar link". Evento `project.imported`/`project.import_updated` por projeto e `import.completed` no job. |
 
 ---
 
@@ -629,7 +639,7 @@ Todos calculados por SQL sobre os relacionamentos (P3), com *materialized views*
 ## 13. Importação e migração
 
 1. Mapear antes de desenvolver: quadros do Monday, planilha de projetos/financeiro, lista de freelancers (coluna de origem → campo de destino).
-2. Importadores idempotentes (chaves: código do projeto, CNPJ, e-mail), com *dry run*, pré-visualização e relatório por linha.
+2. Importadores idempotentes (chaves: código do projeto, `legacy_code` da planilha master, CNPJ, e-mail), com *dry run*, pré-visualização e relatório por linha. Aceitam XLSX (primeira aba, ou a aba "Projetos & Pagamentos" na planilha master) e CSV. Tipos: Clientes, Freelancers, Recebíveis e **Planilha master** (RN-44); não há tipos "projetos"/"pagáveis" avulsos — chegam pela planilha master.
 3. Ordem: usuários → clientes e contatos → freelancers → tipos de projeto → projetos (com origem) → propostas → tarefas abertas → financeiro em aberto → anexos relevantes.
 4. Etapas do Monday mapeadas para as etapas fixas; o que não mapear vai para revisão manual.
 5. Setup conjunto com a equipe; operação paralela curta.
@@ -809,6 +819,8 @@ As colunas do quadro (2. Administrativo, 3. Comercial e Marketing, 4. Projetos, 
 | Total Recebido / Valor a Receber | `v_project_financials.received / to_receive` | Derivados |
 | Valor / Status / Data Cobrança Adicional | `receivables` com `kind = adicional` | RN-14 |
 
+Regras de leitura do importador (RN-44): o cabeçalho é procurado nas 10 primeiras linhas (pode haver título acima); as colunas de cada papel (Designer, Advogado, Roteirista, Outros Freelancers) são lidas em bloco até o próximo papel, porque "Valor", "Liberado para pagto?", "Data Pagto" e "Status Pagto" se repetem; valores aceitam "R$ 1.920", "1.920,50" e número do Excel; datas aceitam dd/mm/aaaa, dd/mm/aa e data do Excel; título perde o prefixo "Cliente - " quando ele bate com o cliente; status: Iniciando/Em Andamento → `ativo` na primeira etapa, Parado → `ativo` + `paused_at`, Finalizado → `concluido` (`completed_at` = Data Entrega), outro texto → `ativo` com aviso; sem valores de parcela, o Valor Total vira 1 parcela (ou 2 metades em 50/50); parcela com data de pagamento → `recebido`, com Data Emissão NF → `faturado`, senão `previsto`; imposto pela RN-15; pagável: REALIZADO/PAGO ou data → `pago`, Liberado SIM → `aprovado`, projeto finalizado ou Liberado NÃO → `aguardando_nf`, "x" → sem pagável; projeto ativo sem informação de pagamento não gera pagável (RN-03 na conclusão). Modelo CSV com as colunas em /financeiro/importar.
+
 ### 20.4 Abas de freelancers
 
 | Aba | Destino |
@@ -866,12 +878,17 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | `tasksApi.list / get / create / update / remove / sprints / createSprint / setSprintStatus` | `/tasks`, `/sprints` |
 | `clientsApi.*`, `freelancersApi.*`, `projectTypesApi.*` | `/clients`, `/client-groups`, `/client-contacts`, `/freelancers`, `/project-types` |
 | `financeApi.receivables / issueInvoice / receive / updateReceivable / addAdditionalCharge / setCollectionNote / cancelReceivable / payables / createExpense / approvePayable / markDivergent / pay / resendInvoiceLink / overview` | `/receivables…`, `/payables…`, `GET /finance/overview` |
+| `payablesExtraApi.registerInvoice` (+ `financeExtraApi.registerFreelancerInvoiceWithFile`) | `POST /payables/:id/invoice` (upload do PDF em duas etapas antes; RN-41) |
+| `payablesExtraApi.requestNewInvoice` | `POST /payables/:id/request-new-invoice` `{ reason }` (RN-42) |
+| `payablesExtraApi.createFreelancerPayment` | `POST /projects/:id/members/:memberId/payables` `{ amount_cents, due_at?, description?, additional? }` (RN-43; `Idempotency-Key`) |
+| `projectsApi.complete(id, decisions)` · `projectsExtraApi.completionPreview` | `POST /projects/:id/complete` `{ decisions: [{ member_id, action: pagar\|sem_pagamento, amount_cents? }] }` · `GET /projects/:id/completion-preview` (RN-40) |
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
 | `commentsApi` (inclui `mentionables`), `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `GET /projects/:id/mentionables`, `/approvals`, `/events`, `/notifications` |
 | `authApi.login / verifyMfa / cancelMfa / logout / requestPasswordReset / resetPassword / getInvite / acceptInvite` | `POST /auth/login` (com 2FA devolve `mfa_challenge`, sem cookie), `POST /auth/verify-mfa` (cria a sessão), `POST /auth/logout`, `POST /auth/password-resets`, `POST /auth/password-resets/:token`, `GET/POST /auth/invites/:token` |
 | `authApi.demoProfiles / impersonate / resetDemo` | Só no front de demonstração (RN-33) — **não existem no back-end de produção** |
 | `usersApi.list / invite / inviteLink / resendInvite / update / setStatus / accessLogs / organization / updateOrganization` | `GET/POST /users`, `POST /users/:id/invite-link` (admin; gera link novo), `POST /users/:id/resend-invite`, `PATCH /users/:id`, `GET /access-logs`, `GET/PATCH /organization` |
+| `masterImportApi.preview / commit` (+ `parseMasterSheet`, leitura em `lib/spreadsheet.ts`) | `POST /imports/master/preview` (dry run, relatório por linha) · `POST /imports/master` (grava, `Idempotency-Key`; RN-44) |
 | `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
 
 ### 21.2 Divergências conscientes da versão 0.3
@@ -880,4 +897,4 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 - **Autenticação:** simulada no front, com credencial em variável de build. Serve só para demonstração; argon2id e sessão httpOnly vêm com o back-end.
 - **2FA:** a sessão só é criada depois do código (RN-30), mas o código ainda não é validado (qualquer 6 dígitos) e não há cadastro TOTP (segredo/QR/códigos de recuperação) — entra com o back-end.
 - **Tokens e sessão:** recuperação de senha e convite já seguem RN-31/RN-32 (hash, validade, uso único); o mock guarda o hash em localStorage e a "sessão" é o id do usuário + `session_version` no navegador. No back-end: cookie httpOnly e tabela `sessions`.
-- **XLSX:** a importação aceita CSV; XLSX entra com o back-end.
+- **XLSX:** lido no navegador com SheetJS (`xlsx` 0.18.5 do npm, carregado sob demanda em `src/lib/spreadsheet.ts`). Essa versão tem alertas de segurança conhecidos (poluição de protótipo e ReDoS ao ler arquivo malicioso; correção só no CDN da SheetJS). O risco fica restrito ao navegador de quem importa o próprio arquivo; no back-end, a leitura deve usar uma versão corrigida ou outra biblioteca.

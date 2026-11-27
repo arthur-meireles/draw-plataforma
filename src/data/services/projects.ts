@@ -22,7 +22,6 @@ import {
   emit,
   emitValueChange,
   notify,
-  queueSystemEmail,
   read,
   redactProject,
   taxOf,
@@ -31,8 +30,8 @@ import {
   write,
 } from "./_core";
 import { notifyMany, projectAudience } from "./audience";
-import { CLIENT_LINK_DEFAULTS } from "../defaults";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
+import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -62,7 +61,8 @@ export interface ProjectListItem extends Project {
   billingStatus: "sem_faturamento" | "a_faturar" | "parcial" | "faturado" | "recebido";
 }
 
-const nextCode = (db: Database, prefix: string) => {
+/** RN-05 — próximo código do prefixo (também usado pela importação da planilha master). */
+export const nextCode = (db: Database, prefix: string) => {
   db.codeSequences[prefix] = (db.codeSequences[prefix] ?? 0) + 1;
   return `${prefix}-${String(db.codeSequences[prefix]).padStart(3, "0")}`;
 };
@@ -417,12 +417,14 @@ export const projectsApi = {
     }),
 
   /** RF-M4-12 / RN-03 — concluir gera contas a pagar, share links e e-mails. */
-  complete: (id: ID) =>
+  complete: (id: ID, decisions: CompletionDecision[] = []) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser concluídos.");
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode concluir projetos.");
       const now = new Date();
+      // RN-40: decide antes de mudar o status — se faltar decisão, nada é gravado (422)
+      const created = settleCompletionPayables(db, me, p, decisions);
       p.status = "concluido";
       emit(db, me, { type: "project.stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.projectStageKey, to: "concluido" } });
       p.projectStageKey = "concluido";
@@ -430,41 +432,6 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
-      const org = db.organizations[0];
-      const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, org.settings.freelancerPaymentDay, 15)).toISOString();
-      const created: ID[] = [];
-      db.projectMembers
-        .filter((m) => m.projectId === p.id && m.active && m.freelancerId && m.agreedAmountCents)
-        .forEach((m) => {
-          const already = db.payables.some((pay) => pay.projectMemberId === m.id && !pay.deletedAt);
-          if (already) return;
-          const fl = db.freelancers.find((f) => f.id === m.freelancerId)!;
-          const pay = {
-            ...baseFields(me.id),
-            projectId: p.id,
-            kind: "freelancer" as const,
-            freelancerId: fl.id,
-            projectMemberId: m.id,
-            description: `${m.memberRole === "designer" ? "Design" : m.memberRole === "advogado" ? "Revisão jurídica" : "Roteiro"} — ${p.code}`,
-            agreedAmountCents: m.agreedAmountCents!,
-            invoicedAmountCents: null,
-            invoiceFileId: null,
-            invoiceNumber: null,
-            dueAt: due,
-            paidAt: null,
-            status: "aguardando_nf" as const,
-            divergenceNote: null,
-          };
-          db.payables.push(pay);
-          const token = `nf-${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
-          const link = { ...baseFields(me.id), token, purpose: "nf_freelancer" as const, projectId: p.id, targetId: pay.id, expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), hasPassword: false, maxUses: 3, useCount: 0, revokedAt: null, ...CLIENT_LINK_DEFAULTS, recipients: [fl.email], lastSentAt: nowIso() };
-          db.shareLinks.push(link);
-          db.freelancerInvoiceRequests.push({ ...baseFields(me.id), payableId: pay.id, shareLinkId: link.id, sentAt: nowIso(), submittedAt: null, declaredLegalName: null, declaredDocument: null, declaredPixKey: null, declaredInvoiceNumber: null, declaredAmountCents: null });
-          queueSystemEmail(db, { to: [fl.email], subject: `Envie sua nota fiscal — ${p.code}`, template: "nf_freelancer", projectId: p.id });
-          notify(db, me, { userId: fl.userId, type: "nf_solicitada", title: "Envie sua nota fiscal", project: p });
-          emit(db, me, { type: "payable.created", entityType: "payable", entityId: pay.id, project: p, data: { agreedAmountCents: pay.agreedAmountCents } });
-          created.push(pay.id);
-        });
       emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto concluído", body: `${me.name} concluiu o projeto`, project: p });
       return { project: p, payablesCreated: created.length };

@@ -1,13 +1,16 @@
 "use client";
 import { useState } from "react";
-import { Badge, Button, DataTable, FileDropzone, Icon, Section, Stat, type Column } from "@/components/ui";
+import { usePermissions } from "@/components/layout/session";
+import { Badge, Button, Callout, DataTable, EmptyState, FileDropzone, Icon, Section, Stat, type Column } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
-import { importsApi } from "@/data/services";
-import { downloadTextFile, parseCsv, toCsv, type CsvTable } from "@/lib/csv";
+import { importsApi, masterImportApi, parseMasterSheet, MASTER_TEMPLATE_EXAMPLE, MASTER_TEMPLATE_HEADERS, type MasterReport, type MasterRow } from "@/data/services";
+import { downloadTextFile, tableFromRecords, toCsv, type CsvTable } from "@/lib/csv";
+import { readSpreadsheet } from "@/lib/spreadsheet";
 import { fileSize, number, plural } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { ImportHistory } from "./import-history";
 import { IMPORT_KINDS, normalizeDate, normalizeMoney, type WizardKind } from "./import-config";
+import { MasterImportReport } from "./master-import-report";
 
 type Report = { total: number; ok: number; errors: { line: number; message: string }[] };
 type Step = "tipo" | "arquivo" | "revisao" | "fim";
@@ -38,8 +41,13 @@ function Stepper({ step }: { step: Step }) {
 }
 
 export function ImportWizard() {
+  const { canWriteAll } = usePermissions();
+  const kinds = IMPORT_KINDS.filter((k) => k.needs.every((r) => canWriteAll(r)));
   const [step, setStep] = useState<Step>("tipo");
-  const [kind, setKind] = useState<WizardKind>("clientes");
+  const [kind, setKind] = useState<WizardKind>(kinds[0]?.value ?? "clientes");
+  const isMaster = kind === "planilha_master";
+  const [master, setMaster] = useState<{ rows: MasterRow[]; sheetName: string | null } | null>(null);
+  const [masterReport, setMasterReport] = useState<MasterReport | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [table, setTable] = useState<CsvTable | null>(null);
   const [fileError, setFileError] = useState<string>();
@@ -48,6 +56,21 @@ export function ImportWizard() {
   const [done, setDone] = useState<{ imported: number; total: number } | null>(null);
 
   const cfg = IMPORT_KINDS.find((k) => k.value === kind)!;
+
+  const masterPreview = useApiMutation((rows: MasterRow[]) => masterImportApi.preview(rows), {
+    success: false,
+    onSuccess: (r) => {
+      setMasterReport(r);
+      setStep("revisao");
+    },
+  });
+  const masterCommit = useApiMutation((rows: MasterRow[]) => masterImportApi.commit(file!.name, rows), {
+    success: false,
+    onSuccess: ({ report: r }) => {
+      setDone({ imported: r.ok, total: r.total });
+      setStep("fim");
+    },
+  });
 
   const preview = useApiMutation((a: { kind: WizardKind; rows: CsvTable["rows"] }) => importsApi.preview(a.kind, a.rows), { success: false, onSuccess: () => setStep("revisao") });
   const commit = useApiMutation((a: { rows: CsvTable["rows"]; report: Report }) => importsApi.commit(kind, file!.name, a.rows, a.report), {
@@ -66,21 +89,41 @@ export function ImportWizard() {
     setDone(null);
     setFileError(undefined);
     setNoValid(false);
+    setMaster(null);
+    setMasterReport(null);
   };
 
-  const downloadTemplate = () => downloadTextFile(cfg.file, toCsv(cfg.columns, [cfg.example]));
+  const downloadTemplate = () => (isMaster ? downloadTextFile(cfg.file, toCsv(MASTER_TEMPLATE_HEADERS, [MASTER_TEMPLATE_EXAMPLE])) : downloadTextFile(cfg.file, toCsv(cfg.columns, [cfg.example])));
 
   const onFile = async (f: File | null) => {
     setFile(f);
     setTable(null);
     setFileError(undefined);
+    setMaster(null);
     if (!f) return;
-    if (/\.xlsx?$/i.test(f.name)) {
+    let read: Awaited<ReturnType<typeof readSpreadsheet>>;
+    try {
+      read = await readSpreadsheet(f, isMaster ? /projetos.*pagamentos/i : undefined);
+    } catch {
       setFile(null);
-      setFileError("Planilhas .xlsx ainda não são lidas aqui. No Excel, use Arquivo › Salvar como › CSV UTF-8 e envie o CSV.");
+      setFileError("Não conseguimos ler este arquivo. Salve de novo como .xlsx ou CSV UTF-8 e tente outra vez.");
       return;
     }
-    const parsed = parseCsv(await f.text());
+    if (isMaster) {
+      const parsedMaster = parseMasterSheet(read.records);
+      if (parsedMaster.headerError) {
+        setFile(null);
+        setFileError(parsedMaster.headerError);
+      } else if (!parsedMaster.rows.length) {
+        setFile(null);
+        setFileError("A aba não tem linhas de projeto abaixo do cabeçalho.");
+      } else if (parsedMaster.rows.length > 2000) {
+        setFile(null);
+        setFileError("A planilha passa de 2.000 projetos. Divida em arquivos menores.");
+      } else setMaster({ rows: parsedMaster.rows, sheetName: read.sheetName });
+      return;
+    }
+    const parsed = tableFromRecords(read.records);
     const missing = cfg.required.filter((c) => !parsed.headers.includes(c));
     if (!parsed.headers.length || !parsed.rows.length) {
       setFile(null);
@@ -151,21 +194,29 @@ export function ImportWizard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-md font-semibold text-fg">Importar planilha</h2>
-          <p className="text-sm text-fg-subtle">Traga clientes, freelancers e recebíveis em CSV. Você revisa tudo antes de gravar.</p>
+          <p className="text-sm text-fg-subtle">Traga a planilha master, clientes, freelancers e recebíveis em XLSX ou CSV. Você revisa tudo antes de gravar.</p>
         </div>
         <Stepper step={step} />
       </div>
 
-      {step === "tipo" && (
+      {step === "tipo" && kinds.length === 0 && <EmptyState icon="lock" title="Seu perfil não importa planilhas" description="A importação grava cadastros e lançamentos. Peça a um Administrador ou à Gestão." />}
+      {step === "tipo" && kinds.length > 0 && (
         <Section title="O que você vai importar?" icon="upload">
-          <div role="radiogroup" aria-label="Tipo de importação" className="grid gap-3 sm:grid-cols-3">
-            {IMPORT_KINDS.map((k) => (
+          <div role="radiogroup" aria-label="Tipo de importação" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {kinds.map((k) => (
               <button
                 key={k.value}
                 type="button"
                 role="radio"
                 aria-checked={kind === k.value}
-                onClick={() => setKind(k.value)}
+                onClick={() => {
+                  if (k.value === kind) return;
+                  setKind(k.value);
+                  setFile(null);
+                  setTable(null);
+                  setMaster(null);
+                  setFileError(undefined);
+                }}
                 className={cn("flex flex-col gap-2 rounded-lg border p-4 text-left transition-colors max-md:min-h-11", kind === k.value ? "border-accent bg-accent-subtle" : "border-line hover:bg-layer-hover")}
               >
                 <span className={cn("flex size-8 items-center justify-center rounded-md", kind === k.value ? "bg-accent-solid text-accent-fg" : "bg-layer text-fg-muted")}>
@@ -185,18 +236,34 @@ export function ImportWizard() {
       )}
 
       {step === "arquivo" && (
-        <Section title={`Arquivo de ${cfg.label.toLowerCase()}`} description="Cabeçalho na primeira linha. Aceita separador ; ou , e campos entre aspas." icon="file">
+        <Section
+          title={isMaster ? "Planilha master" : `Arquivo de ${cfg.label.toLowerCase()}`}
+          description={isMaster ? "Envie o .xlsx inteiro (a aba \"Projetos & Pagamentos\" é escolhida sozinha) ou o CSV exportado dessa aba." : "Cabeçalho na primeira linha. XLSX (primeira aba) ou CSV com separador ; ou , e campos entre aspas."}
+          icon="file"
+        >
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface-2 p-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-fg">Modelo com as colunas certas</p>
-                <p className="break-words font-mono text-xs text-fg-subtle">{cfg.columns.join(" ; ")}</p>
+                <p className="break-words font-mono text-xs text-fg-subtle">{isMaster ? "ID ; PROJETO ; Cliente ; CNPJ Cliente ; … ; Designer ; Valor ; Liberado para pagto? ; … (seção 20.3)" : cfg.columns.join(" ; ")}</p>
               </div>
               <Button variant="secondary" size="sm" icon="download" onClick={downloadTemplate}>
                 Baixar modelo CSV
               </Button>
             </div>
-            <FileDropzone label="Planilha em CSV" required file={file} onFile={onFile} accept=".csv,.xlsx,.xls,text/csv" hint="CSV UTF-8, até 2.000 linhas." error={fileError} />
+            <FileDropzone label="Planilha (XLSX ou CSV)" required file={file} onFile={onFile} accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hint="XLSX ou CSV UTF-8, até 2.000 linhas." error={fileError} />
+            {isMaster && master && file && (
+              <p className="text-sm text-fg-muted">
+                <Icon name="success" size="sm" className="mr-1 inline text-success" />
+                {plural(master.rows.length, "projeto lido", "projetos lidos")} de {file.name}
+                {master.sheetName ? ` (aba "${master.sheetName}")` : ""}.
+              </p>
+            )}
+            {isMaster && (
+              <Callout tone="info" title="Ordem da importação (seção 20.6)">
+                Clientes → freelancers → projetos (pelo ID) → equipe e valores → recebíveis e cobranças adicionais → contas a pagar. Nenhum e-mail é enviado aos freelancers; projetos ativos geram o pedido de NF na conclusão.
+              </Callout>
+            )}
             {table && file && (
               <p className="text-sm text-fg-muted">
                 <Icon name="success" size="sm" className="mr-1 inline text-success" />
@@ -208,14 +275,45 @@ export function ImportWizard() {
             <Button variant="ghost" onClick={() => setStep("tipo")}>
               Voltar
             </Button>
-            <Button variant="primary" loading={preview.isPending} onClick={() => (table ? runPreview() : setFileError("Escolha um arquivo CSV para continuar"))}>
+            <Button
+              variant="primary"
+              loading={preview.isPending || masterPreview.isPending}
+              onClick={() => (isMaster ? (master ? masterPreview.mutate(master.rows) : setFileError("Escolha a planilha master para continuar")) : table ? runPreview() : setFileError("Escolha um arquivo XLSX ou CSV para continuar"))}
+            >
               Validar planilha
             </Button>
           </div>
         </Section>
       )}
 
-      {step === "revisao" && report && (
+      {step === "revisao" && isMaster && masterReport && master && (
+        <div className="space-y-4">
+          <MasterImportReport report={masterReport} fileName={file?.name} sheetName={master.sheetName} />
+          <div className="flex flex-wrap justify-between gap-2">
+            <Button variant="ghost" onClick={() => setStep("arquivo")}>
+              Trocar arquivo
+            </Button>
+            <Button
+              variant="primary"
+              icon="check"
+              loading={masterCommit.isPending}
+              onClick={() => {
+                if (masterReport.ok === 0) return setNoValid(true);
+                masterCommit.mutate(master.rows);
+              }}
+            >
+              Importar {plural(masterReport.ok, "projeto válido", "projetos válidos")}
+            </Button>
+          </div>
+          {masterReport.ok === 0 && noValid && (
+            <p role="alert" className="text-sm text-danger">
+              Nenhum projeto válido para importar. Corrija a planilha e valide de novo.
+            </p>
+          )}
+        </div>
+      )}
+
+      {step === "revisao" && !isMaster && report && (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <Stat label="Linhas lidas" icon="file" value={number(report.total)} />
@@ -272,7 +370,7 @@ export function ImportWizard() {
             <span className="flex size-12 items-center justify-center rounded-full bg-success-subtle text-success">
               <Icon name="success" size="xl" />
             </span>
-            <p className="text-md font-semibold text-fg">{plural(done.imported, "linha importada", "linhas importadas")}</p>
+            <p className="text-md font-semibold text-fg">{isMaster ? plural(done.imported, "projeto importado", "projetos importados") : plural(done.imported, "linha importada", "linhas importadas")}</p>
             <p className="text-sm text-fg-subtle">
               {done.total - done.imported > 0 ? `${plural(done.total - done.imported, "linha foi pulada", "linhas foram puladas")} por erro. ` : "Nenhuma linha com erro. "}O registro fica no histórico abaixo.
             </p>

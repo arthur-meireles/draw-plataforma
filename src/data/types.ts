@@ -58,6 +58,8 @@ export interface ProjectMember extends BaseEntity {
   memberRole: MemberRole;
   agreedAmountCents: number | null;
   active: boolean;
+  /** Freelancer marcado explicitamente "sem pagamento" na conclusão (RN-40): não gera conta a pagar. Ausente = false. */
+  paymentWaived?: boolean;
 }
 
 export interface FeatureFlag extends BaseEntity {
@@ -491,6 +493,8 @@ export interface Payable extends BaseEntity {
   paidAt: ISODate | null;
   status: PayableStatus;
   divergenceNote: string | null;
+  /** Data de emissão da NF do freelancer, quando registrada manualmente (RN-41). */
+  invoiceIssuedAt?: ISODate | null;
 }
 
 export interface FreelancerInvoiceRequest extends BaseEntity {
@@ -503,6 +507,11 @@ export interface FreelancerInvoiceRequest extends BaseEntity {
   declaredPixKey: string | null;
   declaredInvoiceNumber: string | null;
   declaredAmountCents: number | null;
+  /** Como a NF chegou: formulário público ou registro manual pelo Financeiro (RN-41). */
+  source: "formulario" | "manual" | null;
+  /** Motivo do último pedido de nova NF (RN-42) — aparece no formulário público. */
+  reissueReason: string | null;
+  reissueRequestedAt: ISODate | null;
 }
 
 /** Linha da view `v_project_financials`. */
@@ -603,14 +612,15 @@ export interface NotificationPreference extends BaseEntity {
   enabled: boolean;
 }
 
-export type ImportKind = "clientes" | "freelancers" | "projetos" | "recebiveis" | "pagaveis";
+/** `planilha_master` = aba "Projetos & Pagamentos" da planilha master (seção 20.3/20.6, RN-44). */
+export type ImportKind = "clientes" | "freelancers" | "recebiveis" | "planilha_master";
 
 export interface ImportJob extends BaseEntity {
   kind: ImportKind;
   sourceFileName: string;
   status: "pre_visualizacao" | "concluida" | "falhou";
   dryRun: boolean;
-  report: { total: number; ok: number; errors: { line: number; message: string }[] };
+  report: { total: number; ok: number; errors: { line: number; message: string }[]; summary?: Record<string, number> };
 }
 
 export type EmailStatus = "queued" | "sent" | "delivered" | "bounced" | "complained" | "failed";

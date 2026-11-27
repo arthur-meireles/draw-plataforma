@@ -8,6 +8,7 @@ import { ApiError, assertProjectVisible, emit, read, requireAccessNow, touch, wr
 import { filesApi } from "./collab";
 import { proposalsApi, type InstallmentInput } from "./proposals";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
+import { completionCandidates } from "./payables-extra";
 
 const canEditProject = (me: { role: string }) => canWriteAll(me as never, "projects") || me.role === "operacao";
 
@@ -96,17 +97,19 @@ export const proposalsExtraApi = {
   },
 };
 
-/* ───────── Prévia da conclusão (RN-03) ───────── */
+/* ───────── Prévia da conclusão (RN-03 / RN-40) ───────── */
 export const projectsExtraApi = {
   completionPreview: (projectId: ID) =>
     read((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
-      const members = db.projectMembers.filter((m) => m.projectId === p.id && m.active && m.freelancerId && !m.deletedAt);
-      const already = (id: ID) => db.payables.some((pay) => pay.projectMemberId === id && !pay.deletedAt);
+      const money = canSeeMoney(me);
+      const candidates = completionCandidates(db, p.id);
       return {
         openTasks: db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida").length,
-        freelancersWithAmount: members.filter((m) => m.agreedAmountCents && !already(m.id)).length,
-        freelancersWithoutAmount: members.filter((m) => !m.agreedAmountCents).map((m) => db.freelancers.find((f) => f.id === m.freelancerId)?.name ?? "—"),
+        freelancersWithAmount: candidates.filter((c) => !c.paymentWaived && !c.needsDecision).length,
+        freelancersWithoutAmount: candidates.filter((c) => c.needsDecision && c.active).map((c) => c.name),
+        /** Freelancers sem conta a pagar: o diálogo pede valor ou "sem pagamento" para os que `needsDecision` (RN-40). */
+        freelancers: candidates.map((c) => ({ ...c, agreedAmountCents: money ? c.agreedAmountCents : null })),
       };
     }),
 };

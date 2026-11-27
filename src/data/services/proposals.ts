@@ -5,7 +5,7 @@ import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, req
 import { notifyMany, projectAudience } from "./audience";
 import { createClientLink, resolveRecipients } from "./client-links";
 import { generateTasksFromTemplate } from "./projects";
-import { canSeeMoney, canWriteAll } from "@/lib/permissions";
+import { canSeeMoney } from "@/lib/permissions";
 
 /** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
 function validateProposal(input: { amountCents: number; installments: InstallmentInput[] }) {

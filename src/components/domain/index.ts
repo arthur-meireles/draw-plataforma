@@ -19,3 +19,4 @@ export * from "./additional-charge-dialog";
 export * from "./task-card";
 export * from "./task-views";
 export * from "./client-links";
+export * from "./freelancer-payment-dialog";

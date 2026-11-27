@@ -1,7 +1,8 @@
 /** Financeiro (M5) — sempre por projeto. */
 import { baseFields, loadDb, nowIso, transaction } from "../db";
 import type { ID, Payable, PayableStatus, Receivable, ReceivableStatus } from "../types";
-import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, read, touch, write } from "./_core";
+import { ApiError, taxOf, emit, emitValueChange, freelancerIdOf, latency, notify, queueSystemEmail, read, touch, write } from "./_core";
+import { applyInvoiceAmount } from "./payables-extra";
 import { computeFinancials } from "./projects";
 import { access, canWriteAll } from "@/lib/permissions";
 
@@ -215,6 +216,7 @@ export const financeApi = {
       const p = db.payables.find((x) => x.id === id);
       if (!p) throw new ApiError(404, "Lançamento não encontrado.");
       if (!note.trim()) throw new ApiError(422, "Descreva a divergência.", { note: "Descreva a divergência" });
+      if (p.status !== "em_conferencia" && p.status !== "divergente") throw new ApiError(409, "Só NFs em conferência podem ser marcadas como divergentes.");
       p.status = "divergente";
       p.divergenceNote = note.trim();
       touch(p);
@@ -237,7 +239,7 @@ export const financeApi = {
 
   resendInvoiceLink: (payableId: ID) =>
     write((db, me) => {
-      if (!canWriteAll(me, "payables")) throw new ApiError(403, "Só o Financeiro e a administração reenviam o link de NF.");
+      if (!canWriteAll(me, "payables")) throw new ApiError(403, "Seu perfil não reenvia pedidos de NF. Peça ao Financeiro.");
       const p = db.payables.find((x) => x.id === payableId);
       if (!p || !p.freelancerId) throw new ApiError(404, "Lançamento não encontrado.");
       const req = db.freelancerInvoiceRequests.find((r) => r.payableId === p.id);
@@ -245,11 +247,16 @@ export const financeApi = {
       if (link) {
         link.expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
         link.revokedAt = null;
+        // link esgotado não serve para nada: o reenvio devolve os envios (RN-42)
+        if (link.maxUses && link.useCount >= link.maxUses) link.useCount = 0;
       }
       if (req) req.sentAt = nowIso();
       const fl = db.freelancers.find((f) => f.id === p.freelancerId)!;
-      db.emailLogs.push({ ...baseFields(null), channel: "system", provider: "brevo", userId: null, projectId: p.projectId, to: [fl.email], cc: [], subject: "Lembrete: envie sua nota fiscal", template: "nf_freelancer", status: "sent", error: null, sentAt: nowIso() });
-      emit(db, me, { type: "payable.link_resent", entityType: "payable", entityId: p.id, project: db.projects.find((x) => x.id === p.projectId), data: {} });
+      if (!fl.email) throw new ApiError(422, `Cadastre o e-mail de ${fl.name} em Freelancers para reenviar o link. Enquanto isso, use "Copiar link".`);
+      const proj = db.projects.find((x) => x.id === p.projectId) ?? null;
+      queueSystemEmail(db, { to: [fl.email], subject: "Lembrete: envie sua nota fiscal", template: "nf_freelancer", projectId: p.projectId });
+      if (p.status === "aguardando_nf") notify(db, me, { userId: fl.userId, type: "nf_solicitada", title: "Lembrete: envie sua nota fiscal", project: proj, entityType: "payable", entityId: p.id });
+      emit(db, me, { type: "payable.link_resent", entityType: "payable", entityId: p.id, project: proj, data: {} });
       return link?.token ?? null;
     }),
 
@@ -332,6 +339,9 @@ export const publicInvoiceApi = {
       dueAt: pay.dueAt,
       status: pay.status,
       submittedAt: req.submittedAt,
+      /** RN-42 — a Draw pediu nova NF: o formulário volta a aceitar envio e mostra o motivo. */
+      reissueReason: pay.status === "aguardando_nf" ? (req.reissueReason ?? null) : null,
+      reissueRequestedAt: pay.status === "aguardando_nf" ? (req.reissueRequestedAt ?? null) : null,
       expiresAt: link.expiresAt,
       freelancer: { name: fl.name, legalName: fl.legalName, document: fl.document, pixKey: fl.pixKey, bankName: fl.bankName, bankAgency: fl.bankAgency, bankAccount: fl.bankAccount },
     });
@@ -340,7 +350,7 @@ export const publicInvoiceApi = {
   submit: async (token: string, input: { legalName: string; document: string; pixKey: string; invoiceNumber: string; amountCents: number; fileName: string; fileSize: number; dataUrl: string | null }) => {
     await latency(400);
     return transaction((db) => {
-      const link = db.shareLinks.find((s) => s.token === token);
+      const link = db.shareLinks.find((s) => s.token === token && s.purpose === "nf_freelancer");
       if (!link || link.revokedAt || new Date(link.expiresAt).getTime() < Date.now()) throw new ApiError(409, "Este link não é mais válido.");
       if (link.maxUses && link.useCount >= link.maxUses) throw new ApiError(409, "Limite de envios atingido. Fale com a Draw.");
       const errors: Record<string, string> = {};
@@ -353,6 +363,8 @@ export const publicInvoiceApi = {
       const pay = db.payables.find((p) => p.id === link.targetId)!;
       const req = db.freelancerInvoiceRequests.find((r) => r.shareLinkId === link.id)!;
       const p = db.projects.find((x) => x.id === pay.projectId)!;
+      // só aceita envio enquanto aguarda NF (inclusive depois de um pedido de nova NF — RN-42)
+      if (pay.status !== "aguardando_nf") throw new ApiError(409, "Esta nota já foi enviada e está com a equipe financeira da Draw.");
       const fileId = `file_${Date.now().toString(36)}`;
       const versionId = `fv_${Date.now().toString(36)}`;
       db.fileVersions.push({ ...baseFields(null), id: versionId, fileId, version: 1, storageKey: `org_draw/${p.id}/${fileId}/v1`, size: input.fileSize, mime: "application/pdf", sha256: Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join(""), uploadedBy: "public", note: "Enviado pelo formulário público", dataUrl: input.dataUrl });
@@ -361,19 +373,13 @@ export const publicInvoiceApi = {
       pay.invoiceNumber = input.invoiceNumber.trim();
       pay.invoiceFileId = fileId;
       // RN-04
-      if (input.amountCents !== pay.agreedAmountCents) {
-        pay.status = "divergente";
-        pay.divergenceNote = `Valor da NF (${(input.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) diferente do acordado (${(pay.agreedAmountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).`;
-      } else {
-        pay.status = "em_conferencia";
-        pay.divergenceNote = null;
-      }
+      const status = applyInvoiceAmount(pay, input.amountCents);
       touch(pay);
-      Object.assign(req, { submittedAt: nowIso(), declaredLegalName: input.legalName, declaredDocument: input.document, declaredPixKey: input.pixKey, declaredInvoiceNumber: input.invoiceNumber, declaredAmountCents: input.amountCents });
+      Object.assign(req, { submittedAt: nowIso(), declaredLegalName: input.legalName, declaredDocument: input.document, declaredPixKey: input.pixKey, declaredInvoiceNumber: input.invoiceNumber, declaredAmountCents: input.amountCents, source: "formulario" });
       link.useCount += 1;
-      emit(db, null, { type: "payable.invoice_submitted", entityType: "payable", entityId: pay.id, project: p, data: { amountCents: input.amountCents, divergent: pay.status === "divergente" } });
-      db.users.filter((u) => u.role === "financeiro" || u.role === "admin").forEach((u) => notify(db, null, { userId: u.id, type: "nf_recebida", title: pay.status === "divergente" ? "NF divergente recebida" : "NF recebida de freelancer", project: p, entityType: "payable", entityId: pay.id }));
-      return { status: pay.status };
+      emit(db, null, { type: "payable.invoice_submitted", entityType: "payable", entityId: pay.id, project: p, data: { amountCents: input.amountCents, divergent: status === "divergente" } });
+      db.users.filter((u) => u.role === "financeiro" || u.role === "admin").forEach((u) => notify(db, null, { userId: u.id, type: "nf_recebida", title: status === "divergente" ? "NF divergente recebida" : "NF recebida de freelancer", project: p, entityType: "payable", entityId: pay.id }));
+      return { status };
     });
   },
 };

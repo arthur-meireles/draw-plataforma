@@ -1,8 +1,22 @@
 import type { ImportKind } from "@/data/types";
+import type { Resource } from "@/lib/permissions";
 
-export type WizardKind = Extract<ImportKind, "clientes" | "freelancers" | "recebiveis">;
+export type WizardKind = ImportKind;
 
-export const IMPORT_KINDS: { value: WizardKind; label: string; description: string; icon: "clients" | "freelancers" | "receivable"; columns: string[]; required: string[]; example: string[]; file: string }[] = [
+export interface ImportKindConfig {
+  value: WizardKind;
+  label: string;
+  description: string;
+  icon: "clients" | "freelancers" | "receivable" | "projects";
+  columns: string[];
+  required: string[];
+  example: string[];
+  file: string;
+  /** Recursos com acesso total exigidos para importar (o tipo some para quem não tem). */
+  needs: Resource[];
+}
+
+export const IMPORT_KINDS: ImportKindConfig[] = [
   {
     value: "clientes",
     label: "Clientes",
@@ -12,6 +26,7 @@ export const IMPORT_KINDS: { value: WizardKind; label: string; description: stri
     required: ["razao_social", "cnpj"],
     example: ["Silva & Associados Advocacia Ltda", "Silva Advogados", "11.222.333/0001-81", "Jurídico", "São Paulo", "SP"],
     file: "modelo-clientes.csv",
+    needs: ["clients"],
   },
   {
     value: "freelancers",
@@ -22,6 +37,7 @@ export const IMPORT_KINDS: { value: WizardKind; label: string; description: stri
     required: ["nome", "email"],
     example: ["Ana Souza", "ana.souza@email.com", "(11) 91234-5678", "Designer gráfico", "design", "ana.souza@email.com"],
     file: "modelo-freelancers.csv",
+    needs: ["freelancers"],
   },
   {
     value: "recebiveis",
@@ -32,6 +48,18 @@ export const IMPORT_KINDS: { value: WizardKind; label: string; description: stri
     required: ["codigo_projeto", "valor"],
     example: ["MEM-001", "Parcela 1 de 2", "5000,00", "30/12/2026"],
     file: "modelo-recebiveis.csv",
+    needs: ["receivables"],
+  },
+  {
+    value: "planilha_master",
+    label: "Planilha master",
+    description: "Aba \"Projetos & Pagamentos\": clientes, projetos, equipe, recebíveis e pagáveis. Reimportar atualiza pelo ID (P001).",
+    icon: "projects",
+    columns: [],
+    required: [],
+    example: [],
+    file: "modelo-planilha-master.csv",
+    needs: ["projects", "receivables", "payables"],
   },
 ];
 
