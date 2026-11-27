@@ -5,7 +5,7 @@
  * recuperação (mostrados uma única vez).
  */
 import { useEffect, useRef, useState } from "react";
-import { Button, Callout, Checkbox, CopyButton, ErrorState, Icon, Reveal, Skeleton, TextField } from "@/components/ui";
+import { Button, Callout, Checkbox, Copyable, CopyButton, ErrorState, Icon, Reveal, Skeleton, TextField } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { isDemoMode } from "@/lib/demo";
 
@@ -129,11 +129,12 @@ export function MfaEnrollment({
         <QrPlaceholder account={setup.data.account} />
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-xs font-medium text-fg-muted">Chave para digitar no aplicativo</p>
-          <p className="break-all rounded-md border border-line bg-layer px-2.5 py-2 font-mono text-sm text-fg">{setup.data.secret}</p>
-          <div className="flex flex-wrap gap-2">
-            <CopyButton value={setup.data.secret.replace(/\s/g, "")} label="Copiar chave" />
-            <CopyButton value={setup.data.otpauthUrl} label="Copiar link otpauth" />
-          </div>
+          <p className="break-all rounded-md border border-line bg-layer px-2.5 py-2 font-mono text-sm text-fg">
+            <Copyable value={setup.data.secret.replace(/\s/g, "")} label="Chave do autenticador">
+              {setup.data.secret}
+            </Copyable>
+          </p>
+          <p className="text-2xs text-fg-subtle">Tipo: baseada em tempo · 6 dígitos · conta {setup.data.account}</p>
         </div>
       </div>
       <TextField
