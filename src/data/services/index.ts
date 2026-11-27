@@ -22,3 +22,4 @@ export { masterImportApi, parseMasterSheet, MASTER_TEMPLATE_HEADERS, MASTER_TEMP
 export { routinesApi } from "./finance-routines";
 export { reversalsApi } from "./finance-reversals";
 export { freelancerPaymentDataApi } from "./freelancer-payment-data";
+export { clientBillingApi } from "./client-billing";

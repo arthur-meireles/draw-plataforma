@@ -1,17 +1,20 @@
 "use client";
 /** Aba "Contatos": tabela com marcas de cobrança/decisor e CRUD (RF-M2-02). */
 import { useState } from "react";
-import { Badge, Button, ConfirmDialog, DataTable, RowActions, type Column, Copyable } from "@/components/ui";
-import { useApiMutation } from "@/data/hooks";
-import { clientsApi } from "@/data/services";
+import { Badge, Button, DataTable, RowActions, type Column, Copyable } from "@/components/ui";
 import type { ClientContact } from "@/data/types";
 import { ContactFormDialog } from "./contact-form-dialog";
 import type { ClientDetail } from "./use-clients";
+import { RemoveContactDialog, useCanEditBilling } from "./client-billing";
 
 export function ClientContactsTab({ client: c, canWrite }: { client: ClientDetail; canWrite: boolean }) {
   const [form, setForm] = useState<{ open: boolean; contact: ClientContact | null }>({ open: false, contact: null });
   const [toRemove, setToRemove] = useState<ClientContact | null>(null);
-  const remove = useApiMutation((id: string) => clientsApi.removeContact(id), { success: "Contato removido", onSuccess: () => setToRemove(null) });
+  // RN-49 — o Financeiro mantém só o contato de cobrança
+  const { billing } = useCanEditBilling();
+  const billingOnly = !canWrite && billing;
+  const canEdit = (x: ClientContact) => canWrite || (billing && x.isBillingContact);
+  const canAdd = canWrite || billing;
 
   const columns: Column<ClientContact>[] = [
     {
@@ -46,7 +49,7 @@ export function ClientContactsTab({ client: c, canWrite }: { client: ClientDetai
       width: "2.5rem",
       mobile: "hidden",
       cell: (x) =>
-        canWrite ? (
+        canEdit(x) ? (
           <RowActions
             items={[
               { label: "Editar contato", icon: "edit", onSelect: () => setForm({ open: true, contact: x }) },
@@ -59,11 +62,11 @@ export function ClientContactsTab({ client: c, canWrite }: { client: ClientDetai
 
   return (
     <div>
-      {canWrite && (
+      {canAdd && (
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
-          <p className="text-xs text-fg-subtle">Quem recebe cobranças e quem decide a aprovação.</p>
+          <p className="text-xs text-fg-subtle">{billingOnly ? "Você mantém o contato que recebe as cobranças deste cliente." : "Quem recebe cobranças e quem decide a aprovação."}</p>
           <Button size="sm" variant="primary" icon="add" onClick={() => setForm({ open: true, contact: null })}>
-            Adicionar contato
+            {billingOnly ? "Contato de cobrança" : "Adicionar contato"}
           </Button>
         </div>
       )}
@@ -71,20 +74,11 @@ export function ClientContactsTab({ client: c, canWrite }: { client: ClientDetai
         rows={c.contacts}
         columns={columns}
         getRowId={(x) => x.id}
-        onRowClick={canWrite ? (x) => setForm({ open: true, contact: x }) : undefined}
-        empty={{ icon: "user", title: "Nenhum contato cadastrado", description: "Cadastre o contato de cobrança e o decisor para agilizar propostas e faturamento.", action: canWrite ? { label: "Adicionar contato", icon: "add", onClick: () => setForm({ open: true, contact: null }) } : undefined }}
+        onRowClick={(x) => canEdit(x) && setForm({ open: true, contact: x })}
+        empty={{ icon: "user", title: "Nenhum contato cadastrado", description: "Cadastre o contato de cobrança e o decisor para agilizar propostas e faturamento.", action: canAdd ? { label: "Adicionar contato", icon: "add", onClick: () => setForm({ open: true, contact: null }) } : undefined }}
       />
-      <ContactFormDialog open={form.open} onOpenChange={(o) => setForm((f) => ({ ...f, open: o }))} clientId={c.id} contact={form.contact} />
-      <ConfirmDialog
-        open={!!toRemove}
-        onOpenChange={(o) => !o && setToRemove(null)}
-        title="Remover contato"
-        description={toRemove ? `${toRemove.name} deixará de aparecer na ficha do cliente.` : undefined}
-        confirmLabel="Remover contato"
-        destructive
-        loading={remove.isPending}
-        onConfirm={() => toRemove && remove.mutate(toRemove.id)}
-      />
+      <ContactFormDialog open={form.open} onOpenChange={(o) => setForm((f) => ({ ...f, open: o }))} clientId={c.id} contact={form.contact} billingOnly={billingOnly} />
+      <RemoveContactDialog client={c} contact={toRemove} onOpenChange={(o) => !o && setToRemove(null)} />
     </div>
   );
 }

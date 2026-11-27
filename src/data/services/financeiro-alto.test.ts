@@ -279,3 +279,37 @@ describe("RN-48 — dados do freelancer no link público e no pagamento", () => 
     await expect(freelancerPaymentDataApi.get(pay.id)).rejects.toMatchObject({ status: 403 });
   });
 });
+
+describe("RN-49 — cobrança do cliente pelo Financeiro e remoção do contato de cobrança", () => {
+  it("Financeiro edita prazo/política e o contato de cobrança, mas não outros contatos nem o cadastro", async () => {
+    const { clientBillingApi, clientsApi } = await import("./index");
+    const c = loadDb().clients.find((x) => !x.deletedAt)!;
+    as("usr_fernanda");
+    await clientBillingApi.updateTerms(c.id, { paymentTermsNote: "28 dias após a NF", paymentTermDays: 28 });
+    expect(loadDb().clients.find((x) => x.id === c.id)!.paymentTermDays).toBe(28);
+    await expect(clientBillingApi.updateTerms(c.id, { paymentTermsNote: null, paymentTermDays: 900 })).rejects.toMatchObject({ status: 422 });
+    const created = await clientsApi.saveContact(c.id, { name: "Contas a pagar", email: "ap@cliente.com.br", phone: null, jobTitle: null, isBillingContact: true, isDecisionMaker: false });
+    expect(created.isBillingContact).toBe(true);
+    await expect(clientsApi.saveContact(c.id, { name: "Diretor", email: "d@cliente.com.br", phone: null, jobTitle: null, isBillingContact: false, isDecisionMaker: true })).rejects.toMatchObject({ status: 403 });
+    as("usr_lucas");
+    await expect(clientBillingApi.updateTerms(c.id, { paymentTermsNote: null, paymentTermDays: 10 })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("novo contato de cobrança passa para os projetos em aberto; removê-lo exige quem assume", async () => {
+    const { clientsApi } = await import("./index");
+    const db = loadDb();
+    const p = db.projects.find((x) => x.status === "ativo" && !x.deletedAt)!;
+    const c = db.clients.find((x) => x.id === p.clientId)!;
+    const other = { ...db.clientContacts.find((k) => k.clientId === c.id)!, id: "cc_outro", isBillingContact: false, deletedAt: null, email: "outro@c.com" };
+    db.clientContacts.push(other);
+    save(db);
+    const billing = await clientsApi.saveContact(c.id, { name: "Cobrança", email: "cob@c.com", phone: null, jobTitle: null, isBillingContact: true, isDecisionMaker: false });
+    expect(loadDb().projects.find((x) => x.id === p.id)!.billingContactId).toBe(billing.id);
+    await expect(clientsApi.removeContact(billing.id)).rejects.toMatchObject({ status: 422 });
+    const r = await clientsApi.removeContact(billing.id, "cc_outro");
+    expect(r.projectsUpdated).toBeGreaterThan(0);
+    const after = loadDb();
+    expect(after.projects.find((x) => x.id === p.id)!.billingContactId).toBe("cc_outro");
+    expect(after.clientContacts.find((x) => x.id === "cc_outro")!.isBillingContact).toBe(true);
+  });
+});

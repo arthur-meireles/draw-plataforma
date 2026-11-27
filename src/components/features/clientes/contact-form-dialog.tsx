@@ -17,15 +17,16 @@ interface Form {
 }
 const EMPTY: Form = { name: "", email: "", phone: "", jobTitle: "", isBillingContact: false, isDecisionMaker: false };
 
-export function ContactFormDialog({ open, onOpenChange, clientId, contact }: { open: boolean; onOpenChange: (o: boolean) => void; clientId: ID; contact?: ClientContact | null }) {
+/** `billingOnly`: o Financeiro cadastra/edita só o contato de cobrança (RN-49). */
+export function ContactFormDialog({ open, onOpenChange, clientId, contact, billingOnly = false }: { open: boolean; onOpenChange: (o: boolean) => void; clientId: ID; contact?: ClientContact | null; billingOnly?: boolean }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
-    setForm(contact ? { name: contact.name, email: contact.email, phone: contact.phone ?? "", jobTitle: contact.jobTitle ?? "", isBillingContact: contact.isBillingContact, isDecisionMaker: contact.isDecisionMaker } : EMPTY);
+    setForm(contact ? { name: contact.name, email: contact.email, phone: contact.phone ?? "", jobTitle: contact.jobTitle ?? "", isBillingContact: contact.isBillingContact, isDecisionMaker: contact.isDecisionMaker } : { ...EMPTY, isBillingContact: billingOnly });
     setErrors({});
-  }, [open, contact]);
+  }, [open, contact, billingOnly]);
 
   const focusFirst = (errs: Record<string, string>) => document.getElementById(`contact-${Object.keys(errs)[0]}`)?.focus();
   const save = useApiMutation((f: Form) => clientsApi.saveContact(clientId, { name: f.name.trim(), email: f.email.trim(), phone: f.phone || null, jobTitle: f.jobTitle.trim() || null, isBillingContact: f.isBillingContact, isDecisionMaker: f.isDecisionMaker }, contact?.id), {
@@ -84,8 +85,8 @@ export function ContactFormDialog({ open, onOpenChange, clientId, contact }: { o
           <TextField id="contact-phone" label="Telefone" inputMode="tel" placeholder="(11) 99999-0000" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} />
           <TextField id="contact-jobTitle" label="Cargo" value={form.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} />
         </div>
-        <Switch checked={form.isBillingContact} onCheckedChange={(v) => set("isBillingContact", v)} label="Contato de cobrança" description="Recebe notas fiscais e avisos financeiros. Só um por cliente." />
-        <Switch checked={form.isDecisionMaker} onCheckedChange={(v) => set("isDecisionMaker", v)} label="Decisor" description="Aprova propostas e entregas em nome do cliente." />
+        <Switch checked={form.isBillingContact} disabled={billingOnly} onCheckedChange={(v) => set("isBillingContact", v)} label="Contato de cobrança" description="Recebe notas fiscais e avisos financeiros. Só um por cliente; os projetos em aberto passam a usar este contato." />
+        {!billingOnly && <Switch checked={form.isDecisionMaker} onCheckedChange={(v) => set("isDecisionMaker", v)} label="Decisor" description="Aprova propostas e entregas em nome do cliente." />}
       </form>
     </Dialog>
   );
