@@ -25,6 +25,8 @@ export interface TaskView extends Task {
   subtasksTotal: number;
   commentsCount: number;
   isOverdue: boolean;
+  /** RN-38 — quem está logado pode mudar o status (editor da tarefa ou responsável por tarefa ADM). Só nas respostas de `list`/`get`. */
+  canChangeStatus?: boolean;
 }
 
 export function toTaskView(db: Database, t: Task): TaskView {
@@ -74,6 +76,16 @@ function canEditTask(db: Database, me: User, t: Task) {
   return t.assigneeUserId === me.id || (!!flId && t.assigneeFreelancerId === flId) || me.role === "operacao";
 }
 
+/**
+ * RN-38 — responsável por tarefa ADM sem Administrativo T (Operação, Financeiro, Comercial: L) pode mudar o
+ * status da própria tarefa (andar, concluir, reabrir). Os demais campos seguem com quem gerencia o Administrativo.
+ */
+function isAdmAssigneeOnly(me: User, t: Task) {
+  return t.module === "adm" && !canWriteAll(me, "adm") && t.assigneeUserId === me.id;
+}
+
+const canChangeStatus = (db: Database, me: User, t: Task) => canEditTask(db, me, t) || isAdmAssigneeOnly(me, t);
+
 export const tasksApi = {
   list: (f: TaskFilters = {}) =>
     read((db, me) => {
@@ -94,7 +106,7 @@ export const tasksApi = {
           return true;
         })
         .sort((a, b) => a.position - b.position)
-        .map((t) => toTaskView(db, t));
+        .map((t) => ({ ...toTaskView(db, t), canChangeStatus: canChangeStatus(db, me, t) }));
     }),
 
   get: (id: ID) =>
@@ -102,8 +114,9 @@ export const tasksApi = {
       const t = assertTask(db, me, id);
       return {
         ...toTaskView(db, t),
-        subtasks: db.tasks.filter((x) => x.parentTaskId === t.id && !x.deletedAt).sort((a, b) => a.position - b.position).map((x) => toTaskView(db, x)),
+        subtasks: db.tasks.filter((x) => x.parentTaskId === t.id && !x.deletedAt).sort((a, b) => a.position - b.position).map((x) => ({ ...toTaskView(db, x), canChangeStatus: canChangeStatus(db, me, x) })),
         canEdit: canEditTask(db, me, t),
+        canChangeStatus: canChangeStatus(db, me, t),
       };
     }),
 
@@ -163,7 +176,11 @@ export const tasksApi = {
   update: (id: ID, patch: Partial<Pick<Task, "title" | "description" | "assigneeUserId" | "assigneeFreelancerId" | "statusKey" | "priorityKey" | "startAt" | "dueAt" | "estimateMinutes" | "sprintId" | "stageKey" | "position" | "area">>) =>
     write((db, me) => {
       const t = assertTask(db, me, id);
-      if (!canEditTask(db, me, t)) throw new ApiError(403, "Você não pode editar esta tarefa.");
+      if (!canEditTask(db, me, t)) {
+        const statusOnly = Object.keys(patch).every((k) => k === "statusKey");
+        if (!isAdmAssigneeOnly(me, t)) throw new ApiError(403, "Você não pode editar esta tarefa.");
+        if (!statusOnly) throw new ApiError(403, "Nas tarefas do Administrativo você pode mudar só o status das suas. Peça à gestão para alterar prazo, responsável ou área.");
+      }
       const p = t.projectId ? db.projects.find((x) => x.id === t.projectId) ?? null : null;
       const before = { ...t };
       Object.assign(t, patch);

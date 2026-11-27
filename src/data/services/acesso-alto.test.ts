@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { setSessionUserId } from "./_core";
-import { jobsApi, runDueSweepTx } from "./index";
+import { jobsApi, runDueSweepTx, tasksApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 const DAY = 86_400_000;
@@ -93,5 +93,33 @@ describe("RN-34 — rotina de prazos", () => {
     });
     transaction((db) => runDueSweepTx(db));
     expect(notifs("usr_lucas", taskId)).toHaveLength(0);
+  });
+});
+
+describe("RN-38 — responsável muda o status da própria tarefa ADM", () => {
+  const admTask = (assignee: string) =>
+    transaction((db) => {
+      const t = db.tasks.find((x) => x.module === "adm" && !x.deletedAt)!;
+      Object.assign(t, { assigneeUserId: assignee, assigneeFreelancerId: null, statusKey: "a_fazer" });
+      return t.id;
+    });
+
+  it("Operação conclui a tarefa ADM atribuída a ela, mas não muda outros campos", async () => {
+    const id = admTask("usr_lucas");
+    as("usr_lucas");
+    const view = await tasksApi.get(id);
+    expect(view.canEdit).toBe(false);
+    expect(view.canChangeStatus).toBe(true);
+    await tasksApi.update(id, { statusKey: "concluida" });
+    expect(loadDb().tasks.find((t) => t.id === id)?.statusKey).toBe("concluida");
+    await expect(tasksApi.update(id, { dueAt: iso(3) })).rejects.toMatchObject({ status: 403 });
+    await expect(tasksApi.update(id, { statusKey: "a_fazer", title: "x" })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("quem não é o responsável continua só consultando", async () => {
+    const id = admTask("usr_carlos");
+    as("usr_lucas");
+    expect((await tasksApi.get(id)).canChangeStatus).toBe(false);
+    await expect(tasksApi.update(id, { statusKey: "concluida" })).rejects.toMatchObject({ status: 403 });
   });
 });

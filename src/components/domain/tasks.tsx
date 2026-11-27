@@ -36,6 +36,8 @@ export function useTaskUpdate() {
 /** Linha de tarefa estilo Plane: status clicável, título, propriedades à direita. */
 export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readOnly, className, style }: { task: TaskView; onOpen?: (t: TaskView) => void; showProject?: boolean; restrictAssignees?: PersonRef[]; readOnly?: boolean; className?: string; style?: React.CSSProperties }) {
   const update = useTaskUpdate();
+  // RN-38 — responsável por tarefa ADM muda o status mesmo sem editar o resto
+  const statusLocked = !!readOnly && !t.canChangeStatus;
   // conclusão otimista: o círculo responde na hora; volta se a API recusar
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   useEffect(() => setOptimistic(null), [t.statusKey]);
@@ -54,7 +56,7 @@ export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readO
       style={style}
       className={cn("group flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-line px-4 py-2 last:border-0 hover:bg-layer-hover/60 max-md:flex-wrap max-md:py-3", className)}
     >
-      <TaskCheck status={t.statusKey} done={done} disabled={readOnly} onToggle={toggleDone} />
+      <TaskCheck status={t.statusKey} done={done} disabled={statusLocked} onToggle={toggleDone} />
       {showProject && t.projectCode && <ProjectCode code={t.projectCode} className="w-16 max-md:hidden" />}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-fg">
@@ -86,7 +88,7 @@ export function TaskRow({ task: t, onOpen, showProject, restrictAssignees, readO
             {t.commentsCount}
           </span>
         )}
-        <TaskStatusPill value={t.statusKey} onChange={readOnly ? undefined : (v) => update.mutate({ id: t.id, patch: { statusKey: v } })} showLabel={false} />
+        <TaskStatusPill value={t.statusKey} onChange={statusLocked ? undefined : (v) => update.mutate({ id: t.id, patch: { statusKey: v } })} showLabel={false} />
         <PriorityPill value={t.priorityKey} onChange={readOnly ? undefined : (v) => update.mutate({ id: t.id, patch: { priorityKey: v } })} showLabel={false} />
         <DueChip date={t.dueAt} done={done} />
         <AssigneePill
@@ -299,7 +301,7 @@ export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | 
 
           <div className="space-y-1 rounded-lg border border-line p-3">
             <PropertyRow label="Status" icon="task">
-              <TaskStatusPill value={t.statusKey} onChange={ro ? undefined : (v) => patch({ statusKey: v })} />
+              <TaskStatusPill value={t.statusKey} onChange={ro && !t.canChangeStatus ? undefined : (v) => patch({ statusKey: v })} />
             </PropertyRow>
             <PropertyRow label="Responsável" icon="user">
               <AssigneePill showName value={personOf(t)} name={t.assigneeName} color={t.assigneeColor} restrictTo={restrictAssignees} onChange={ro ? undefined : (v) => patch(v?.kind === "freelancer" ? { assigneeFreelancerId: v.id } : { assigneeUserId: v?.id ?? null })} />
