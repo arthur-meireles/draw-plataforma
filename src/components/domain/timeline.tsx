@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Avatar, Button, EmptyState, ErrorState, Icon, RowActions, Skeleton, Textarea, useEntrance, useSuccessFlash, type IconName } from "@/components/ui";
-import { useApiMutation, useApiQuery, useInternalPeople } from "@/data/hooks";
+import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { commentsApi, eventsApi } from "@/data/services";
 import { APPROVAL_DECISION_LABEL, PAYABLE_STATUS_LABEL, projectStage, quoteStage, taskStatus } from "@/data/reference";
 import type { ID, ProjectStageKey, QuoteStageKey, TaskStatusKey } from "@/data/types";
@@ -177,16 +177,23 @@ function CommentBody({ body }: { body: string }) {
 export function CommentThread({ projectId, taskId, placeholder = "Escreva um comentário… use @ para mencionar" }: { projectId: ID; taskId?: ID | null; placeholder?: string }) {
   const { user } = usePermissions();
   const q = useApiQuery(["comments", projectId, taskId], () => commentsApi.list(projectId, taskId === undefined ? undefined : taskId));
-  const people = useInternalPeople();
+  // RN-54 — sugestões = responsável e equipe do projeto (inclusive freelancers); a menção guarda o id escolhido.
+  const people = useApiQuery(["comments", "mentionables", projectId], () => commentsApi.mentionables(projectId), { staleTime: 30_000 });
   const [body, setBody] = useState("");
+  const [picked, setPicked] = useState<{ id: ID; label: string }[]>([]);
   const [error, setError] = useState<string>();
   const mentionQuery = useMemo(() => /@([\wÀ-ú]*)$/.exec(body)?.[1] ?? null, [body]);
-  const suggestions = mentionQuery !== null ? (people.data ?? []).filter((p) => p.name.toLowerCase().includes(mentionQuery.toLowerCase()) && p.id !== user.id).slice(0, 5) : [];
+  const suggestions = mentionQuery !== null ? (people.data ?? []).filter((p) => p.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5) : [];
+  const pick = (p: { id: ID; name: string }) => {
+    setBody(body.replace(/@([\wÀ-ú]*)$/, `@${p.name} `));
+    setPicked((l) => (l.some((x) => x.id === p.id) ? l : [...l, { id: p.id, label: p.name }]));
+  };
 
   const sent = useSuccessFlash();
   const enter = useEntrance();
   const create = useApiMutation(commentsApi.create, { onSuccess: () => {
       setBody("");
+      setPicked([]);
       sent.flash();
     }, onError: (e) => setError(e.fieldErrors?.body ?? e.message) });
   const remove = useApiMutation(commentsApi.remove, { success: "Comentário excluído" });
@@ -197,7 +204,8 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
       return;
     }
     setError(undefined);
-    const mentions = (people.data ?? []).filter((p) => body.includes(`@${p.name.split(" ")[0]}`)).map((p) => p.id);
+    // só as menções escolhidas na lista que continuam no texto
+    const mentions = picked.filter((p) => body.includes(`@${p.label}`)).map((p) => p.id);
     create.mutate({ projectId, taskId: taskId ?? null, body, mentions });
   };
 
@@ -251,9 +259,10 @@ export function CommentThread({ projectId, taskId, placeholder = "Escreva um com
             <ul role="listbox" className="absolute bottom-full left-0 z-20 mb-1 w-64 rounded-lg border border-line bg-layer-2 p-1 shadow-overlay">
               {suggestions.map((p) => (
                 <li key={p.id}>
-                  <button type="button" onClick={() => setBody(body.replace(/@([\wÀ-ú]*)$/, `@${p.name.split(" ")[0]} `))} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted hover:bg-layer-hover">
+                  <button type="button" onClick={() => pick(p)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted hover:bg-layer-hover">
                     <Avatar name={p.name} color={p.color} size="sm" />
-                    {p.name}
+                    <span className="min-w-0 flex-1 truncate text-left">{p.name}</span>
+                    {p.kind === "freelancer" && <span className="text-2xs text-fg-subtle">Freelancer</span>}
                   </button>
                 </li>
               ))}

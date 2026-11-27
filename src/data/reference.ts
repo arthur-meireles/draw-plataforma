@@ -172,6 +172,18 @@ export const ADM_AREAS: { key: import("./types").AdmArea; label: string; number:
 export const PROJECT_SIZE_LABEL: Record<import("./types").ProjectSize, string> = { pequeno: "Pequeno", medio: "Médio", grande: "Grande" };
 export const PAYMENT_CONDITION_LABEL: Record<import("./types").PaymentCondition, string> = { a_vista: "À vista", "50_50": "50/50", parcelado: "Parcelado" };
 
+/** Envio ao cliente por link (RN-51/52). */
+export const CLIENT_LINK_PURPOSE_LABEL: Record<Exclude<import("./types").ShareLinkPurpose, "nf_freelancer">, string> = { proposta: "Proposta", aprovacao: "Pedido de aprovação", entrega: "Entrega" };
+export const CLIENT_LINK_STATUS_LABEL: Record<import("./types").ClientLinkStatus, string> = {
+  enviado: "Enviado",
+  visto: "Visto",
+  aprovado: "Aprovado",
+  ajustes: "Ajustes pedidos",
+  encerrado: "Encerrado",
+  expirado: "Expirado",
+  revogado: "Revogado",
+};
+
 export const quoteStage = (key: QuoteStageKey | null | undefined) =>
   QUOTE_STAGES.find((s) => s.key === key);
 export const projectStage = (key: ProjectStageKey | null | undefined) =>

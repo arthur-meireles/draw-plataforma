@@ -6,7 +6,7 @@
 import { baseFields, loadDb, nowIso, transaction } from "../db";
 import { CLIENT_LINK_DEFAULTS } from "../defaults";
 import { PROJECT_STAGES } from "../reference";
-import type { Approval, Database, ID, Project, ProjectStageKey, ShareLink, ShareLinkPurpose, ShareLinkResponse, User } from "../types";
+import type { Approval, ClientLinkStatus, Database, ID, Project, ProjectStageKey, ShareLink, ShareLinkPurpose, ShareLinkResponse, User } from "../types";
 import { ApiError, assertProjectVisible, emit, latency, queueSystemEmail, read, touch, write } from "./_core";
 import { notifyMany } from "./audience";
 import { decideApprovalTx } from "./collab";
@@ -14,7 +14,7 @@ import { approveProposalTx } from "./proposals";
 import { canSeeMoney, canWrite, canWriteAll } from "@/lib/permissions";
 
 export type ClientLinkPurpose = Exclude<ShareLinkPurpose, "nf_freelancer">;
-export type ClientLinkStatus = "enviado" | "visto" | "aprovado" | "ajustes" | "encerrado" | "expirado" | "revogado";
+export type { ClientLinkStatus };
 
 /** Validade padrão do link enviado ao cliente. */
 export const CLIENT_LINK_DAYS = 30;

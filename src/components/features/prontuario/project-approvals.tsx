@@ -1,16 +1,17 @@
 "use client";
 import { useState } from "react";
 import { Button, ConfirmDialog, Dialog, EmptyState, ErrorState, Icon, SelectField, Skeleton, TextField } from "@/components/ui";
-import { ApprovalBadge, projectStageOptions } from "@/components/domain";
+import { ApprovalBadge, ClientLinksSection, SendToClientDialog, projectStageOptions } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
-import { approvalsApi } from "@/data/services";
+import { approvalsApi, type ClientLinkPurpose } from "@/data/services";
 import { projectStage } from "@/data/reference";
 import type { ID, ProjectStageKey } from "@/data/types";
 import { dateTime, relative } from "@/lib/format";
 import type { ProjectDetail } from "./use-project";
 
 type Approval = Awaited<ReturnType<typeof approvalsApi.list>>[number];
+const WORK_LINKS = ["aprovacao", "entrega"] as const satisfies ClientLinkPurpose[];
 
 function RequestDialog({ project, onClose }: { project: ProjectDetail; onClose: () => void }) {
   const [stage, setStage] = useState<ProjectStageKey>(project.projectStageKey && project.projectStageKey !== "concluido" ? project.projectStageKey : "validacao_cliente");
@@ -25,12 +26,12 @@ function RequestDialog({ project, onClose }: { project: ProjectDetail; onClose: 
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Pedir aprovação"
-      description="Registra que uma etapa aguarda a decisão do cliente. Para enviar o material por e-mail, use a aba E-mails."
+      title="Registrar pedido de aprovação"
+      description="Registra um pedido feito fora do sistema (reunião, telefone). Para o cliente ver os arquivos e decidir sozinho, use “Pedir aprovação ao cliente…”."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" loading={request.isPending} onClick={() => request.mutate(undefined)}>Pedir aprovação</Button>
+          <Button variant="primary" loading={request.isPending} onClick={() => request.mutate(undefined)}>Registrar pedido</Button>
         </>
       }
     >
@@ -47,6 +48,7 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
   const { isFreelancer, canWrite } = usePermissions();
   const q = useApiQuery(["approvals", project.id], () => approvalsApi.list(project.id));
   const [requesting, setRequesting] = useState(false);
+  const [sending, setSending] = useState<null | { kind: "aprovacao"; approvalId?: ID; stageKey?: ProjectStageKey } | { kind: "entrega" }>(null);
   const [deciding, setDeciding] = useState<{ approval: Approval; decision: "ajustes" | "negado" } | null>(null);
   const decide = useApiMutation(({ id, decision, reason }: { id: ID; decision: "aprovado" | "ajustes" | "negado"; reason?: string }) => approvalsApi.decide(id, decision, reason), {
     success: (a) => (a.decision === "aprovado" ? "Aprovação registrada" : a.decision === "ajustes" ? "Pedido de ajustes registrado" : "Negativa registrada"),
@@ -54,19 +56,25 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
   });
   const canDecide = !isFreelancer && canWrite("projects");
   const canRequest = canDecide && project.status === "ativo";
+  const canDeliver = canDecide && (project.status === "ativo" || project.status === "concluido");
+  const defaultStage = project.projectStageKey && project.projectStageKey !== "concluido" ? project.projectStageKey : null;
 
   return (
     <div>
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
         <p className="text-xs text-fg-subtle">{q.data ? `${q.data.length} ${q.data.length === 1 ? "registro" : "registros"}` : ""}</p>
-        {canRequest && <Button size="sm" variant="primary" icon="add" onClick={() => setRequesting(true)}>Pedir aprovação</Button>}
+        <div className="flex flex-wrap justify-end gap-2">
+          {canRequest && <Button size="sm" variant="ghost" icon="add" onClick={() => setRequesting(true)}>Registrar pedido…</Button>}
+          {canDeliver && <Button size="sm" icon="delivery" onClick={() => setSending({ kind: "entrega" })}>Enviar entrega ao cliente…</Button>}
+          {canRequest && <Button size="sm" variant="primary" icon="send" onClick={() => setSending({ kind: "aprovacao" })}>Pedir aprovação ao cliente…</Button>}
+        </div>
       </div>
       {q.error ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : q.isLoading ? (
         <div className="space-y-3 p-4"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
       ) : !q.data?.length ? (
-        <EmptyState icon="approval" title="Nenhuma aprovação registrada" description="Quando uma etapa depender do cliente, registre o pedido aqui. Etapas de validação criam o pedido automaticamente." action={canRequest ? { label: "Pedir aprovação", icon: "add", onClick: () => setRequesting(true) } : undefined} />
+        <EmptyState icon="approval" title="Nenhuma aprovação registrada" description="Quando uma etapa depender do cliente, registre o pedido aqui. Etapas de validação criam o pedido automaticamente." action={canRequest ? { label: "Pedir aprovação ao cliente…", icon: "send", onClick: () => setSending({ kind: "aprovacao" }) } : undefined} />
       ) : (
         <ul className="divide-y divide-line">
           {q.data.map((a) => (
@@ -80,7 +88,7 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
                 <p className="flex items-start gap-1.5 text-xs text-fg-muted">
                   <Icon name="history" size="xs" className="mt-0.5 shrink-0 text-fg-subtle" />
                   <span>
-                    Decidida {a.decidedByName ? `por ${a.decidedByName} ` : ""}em {dateTime(a.decidedAt)}
+                    {a.decidedVia === "link_cliente" ? `Decidida pelo cliente${a.decidedByName ? ` (${a.decidedByName})` : ""} pelo link ` : `Decidida ${a.decidedByName ? `por ${a.decidedByName} ` : ""}`}em {dateTime(a.decidedAt)}
                     {a.reason ? <> — “{a.reason}”</> : null}
                   </span>
                 </p>
@@ -90,13 +98,24 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
                   <Button size="sm" variant="primary" icon="check" loading={decide.isPending && decide.variables?.id === a.id && decide.variables.decision === "aprovado"} onClick={() => decide.mutate({ id: a.id, decision: "aprovado" })}>Registrar aprovação</Button>
                   <Button size="sm" onClick={() => setDeciding({ approval: a, decision: "ajustes" })}>Pedir ajustes…</Button>
                   <Button size="sm" variant="destructive-ghost" onClick={() => setDeciding({ approval: a, decision: "negado" })}>Registrar negativa…</Button>
+                  {project.status === "ativo" && (
+                    <Button size="sm" variant="ghost" icon="send" onClick={() => setSending({ kind: "aprovacao", approvalId: a.id, stageKey: a.stageKey })}>
+                      {a.shareLinkId ? "Enviar de novo ao cliente…" : "Enviar ao cliente…"}
+                    </Button>
+                  )}
                 </div>
               )}
             </li>
           ))}
         </ul>
       )}
+      {!isFreelancer && (
+        <div className="border-t border-line p-4">
+          <ClientLinksSection projectId={project.id} purposes={WORK_LINKS} />
+        </div>
+      )}
       {requesting && <RequestDialog project={project} onClose={() => setRequesting(false)} />}
+      {sending && <SendToClientDialog projectId={project.id} mode={sending} defaultStage={defaultStage} onClose={() => setSending(null)} />}
       <ConfirmDialog
         open={!!deciding}
         onOpenChange={(o) => !o && setDeciding(null)}

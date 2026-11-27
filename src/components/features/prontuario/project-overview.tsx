@@ -1,16 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorState, Progress, Section, Skeleton, TextareaField } from "@/components/ui";
-import { ApprovalBadge, EventTimeline, LineSeriesChart, Proposals } from "@/components/domain";
+import { ApprovalBadge, ClientLinksSection, EventTimeline, LineSeriesChart, Proposals } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
-import { approvalsApi, metricsApi } from "@/data/services";
+import { approvalsApi, metricsApi, type ClientLinkPurpose } from "@/data/services";
 import { projectStage } from "@/data/reference";
 import { dateFull, plural, relative } from "@/lib/format";
 import { DeliveryInsights } from "./delivery-insights";
 import { KeyDates } from "./key-dates";
 import { StageStepper } from "./stage-stepper";
 import { useCanEditProject, useProjectUpdate, type ProjectDetail } from "./use-project";
+
+const PROPOSAL_LINKS = ["proposta"] as const satisfies ClientLinkPurpose[];
 
 function Briefing({ project, editable }: { project: ProjectDetail; editable: boolean }) {
   const update = useProjectUpdate(project.id);
@@ -107,6 +109,7 @@ export function ProjectOverview({ project, onTab, proposalOpen, onProposalOpen }
       </Section>
 
       {showProposals && <Proposals projectId={project.id} projectStatus={project.status} newOpen={proposalOpen} onNewOpenChange={onProposalOpen} />}
+      {showProposals && <ClientLinksSection projectId={project.id} purposes={PROPOSAL_LINKS} title="Propostas enviadas ao cliente" description="Links de proposta enviados por e-mail. O cliente aprova ou pede ajustes pela página do link." />}
 
       <Briefing project={project} editable={editable} />
 

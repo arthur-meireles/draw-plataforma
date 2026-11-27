@@ -385,6 +385,9 @@ export interface FileVersion extends BaseEntity {
  */
 export type ShareLinkPurpose = "nf_freelancer" | "proposta" | "aprovacao" | "entrega";
 
+/** Situação derivada de um link enviado ao cliente (não é gravada). */
+export type ClientLinkStatus = "enviado" | "visto" | "aprovado" | "ajustes" | "encerrado" | "expirado" | "revogado";
+
 /** Resposta do cliente no link público. */
 export type ShareLinkResponse = "aprovado" | "ajustes";
 

@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const res = await fetch(req);
-          if (res.ok && !url.pathname.startsWith("/nf/")) (await caches.open(PAGES_CACHE)).put(req, res.clone());
+          if (res.ok && !url.pathname.startsWith("/nf/") && !url.pathname.startsWith("/c/")) (await caches.open(PAGES_CACHE)).put(req, res.clone());
           return res;
         } catch {
           const cached = await caches.match(req);

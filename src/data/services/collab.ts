@@ -190,6 +190,17 @@ export const commentsApi = {
         });
     }),
 
+  /** RN-54 — quem pode ser mencionado no projeto: responsável e equipe, inclusive freelancers com acesso. */
+  mentionables: (projectId: ID) =>
+    read((db, me) => {
+      const p = assertProjectVisible(db, me, projectId);
+      const ids = mentionableUserIds(db, p);
+      return db.users
+        .filter((u) => ids.has(u.id) && u.id !== me.id)
+        .map((u) => ({ id: u.id, name: u.name, color: u.avatarColor, kind: (u.role === "freelancer" ? "freelancer" : "interno") as "interno" | "freelancer" }))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    }, 60),
+
   create: (input: { projectId: ID; taskId?: ID | null; body: string; mentions: ID[] }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, input.projectId);
@@ -237,7 +248,7 @@ export const approvalsApi = {
       return db.approvals
         .filter((a) => a.projectId === p.id && !a.deletedAt)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((a) => ({ ...a, decidedByName: db.users.find((u) => u.id === a.decidedBy)?.name ?? null }));
+        .map((a) => ({ ...a, decidedByName: a.decidedVia === "link_cliente" ? a.decidedByName : (db.users.find((u) => u.id === a.decidedBy)?.name ?? null) }));
     }),
 
   request: (projectId: ID, input: { stageKey: Approval["stageKey"]; requestedFrom: string }) =>

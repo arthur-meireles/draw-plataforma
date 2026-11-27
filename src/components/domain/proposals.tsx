@@ -12,6 +12,7 @@ import { fromDateInput, dateFull, fileSize, money, toDateInput } from "@/lib/for
 import type { ID } from "@/data/types";
 import { Money, ProposalStatusBadge } from "./badges";
 import { useFileDownload } from "./files";
+import { SendToClientDialog } from "./client-links";
 
 type ProposalRow = Awaited<ReturnType<typeof proposalsApi.listByProject>>[number];
 
@@ -194,9 +195,8 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
   const [rejecting, setRejecting] = useState<ProposalRow | null>(null);
   const canAct = canWriteAll("commercial") && projectStatus === "cotacao";
 
-  const sent = useSuccessFlash();
+  const [sending, setSending] = useState<ProposalRow | null>(null);
   const approved = useSuccessFlash();
-  const send = useApiMutation((id: ID) => proposalsApi.send(id), { success: (p) => `Proposta v${p.version} enviada`, onSuccess: () => sent.flash() });
   const approve = useApiMutation((id: ID) => proposalsApi.approve(id), {
     success: "Proposta aprovada: o projeto está ativo, com recebíveis e tarefas criados",
     onSuccess: () => approved.flash(() => setApproving(null)),
@@ -207,7 +207,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
     <Section
       title="Propostas"
       icon="proposal"
-      description="Cada versão guarda valor, parcelas e arquivo. Datas de envio e aprovação são do sistema."
+      description="Cada versão guarda valor, parcelas e arquivo. Ao enviar, o cliente recebe um link para aprovar ou pedir ajustes."
       actions={
         canAct && (
           <Button size="sm" variant="primary" icon="add" onClick={() => onNewOpenChange(true)}>
@@ -251,19 +251,17 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
                   </Button>
                 )}
                 <span className="flex-1" />
-                {canAct && (p.status === "rascunho" || (sent.success && send.variables === p.id)) && (
+                {canAct && p.status === "rascunho" && (
                   <>
-                    {p.status === "rascunho" && (
-                      <Button size="sm" icon="edit" onClick={() => setEditing(p)}>
-                        Editar rascunho
-                      </Button>
-                    )}
-                    <Button size="sm" variant="primary" icon="send" loading={send.isPending && send.variables === p.id} success={sent.success && send.variables === p.id} successLabel="Enviada" onClick={() => send.mutate(p.id)}>
-                      Enviar proposta
+                    <Button size="sm" icon="edit" onClick={() => setEditing(p)}>
+                      Editar rascunho
+                    </Button>
+                    <Button size="sm" variant="primary" icon="send" onClick={() => setSending(p)}>
+                      Enviar proposta…
                     </Button>
                   </>
                 )}
-                {canAct && p.status === "enviada" && !(sent.success && send.variables === p.id) && (
+                {canAct && p.status === "enviada" && (
                   <>
                     <Button size="sm" variant="destructive-ghost" onClick={() => setRejecting(p)}>
                       Registrar recusa…
@@ -281,6 +279,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
 
       {newOpen && <ProposalDialog projectId={projectId} proposal={null} onClose={() => onNewOpenChange(false)} />}
       {editing && <ProposalDialog projectId={projectId} proposal={editing} onClose={() => setEditing(null)} />}
+      {sending && <SendToClientDialog projectId={projectId} mode={{ kind: "proposta", proposalId: sending.id, version: sending.version }} onClose={() => setSending(null)} />}
       <ConfirmDialog
         open={!!approving}
         onOpenChange={(o) => !o && setApproving(null)}
@@ -293,6 +292,7 @@ export function Proposals({ projectId, projectStatus, newOpen, onNewOpenChange }
               <li>cria os recebíveis conforme as {approving?.installments.length ?? 0} parcelas da proposta;</li>
               <li>gera as tarefas do modelo do tipo de projeto, por etapa;</li>
               <li>as demais propostas abertas são marcadas como recusadas.</li>
+              <li>se o cliente ainda não respondeu pelo link, o link deixa de aceitar resposta.</li>
             </ul>
           </div>
         }
