@@ -313,3 +313,21 @@ describe("RN-49 — cobrança do cliente pelo Financeiro e remoção do contato 
     expect(after.clientContacts.find((x) => x.id === "cc_outro")!.isBillingContact).toBe(true);
   });
 });
+
+describe("Freelancer — e-mail único e sincronizado com o login", () => {
+  const input = (f: ReturnType<typeof loadDb>["freelancers"][number], email: string) => ({ name: f.name, email, phone: f.phone, legalName: f.legalName, document: f.document, pixKey: f.pixKey, bankName: f.bankName, bankAgency: f.bankAgency, bankAccount: f.bankAccount, jobTitle: f.jobTitle ?? "Designer", specialties: f.specialties, status: f.status, notes: f.notes });
+
+  it("recusa e-mail de outro freelancer ou usuário e sincroniza o login", async () => {
+    const { freelancersApi } = await import("./index");
+    as("usr_fernanda");
+    const db = loadDb();
+    const julia = db.freelancers.find((f) => f.userId === "usr_julia")!;
+    const other = db.freelancers.find((f) => f.id !== julia.id && !f.deletedAt)!;
+    await expect(freelancersApi.update(julia.id, input(julia, other.email.toUpperCase()))).rejects.toMatchObject({ status: 409 });
+    await expect(freelancersApi.update(julia.id, input(julia, "paula@draw.com.br"))).rejects.toMatchObject({ status: 409 });
+    await freelancersApi.update(julia.id, input(julia, "Julia.Nova@Gmail.com"));
+    const after = loadDb();
+    expect(after.freelancers.find((f) => f.id === julia.id)!.email).toBe("julia.nova@gmail.com");
+    expect(after.users.find((u) => u.id === "usr_julia")!.email).toBe("julia.nova@gmail.com");
+  });
+});

@@ -274,6 +274,20 @@ export const freelancersApi = {
         delete patch.bankAgency;
         delete patch.bankAccount;
       }
+      // E-mail único entre freelancers e usuários; com login, o e-mail de acesso acompanha (pedido de NF e login no mesmo endereço)
+      const email = input.email.trim().toLowerCase();
+      patch.email = email;
+      if (email !== f.email.toLowerCase()) {
+        if (db.freelancers.some((x) => x.id !== f.id && !x.deletedAt && x.email.toLowerCase() === email)) throw new ApiError(409, "Já existe um freelancer com este e-mail.", { email: "E-mail já cadastrado em outro freelancer" });
+        if (db.users.some((u) => u.id !== f.userId && !u.deletedAt && u.email.toLowerCase() === email)) throw new ApiError(409, "Este e-mail já é o acesso de outra pessoa na plataforma.", { email: "E-mail já usado por outro usuário" });
+        const u = f.userId ? db.users.find((x) => x.id === f.userId) : null;
+        if (u) {
+          emit(db, me, { type: "user.email_changed", entityType: "user", entityId: u.id, data: { before: u.email, after: email, via: "freelancer" } });
+          u.email = email;
+          touch(u);
+        }
+        emit(db, me, { type: "freelancer.email_changed", entityType: "freelancer", entityId: f.id, data: { before: f.email, after: email, loginSynced: !!u } });
+      }
       Object.assign(f, patch);
       touch(f);
       emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: {} });

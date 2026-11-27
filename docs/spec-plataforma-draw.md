@@ -300,7 +300,7 @@ Aceite: freelancer que pede um projeto em que não está alocado recebe `404`; u
 | RF-M2-01 | Clientes com CNPJ validado e único; grupo econômico; contatos (faturamento, decisor). | R1 |
 | RF-M2-02 | Ficha do cliente: todos os projetos, propostas, recebíveis e indicadores do cliente (conforme permissão). | R1 |
 | RF-M2-03 | Ao escolher o cliente no projeto, trazer CNPJ, razão social e contato de faturamento. | R1 |
-| RF-M2-04 | Freelancers com especialidades, dados fiscais e bancários cifrados; ficha com projetos, entregas, pagamentos e carga atual. | R1 |
+| RF-M2-04 | Freelancers com especialidades, dados fiscais e bancários cifrados; ficha com projetos, entregas, pagamentos e carga atual. E-mail único entre freelancers e usuários (409); com login vinculado, mudar o e-mail do freelancer muda o e-mail de acesso (`user.email_changed` + `freelancer.email_changed`, com antes/depois). | R1 |
 | RF-M2-05 | Catálogo de tipos de projeto (admin): nome, prefixo, modelo de tarefas por etapa. | R1 |
 | RF-M2-06 | Consulta pública de CNPJ para preencher cadastro **[A DECIDIR fonte sem custo por uso]**. | R2 |
 
