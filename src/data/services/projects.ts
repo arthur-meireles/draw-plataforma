@@ -32,6 +32,7 @@ import {
 import { freelancerUserId, notifyMany, projectAudience } from "./audience";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
+import { afterCompletionTeamChange } from "./team-after-completion";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -530,6 +531,7 @@ export const projectsApi = {
       if (!!input.userId === !!input.freelancerId) throw new ApiError(422, "Escolha uma pessoa da equipe ou um freelancer.");
       const existing = db.projectMembers.find((m) => m.projectId === p.id && !m.deletedAt && ((input.userId && m.userId === input.userId) || (input.freelancerId && m.freelancerId === input.freelancerId)));
       if (existing?.active) throw new ApiError(409, "Essa pessoa já faz parte da equipe.");
+      const prevAmount = existing?.agreedAmountCents ?? null;
       if (existing) {
         existing.active = true;
         existing.memberRole = input.memberRole;
@@ -541,6 +543,9 @@ export const projectsApi = {
       const fl = input.freelancerId ? db.freelancers.find((f) => f.id === input.freelancerId) : null;
       emit(db, me, { type: "project.member_added", entityType: "project", entityId: p.id, project: p, data: { userId: input.userId, freelancerId: input.freelancerId, role: input.memberRole, agreedAmountCents: input.agreedAmountCents ?? null } });
       notify(db, me, { userId: input.userId ?? fl?.userId, type: "atribuicao", title: "Você foi alocado em um projeto", project: p });
+      const m = existing ?? db.projectMembers[db.projectMembers.length - 1];
+      // RN-70 — entrou depois da conclusão: não fica sem pagamento em silêncio
+      return { memberId: m.id, paymentSuggestion: afterCompletionTeamChange(db, me, p, m, prevAmount) };
     }),
 
   updateMember: (memberId: ID, patch: { memberRole?: MemberRole; agreedAmountCents?: number | null }) =>
@@ -550,8 +555,11 @@ export const projectsApi = {
       const p = assertProjectVisible(db, me, m.projectId);
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Sem permissão.");
       if ("agreedAmountCents" in patch) emitValueChange(db, me, "project_member", m.id, p, "agreedAmountCents", m.agreedAmountCents, patch.agreedAmountCents);
+      const beforeAmount = m.agreedAmountCents;
       Object.assign(m, patch);
       touch(m);
+      // RN-70 — valor alterado depois da conclusão acompanha o pagável ou sugere o pagamento
+      return { memberId: m.id, paymentSuggestion: "agreedAmountCents" in patch ? afterCompletionTeamChange(db, me, p, m, beforeAmount) : null };
     }),
 
   /** RN-08 — sair do projeto remove acesso mas preserva registros. */

@@ -256,3 +256,28 @@ describe("RN-74 — decisão de aprovação move a etapa", () => {
     expect(fresh(p.id).projectStageKey).toBe("validacao_cliente");
   });
 });
+
+describe("RN-70 — equipe alterada depois da conclusão", () => {
+  it("freelancer adicionado após concluir recebe sugestão de pagamento e o Financeiro é avisado", async () => {
+    const p = await directProject();
+    await projectsApi.complete(p.id);
+    const fl = loadDb().freelancers.find((f) => f.userId === "usr_julia")!;
+    const r = await projectsApi.addMember(p.id, { freelancerId: fl.id, memberRole: "designer", agreedAmountCents: 30_000 });
+    expect(r.paymentSuggestion).toMatchObject({ amountCents: 30_000, additional: false });
+    expect(loadDb().notifications.some((n) => n.userId === "usr_fernanda" && n.projectId === p.id && n.title.includes("depois da conclusão"))).toBe(true);
+  });
+  it("valor alterado com pagável aguardando NF acompanha o pagável; com NF já registrada sugere adicional", async () => {
+    const fl = loadDb().freelancers.find((f) => f.userId === "usr_julia")!;
+    const p = await directProject({ team: [{ freelancerId: fl.id, memberRole: "designer", agreedAmountCents: 20_000 }] });
+    await projectsApi.complete(p.id);
+    const m = loadDb().projectMembers.find((x) => x.projectId === p.id && x.freelancerId === fl.id)!;
+    const r1 = await projectsApi.updateMember(m.id, { agreedAmountCents: 25_000 });
+    expect(r1.paymentSuggestion).toBeNull();
+    const pay = loadDb().payables.find((x) => x.projectMemberId === m.id)!;
+    expect(pay.agreedAmountCents).toBe(25_000);
+    const { transaction } = await import("../db");
+    transaction((d) => { const x = d.payables.find((y) => y.id === pay.id)!; x.status = "pago"; });
+    const r2 = await projectsApi.updateMember(m.id, { agreedAmountCents: 40_000 });
+    expect(r2.paymentSuggestion).toMatchObject({ amountCents: 15_000, additional: true });
+  });
+});

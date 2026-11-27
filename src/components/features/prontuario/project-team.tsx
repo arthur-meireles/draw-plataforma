@@ -5,6 +5,7 @@ import { FreelancerPaymentDialog, Money, usePeopleOptions } from "@/components/d
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
+import { toast } from "sonner";
 import { MEMBER_ROLE_LABEL } from "@/data/reference";
 import type { MemberRole } from "@/data/types";
 import { useProjectMembers, type ProjectDetail, type ProjectMemberRow } from "./use-project";
@@ -12,7 +13,9 @@ import { useProjectMembers, type ProjectDetail, type ProjectMemberRow } from "./
 const roleOptions: Option<MemberRole>[] = (Object.keys(MEMBER_ROLE_LABEL) as MemberRole[]).map((r) => ({ value: r, label: MEMBER_ROLE_LABEL[r] }));
 
 /** Adicionar pessoa ou editar função e valor combinado (apenas freelancers têm valor). */
-function MemberDialog({ project, member, taken, onClose }: { project: ProjectDetail; member: ProjectMemberRow | null; taken: Set<string>; onClose: () => void }) {
+type TeamResult = Awaited<ReturnType<typeof projectsApi.updateMember>>;
+
+function MemberDialog({ project, member, taken, onClose, onSaved }: { project: ProjectDetail; member: ProjectMemberRow | null; taken: Set<string>; onClose: () => void; onSaved: (r: TeamResult) => void }) {
   const { money } = usePermissions();
   const people = usePeopleOptions();
   const [person, setPerson] = useState<string | null>(null);
@@ -27,9 +30,9 @@ function MemberDialog({ project, member, taken, onClose }: { project: ProjectDet
       const id = rest.join(":");
       return projectsApi.addMember(project.id, { userId: kind === "user" ? id : null, freelancerId: kind === "freelancer" ? id : null, memberRole: role, agreedAmountCents: kind === "freelancer" && amount > 0 ? amount : null });
     },
-    { success: "Pessoa adicionada à equipe", onSuccess: onClose },
+    { success: "Pessoa adicionada à equipe", onSuccess: (r) => (onClose(), onSaved(r)) },
   );
-  const edit = useApiMutation(() => projectsApi.updateMember(member!.id, { memberRole: role, ...(member!.kind === "freelancer" && money ? { agreedAmountCents: amount > 0 ? amount : null } : {}) }), { success: "Equipe atualizada", onSuccess: onClose });
+  const edit = useApiMutation(() => projectsApi.updateMember(member!.id, { memberRole: role, ...(member!.kind === "freelancer" && money ? { agreedAmountCents: amount > 0 ? amount : null } : {}) }), { success: "Equipe atualizada", onSuccess: (r) => (onClose(), onSaved(r)) });
   const pending = add.isPending || edit.isPending;
 
   const submit = () => {
@@ -55,7 +58,7 @@ function MemberDialog({ project, member, taken, onClose }: { project: ProjectDet
       <div className="space-y-4">
         {!member && <SelectField label="Pessoa" required options={people.options.filter((o) => !taken.has(o.value))} value={person} onChange={setPerson} placeholder={people.isLoading ? "Carregando pessoas…" : "Escolha uma pessoa"} searchPlaceholder="Buscar pessoa…" error={errors.person} />}
         <SelectField label="Função no projeto" options={roleOptions} value={role} onChange={(v) => v && setRole(v)} />
-        {isFreelancer && money && <MoneyField label="Valor combinado" hint="Base da conta a pagar gerada ao concluir o projeto (RN-03). Deixe em branco se ainda não foi combinado." value={amount} onChange={setAmount} />}
+        {isFreelancer && money && <MoneyField label="Valor combinado" hint={project.status === "concluido" ? "O projeto já foi concluído: ao salvar, você pode gerar o pagamento e o pedido de NF." : "Base da conta a pagar gerada ao concluir o projeto (RN-03). Deixe em branco se ainda não foi combinado."} value={amount} onChange={setAmount} />}
       </div>
     </Dialog>
   );
@@ -67,12 +70,19 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
   const q = useProjectMembers(project.id);
   const [dialog, setDialog] = useState<{ member: ProjectMemberRow | null } | null>(null);
   const [removing, setRemoving] = useState<ProjectMemberRow | null>(null);
-  const [paying, setPaying] = useState<ProjectMemberRow | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
   const remove = useApiMutation((id: string) => projectsApi.removeMember(id), { success: "Pessoa removida da equipe", onSuccess: () => setRemoving(null) });
   const manage = canWriteAll("projects") && !["arquivado", "cancelado"].includes(project.status);
   // RN-43: quem cuida de contas a pagar gera o pagamento/pedido de NF de um freelancer sem esperar a conclusão
   const canPay = canWriteAll("payables") && !["cotacao", "perdido"].includes(project.status);
   const rows = q.data?.filter((m) => m.active);
+  // RN-70 — mudança de equipe depois da conclusão: oferece gerar o pagamento (ou avisa que o Financeiro foi avisado)
+  const afterSave = (r: TeamResult) => {
+    const s = r?.paymentSuggestion;
+    if (!s) return;
+    if (canPay) setPaying(s.memberId);
+    else toast.info(`${s.name} ainda não tem ${s.additional ? "o pagamento adicional" : "conta a pagar"} deste projeto. Avisamos quem cuida das contas a pagar.`);
+  };
   const taken = new Set((rows ?? []).map((m) => (m.userId ? `user:${m.userId}` : `freelancer:${m.freelancerId}`)));
 
   const columns: Column<ProjectMemberRow>[] = [
@@ -108,7 +118,7 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
               <RowActions
                 items={[
                   { label: "Editar função e valor", icon: "edit", hidden: !manage, onSelect: () => setDialog({ member: m }) },
-                  { label: "Gerar pagamento / pedido de NF…", icon: "payable", hidden: !(canPay && m.kind === "freelancer"), onSelect: () => setPaying(m) },
+                  { label: "Gerar pagamento / pedido de NF…", icon: "payable", hidden: !(canPay && m.kind === "freelancer"), onSelect: () => setPaying(m.id) },
                   { label: "Remover da equipe…", icon: "delete", destructive: true, hidden: !manage, onSelect: () => setRemoving(m) },
                 ]}
               />
@@ -133,8 +143,8 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
         onRetry={() => q.refetch()}
         empty={{ icon: "team", title: "Ninguém na equipe", description: "Adicione quem vai trabalhar no projeto.", action: manage ? { label: "Adicionar pessoa", icon: "invite", onClick: () => setDialog({ member: null }) } : undefined }}
       />
-      {canPay && <FreelancerPaymentDialog open={!!paying} onOpenChange={(o) => !o && setPaying(null)} projectId={project.id} memberId={paying?.id} />}
-      {dialog && <MemberDialog project={project} member={dialog.member} taken={taken} onClose={() => setDialog(null)} />}
+      {canPay && <FreelancerPaymentDialog open={!!paying} onOpenChange={(o) => !o && setPaying(null)} projectId={project.id} memberId={paying ?? undefined} />}
+      {dialog && <MemberDialog project={project} member={dialog.member} taken={taken} onClose={() => setDialog(null)} onSaved={afterSave} />}
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
