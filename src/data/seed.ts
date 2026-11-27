@@ -52,7 +52,7 @@ import type {
 import { PROJECT_STAGES } from "./reference";
 import { CLIENT_LINK_DEFAULTS } from "./defaults";
 
-export const SEED_VERSION = 10;
+export const SEED_VERSION = 11;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -1096,6 +1096,8 @@ export function createSeed(): Database {
       { ...base("ff", -400), key: "login_google", enabled: false },
     ],
     accessLogs: [],
+    passwordResets: [],
+    userInvites: [],
     clientGroups,
     clients,
     clientContacts,

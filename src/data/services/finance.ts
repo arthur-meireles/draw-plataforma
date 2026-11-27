@@ -237,6 +237,7 @@ export const financeApi = {
 
   resendInvoiceLink: (payableId: ID) =>
     write((db, me) => {
+      if (!canWriteAll(me, "payables")) throw new ApiError(403, "Só o Financeiro e a administração reenviam o link de NF.");
       const p = db.payables.find((x) => x.id === payableId);
       if (!p || !p.freelancerId) throw new ApiError(404, "Lançamento não encontrado.");
       const req = db.freelancerInvoiceRequests.find((r) => r.payableId === p.id);

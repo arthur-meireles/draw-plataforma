@@ -232,8 +232,10 @@ function DropZone({ onFiles, compact }: { onFiles: (f: File[]) => void; compact?
 /* ───────── detalhe ───────── */
 
 function FileDetailSheet({ file, onClose, showProject }: { file: FileRow | null; onClose: () => void; showProject?: boolean }) {
-  const { canWriteAll, isFreelancer, money } = usePermissions();
+  const { canWrite, canWriteAll, isFreelancer, money } = usePermissions();
   const manage = canWriteAll("files");
+  // mesma regra do serviço (RN-30): projeto → escrita em Arquivos (ou NF por quem escreve recebíveis); fora de projeto → gestão de Arquivos
+  const canNewVersion = !!file && (file.projectId ? canWrite("files") || (file.category === "nf" && canWriteAll("receivables")) : manage);
   const download = useFileDownload();
   const restore = useApiMutation(({ versionId }: { versionId: ID }) => filesApi.restoreVersion(file!.id, versionId), { success: "Versão restaurada como atual" });
   const release = useApiMutation((v: boolean) => filesApi.setReleased(file!.id, v), { success: (_d) => "Liberação atualizada" });
@@ -263,9 +265,11 @@ function FileDetailSheet({ file, onClose, showProject }: { file: FileRow | null;
                 <span />
               )}
               <div className="flex items-center gap-2">
-                <Button icon="upload" loading={newVersion.isPending} onClick={() => input.current?.click()}>
-                  Enviar nova versão
-                </Button>
+                {canNewVersion && (
+                  <Button icon="upload" loading={newVersion.isPending} onClick={() => input.current?.click()}>
+                    Enviar nova versão
+                  </Button>
+                )}
                 <Button variant="primary" icon="download" loading={download.isPending} onClick={() => download.mutate({ versionId: file.currentVersionId })}>
                   Baixar atual
                 </Button>

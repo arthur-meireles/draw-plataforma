@@ -64,7 +64,7 @@ export function InviteUserDialog({ open, onOpenChange }: { open: boolean; onOpen
         <div className="space-y-3">
           <p className="text-sm text-fg-muted">Se preferir, copie o link e envie você mesmo. Quem recebe define o nome e a senha ao aceitar.</p>
           <InviteLinkBox token={done.token} />
-          <Callout tone="info">O link vale até o convite ser aceito. Você pode reenviar ou copiar o link depois, na lista de usuários.</Callout>
+          <Callout tone="info">O link vale por 7 dias e só pode ser usado uma vez. Se precisar, gere um link novo ou reenvie o convite na lista de usuários.</Callout>
         </div>
       </Dialog>
     );

@@ -48,6 +48,7 @@ export const metricsApi = {
   /** "Visão geral da empresa" (quadro atual da Draw): casos · projetos internos · pendências por área. */
   companyOverview: () =>
     read((db, me) => {
+      if (access(me, "adm") === "-") throw new ApiError(403, "Seu perfil não tem acesso à visão geral da empresa.");
       const projects = visibleProjects(db, me);
       const adm = db.tasks.filter((t) => !t.deletedAt && t.module === "adm" && !t.parentTaskId);
       const open = adm.filter((t) => t.statusKey !== "concluida");

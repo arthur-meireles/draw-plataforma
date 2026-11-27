@@ -2,9 +2,9 @@
 import { baseFields, nowIso } from "../db";
 import { PROJECT_STAGES } from "../reference";
 import type { Approval, ApprovalDecidedVia, ApprovalDecision, Database, FileCategory, FileEntity, ID, NotificationType, User } from "../types";
-import { ApiError, assertProjectVisible, emit, notify, read, touch, visibleProjects, write } from "./_core";
+import { ApiError, assertProjectVisible, emit, notify, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { freelancerUserId, mentionableUserIds, notifyMany, projectAudience } from "./audience";
-import { canSeeMoney, canWrite, canWriteAll } from "@/lib/permissions";
+import { canRead, canSeeMoney, canWrite, canWriteAll } from "@/lib/permissions";
 
 const DECISION_LABEL: Record<Exclude<ApprovalDecision, "pendente">, string> = { aprovado: "aprovado", ajustes: "ajustes pedidos", negado: "negado" };
 
@@ -68,17 +68,51 @@ export interface FileFilters {
   q?: string;
 }
 
+/** Pasta restrita (`allowedRoles`) fecha os arquivos dela para outros perfis (ex.: "08. Cérebro Paula"). */
+function folderAllows(db: Database, me: User, folderId: ID | null) {
+  if (!folderId) return true;
+  const folder = db.folders.find((x) => x.id === folderId);
+  if (!folder) return true;
+  if (me.role === "freelancer") return false;
+  return me.role === "admin" || folder.allowedRoles.length === 0 || folder.allowedRoles.includes(me.role);
+}
+
+/**
+ * RN-30 — quem vê um arquivo: projeto visível ao perfil, freelancer só liberados/enviados por ele,
+ * proposta/NF só com acesso a valores, pasta restrita só para os perfis dela.
+ */
+export function canSeeFile(db: Database, me: User, x: FileEntity, visible = new Set(visibleProjects(db, me).map((p) => p.id))) {
+  if (x.deletedAt) return false;
+  if (x.projectId ? !visible.has(x.projectId) : x.module === "adm" ? me.role === "freelancer" : false) return false;
+  if (me.role === "freelancer" && !x.releasedToFreelancers && !db.fileVersions.some((v) => v.fileId === x.id && v.uploadedBy === me.id)) return false;
+  if (!canSeeMoney(me) && ["proposta", "nf"].includes(x.category)) return false;
+  return folderAllows(db, me, x.folderId);
+}
+
+/**
+ * RN-30 — quem envia arquivo/nova versão: Arquivos com escrita (T, ou P no projeto alocado). Exceções do próprio fluxo:
+ * NF do recebível por quem escreve Contas a receber; PDF de proposta por quem escreve no Comercial com acesso a valores.
+ */
+function canUploadCategory(me: User, category: FileCategory, project: boolean) {
+  if (category === "nf" && project && canWriteAll(me, "receivables")) return true;
+  if (category === "proposta" && project && canWriteAll(me, "commercial") && canSeeMoney(me)) return true;
+  return project ? canWrite(me, "files") : canWriteAll(me, "files");
+}
+
+function assertFile(db: Database, me: User, fileId: ID) {
+  const f = db.files.find((x) => x.id === fileId);
+  if (!f || !canSeeFile(db, me, f)) throw new ApiError(404, "Arquivo não encontrado.");
+  return f;
+}
+
 export const filesApi = {
   list: (f: FileFilters = {}) =>
     read((db, me) => {
+      requireAccess(me, "files", "read");
       const visible = new Set(visibleProjects(db, me).map((p) => p.id));
       const q = f.q?.trim().toLowerCase();
-      const money = canSeeMoney(me);
       return db.files
-        .filter((x) => !x.deletedAt)
-        .filter((x) => (x.projectId ? visible.has(x.projectId) : x.module === "adm" ? me.role !== "freelancer" : true))
-        .filter((x) => me.role !== "freelancer" || x.releasedToFreelancers || db.fileVersions.some((v) => v.fileId === x.id && v.uploadedBy === me.id))
-        .filter((x) => money || !["proposta", "nf"].includes(x.category))
+        .filter((x) => canSeeFile(db, me, x, visible))
         .filter((x) => !f.projectId || x.projectId === f.projectId)
         .filter((x) => !f.folderId || x.folderId === f.folderId)
         .filter((x) => !f.clientId || x.clientId === f.clientId)
@@ -108,8 +142,11 @@ export const filesApi = {
     const [hash, dataUrl] = await Promise.all([sha256Of(await input.file.arrayBuffer()), toDataUrl(input.file)]);
     return write((db, me) => {
       const p = input.projectId ? assertProjectVisible(db, me, input.projectId) : null;
-      if (me.role === "freelancer" && !p) throw new ApiError(403, "Sem permissão.");
-      let file = input.fileId ? db.files.find((x) => x.id === input.fileId) : db.files.find((x) => !x.deletedAt && x.projectId === (p?.id ?? null) && (p ? true : (x.folderId ?? null) === (input.folderId ?? null)) && x.name === input.file.name && x.module === (input.module ?? (p ? "projeto" : "adm")));
+      if (me.role === "freelancer" && !p) throw new ApiError(403, "Freelancers enviam arquivos só dentro dos projetos em que estão alocados.");
+      const existing = input.fileId ? assertFile(db, me, input.fileId) : null;
+      if (!canUploadCategory(me, existing?.category ?? input.category, !!(p ?? existing?.projectId))) throw new ApiError(403, "Seu perfil só consulta arquivos aqui. Peça a quem cuida do projeto para enviar o arquivo.");
+      if (!folderAllows(db, me, input.folderId ?? null)) throw new ApiError(404, "Pasta não encontrada.");
+      let file = existing ?? db.files.find((x) => !x.deletedAt && x.projectId === (p?.id ?? null) && (p ? true : (x.folderId ?? null) === (input.folderId ?? null)) && x.name === input.file.name && x.module === (input.module ?? (p ? "projeto" : "adm")));
       const version = file ? Math.max(...db.fileVersions.filter((v) => v.fileId === file!.id).map((v) => v.version)) + 1 : 1;
       const fileId = file?.id ?? `file_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const v = { ...baseFields(me.id), fileId, version, storageKey: `org_draw/${p?.id ?? "adm"}/${fileId}/v${version}`, size: input.file.size, mime: input.file.type || "application/octet-stream", sha256: hash, uploadedBy: me.id, note: input.note ?? null, dataUrl };
@@ -128,9 +165,8 @@ export const filesApi = {
 
   setReleased: (fileId: ID, released: boolean) =>
     write((db, me) => {
-      const f = db.files.find((x) => x.id === fileId);
-      if (!f) throw new ApiError(404, "Arquivo não encontrado.");
-      if (!canWriteAll(me, "files")) throw new ApiError(403, "Sem permissão.");
+      const f = assertFile(db, me, fileId);
+      requireAccess(me, "files", "all", "Só quem gerencia arquivos faz isso. Peça a um administrador ou à gestão.");
       f.releasedToFreelancers = released;
       touch(f);
       emit(db, me, { type: released ? "file.released" : "file.unreleased", entityType: "file", entityId: f.id, project: db.projects.find((p) => p.id === f.projectId), data: { name: f.name } });
@@ -138,21 +174,17 @@ export const filesApi = {
 
   setCategory: (fileId: ID, category: FileCategory) =>
     write((db, me) => {
-      const f = db.files.find((x) => x.id === fileId);
-      if (!f) throw new ApiError(404, "Arquivo não encontrado.");
-      if (f.projectId) assertProjectVisible(db, me, f.projectId);
-      if (!canWriteAll(me, "files")) throw new ApiError(403, "Seu perfil não pode mudar a categoria de arquivos.");
+      const f = assertFile(db, me, fileId);
+      requireAccess(me, "files", "all", "Só quem gerencia arquivos muda a categoria. Peça a um administrador ou à gestão.");
       f.category = category;
       touch(f);
     }),
 
   restoreVersion: (fileId: ID, versionId: ID) =>
     write((db, me) => {
-      const f = db.files.find((x) => x.id === fileId);
-      if (!f) throw new ApiError(404, "Arquivo não encontrado.");
-      if (f.projectId) assertProjectVisible(db, me, f.projectId);
-      if (!canWriteAll(me, "files")) throw new ApiError(403, "Seu perfil não pode restaurar versões de arquivos.");
-      if (!db.fileVersions.some((v) => v.id === versionId && v.fileId === f.id && !v.deletedAt)) throw new ApiError(404, "Versão não encontrada.");
+      const f = assertFile(db, me, fileId);
+      requireAccess(me, "files", "all", "Só quem gerencia arquivos restaura versões. Peça a um administrador ou à gestão.");
+      if (!db.fileVersions.some((v) => v.id === versionId && v.fileId === f.id && !v.deletedAt)) throw new ApiError(404, "Versão não encontrada neste arquivo.");
       f.currentVersionId = versionId;
       touch(f);
       emit(db, me, { type: "file.version_restored", entityType: "file", entityId: f.id, project: db.projects.find((p) => p.id === f.projectId), data: { name: f.name } });
@@ -160,19 +192,18 @@ export const filesApi = {
 
   remove: (fileId: ID) =>
     write((db, me) => {
-      const f = db.files.find((x) => x.id === fileId);
-      if (!f) throw new ApiError(404, "Arquivo não encontrado.");
-      if (!canWriteAll(me, "files")) throw new ApiError(403, "Sem permissão.");
+      const f = assertFile(db, me, fileId);
+      requireAccess(me, "files", "all", "Só quem gerencia arquivos faz isso. Peça a um administrador ou à gestão.");
       f.deletedAt = nowIso();
       emit(db, me, { type: "file.deleted", entityType: "file", entityId: f.id, project: db.projects.find((p) => p.id === f.projectId), data: { name: f.name } });
     }),
 
   /** RF-M7-04 — link assinado de curta duração (mock: data URL ou blob placeholder). */
   downloadUrl: (versionId: ID) =>
-    read((db) => {
+    read((db, me) => {
       const v = db.fileVersions.find((x) => x.id === versionId);
-      if (!v) throw new ApiError(404, "Versão não encontrada.");
-      const f = db.files.find((x) => x.id === v.fileId)!;
+      const f = v ? db.files.find((x) => x.id === v.fileId) : undefined;
+      if (!v || !f || !canSeeFile(db, me, f)) throw new ApiError(404, "Versão não encontrada.");
       return { name: f.name, url: v.dataUrl, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() };
     }, 60),
 };
@@ -254,7 +285,8 @@ export const approvalsApi = {
   request: (projectId: ID, input: { stageKey: Approval["stageKey"]; requestedFrom: string }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
-      if (me.role === "freelancer" || !canWrite(me, "projects")) throw new ApiError(403, "Seu perfil não pode registrar pedidos de aprovação. Peça ao responsável pelo projeto.");
+      requireAccess(me, "projects", "write", "Seu perfil só consulta este projeto. Peça ao responsável para registrar a aprovação.");
+      if (me.role === "freelancer") throw new ApiError(403, "Aprovações do cliente são registradas pela equipe da Draw.");
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos pedem aprovação.");
       if (!input.requestedFrom.trim()) throw new ApiError(422, "Informe de quem é a aprovação.", { requestedFrom: "Informe de quem é a aprovação" });
       const a: Approval = { ...baseFields(me.id), projectId: p.id, stageKey: input.stageKey, requestedFrom: input.requestedFrom.trim(), decision: "pendente", reason: null, decidedBy: null, decidedAt: null, requestedBy: me.id, shareLinkId: null, decidedVia: null, decidedByName: null };
@@ -270,7 +302,8 @@ export const approvalsApi = {
       const a = db.approvals.find((x) => x.id === id);
       if (!a) throw new ApiError(404, "Aprovação não encontrada.");
       assertProjectVisible(db, me, a.projectId);
-      if (me.role === "freelancer" || !canWrite(me, "projects")) throw new ApiError(403, "Seu perfil não pode registrar decisões de aprovação. Peça ao responsável pelo projeto.");
+      requireAccess(me, "projects", "write", "Seu perfil só consulta este projeto. Peça ao responsável para registrar a decisão.");
+      if (me.role === "freelancer") throw new ApiError(403, "Decisões de aprovação são registradas pela equipe da Draw.");
       return decideApprovalTx(db, me, a, decision, reason, { via: "interno" });
     }),
 };
@@ -282,6 +315,7 @@ export const eventsApi = {
       const money = canSeeMoney(me);
       return db.events
         .filter((e) => (e.projectId ? visible.has(e.projectId) : me.role !== "freelancer"))
+        .filter((e) => (e.entityType === "user" ? canRead(me, "users") : e.entityType === "organization" || e.entityType === "system_mail_settings" ? canRead(me, "settings") : true))
         .filter((e) => !f.projectId || e.projectId === f.projectId || e.projectId === db.projects.find((p) => p.code === f.projectId)?.id)
         .filter((e) => !f.entityType || e.entityType === f.entityType)
         .filter((e) => !f.entityId || e.entityId === f.entityId)

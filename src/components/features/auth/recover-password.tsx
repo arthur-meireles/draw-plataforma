@@ -12,9 +12,14 @@ function RequestStep() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [sent, setSent] = useState(false);
+  /** Só no modo de demonstração: o e-mail não sai de verdade, então mostramos o link que ele levaria. */
+  const [demoLink, setDemoLink] = useState<string | null>(null);
   const request = useApiMutation(authApi.requestPasswordReset, {
     success: false,
-    onSuccess: () => setSent(true),
+    onSuccess: (r) => {
+      setDemoLink(r.demoLink);
+      setSent(true);
+    },
     onError: (e) => {
       setError(e.fieldErrors?.email ?? e.message);
       focusFirstInvalid();
@@ -37,13 +42,15 @@ function RequestStep() {
         <Callout tone="success" icon="emailSent" title="Pedido recebido">
           Se existir uma conta com <strong className="font-medium text-fg">{email.trim()}</strong>, enviamos um link para criar uma nova senha. Ele vale por 1 hora. Confira também a caixa de spam.
         </Callout>
-        <Callout tone="neutral" title="Na demonstração">
-          Nenhum e-mail sai de verdade.{" "}
-          <Link href="/recuperar-senha?token=demonstracao" className="font-medium text-accent hover:underline">
-            Abrir o link de redefinição
-          </Link>
-          .
-        </Callout>
+        {demoLink && (
+          <Callout tone="neutral" title="Na demonstração">
+            Nenhum e-mail sai de verdade.{" "}
+            <Link href={demoLink} className="font-medium text-accent hover:underline">
+              Abrir o link de redefinição
+            </Link>
+            .
+          </Callout>
+        )}
         <Button variant="ghost" className="w-full" onClick={() => setSent(false)}>
           Usar outro e-mail
         </Button>
@@ -115,8 +122,8 @@ function ResetStep({ token }: { token: string }) {
   if (failed)
     return (
       <div className="space-y-4">
-        <AuthHeading title="Link inválido" />
-        <Callout tone="danger" title={failed}>Peça um novo link de recuperação para continuar.</Callout>
+        <AuthHeading title="Link inválido ou expirado" />
+        <Callout tone="danger" title={failed}>Cada link vale por 1 hora e só pode ser usado uma vez. Peça um novo link de recuperação para continuar.</Callout>
         <Button variant="primary" size="lg" className="w-full" onClick={() => router.replace("/recuperar-senha")}>
           Pedir novo link
         </Button>

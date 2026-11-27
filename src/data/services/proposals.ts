@@ -1,17 +1,13 @@
 import { FIRST_PROJECT_STAGE } from "../reference";
 import { baseFields, nowIso } from "../db";
 import type { Database, ID, Project, Proposal, User } from "../types";
-import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, touch, write } from "./_core";
+import { ApiError, assertProjectVisible, emit, taxOf, emitValueChange, read, requireAccess, touch, write } from "./_core";
 import { notifyMany, projectAudience } from "./audience";
 import { createClientLink, resolveRecipients } from "./client-links";
 import { generateTasksFromTemplate } from "./projects";
 import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 /** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
-function assertCommercial(me: User) {
-  if (!canWriteAll(me, "commercial") || !canSeeMoney(me)) throw new ApiError(403, "Seu perfil não pode alterar propostas. Peça a alguém do Comercial ou da Gestão.");
-}
-
 function validateProposal(input: { amountCents: number; installments: InstallmentInput[] }) {
   const errors: Record<string, string> = {};
   if (!(input.amountCents > 0)) errors.amountCents = "Informe o valor da proposta";
@@ -106,6 +102,12 @@ export interface InstallmentInput {
   dueAt: string | null;
 }
 
+/** RN-30 — criar, editar, enviar, aprovar e recusar propostas: Comercial "T" e acesso a valores (Financeiro só consulta). */
+function requireProposalWrite(me: User) {
+  requireAccess(me, "commercial", "all", "Seu perfil só consulta propostas. Peça ao Comercial para fazer essa alteração.");
+  if (!canSeeMoney(me)) throw new ApiError(403, "Seu perfil não tem acesso a valores e propostas.");
+}
+
 export const proposalsApi = {
   listByProject: (projectId: ID) =>
     read((db, me) => {
@@ -125,7 +127,7 @@ export const proposalsApi = {
   create: (projectId: ID, input: { amountCents: number; paymentTermsNote?: string; installments: InstallmentInput[]; fileId?: ID | null }) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
-      assertCommercial(me);
+      requireProposalWrite(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível criar propostas para projetos em cotação.");
       validateProposal(input);
       const version = Math.max(0, ...db.proposals.filter((x) => x.projectId === p.id).map((x) => x.version)) + 1;
@@ -145,7 +147,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
-      assertCommercial(me);
+      requireProposalWrite(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível editar propostas de projetos em cotação.");
       if (prop.status !== "rascunho") throw new ApiError(409, "Só rascunhos podem ser editados. Crie uma nova versão.");
       validateProposal(input);
@@ -168,7 +170,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
-      assertCommercial(me);
+      requireProposalWrite(me);
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível enviar propostas de projetos em cotação.");
       if (prop.status !== "rascunho") throw new ApiError(409, "Esta proposta já foi enviada. Para reenviar o link, use \"Reenviar\" em Envios ao cliente.");
       const recipients = resolveRecipients(db, p, opts.contactIds);
@@ -184,7 +186,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId && !x.deletedAt);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       assertProjectVisible(db, me, prop.projectId);
-      if (!canWriteAll(me, "commercial") || !canSeeMoney(me)) throw new ApiError(403, "Seu perfil não pode aprovar propostas. Peça a alguém do Comercial ou da Gestão.");
+      requireProposalWrite(me);
       const project = approveProposalTx(db, me, prop, { kind: "interno" });
       return { proposal: prop, project };
     }),
@@ -194,7 +196,7 @@ export const proposalsApi = {
       const prop = db.proposals.find((x) => x.id === proposalId);
       if (!prop) throw new ApiError(404, "Proposta não encontrada.");
       const p = assertProjectVisible(db, me, prop.projectId);
-      assertCommercial(me);
+      requireProposalWrite(me);
       if (prop.status !== "enviada" && prop.status !== "rascunho") throw new ApiError(409, "Só propostas em rascunho ou enviadas podem ser recusadas.");
       prop.status = "recusada";
       touch(prop);

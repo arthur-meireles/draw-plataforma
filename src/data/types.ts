@@ -42,6 +42,11 @@ export interface User extends BaseEntity {
   lastLoginAt: ISODate | null;
   /** Apenas mock local — no back-end real é argon2id. */
   passwordMock: string;
+  /**
+   * Versão das sessões (RN-31). Sobe quando as sessões abertas devem cair (ex.: senha redefinida);
+   * sessão gravada com versão antiga deixa de valer. No back-end: revogar linhas de `sessions`.
+   */
+  sessionVersion?: number;
 }
 
 export type MemberRole = "responsavel" | "designer" | "roteirista" | "advogado" | "apoio";
@@ -60,11 +65,41 @@ export interface FeatureFlag extends BaseEntity {
   enabled: boolean;
 }
 
+export type AccessLogAction =
+  | "login"
+  | "login_failed"
+  | "mfa_failed"
+  | "logout"
+  | "secret_revealed"
+  | "sensitive_access"
+  | "password_reset_requested"
+  | "password_reset_done"
+  | "invite_accepted"
+  | "impersonate"
+  | "demo_reset";
+
 export interface AccessLog extends BaseEntity {
   userId: ID | null;
-  action: "login" | "login_failed" | "logout" | "secret_revealed" | "sensitive_access";
+  action: AccessLogAction;
   detail: string | null;
   at: ISODate;
+}
+
+/** RN-31 — pedido de redefinição de senha: token de uso único (só o hash é guardado), vale 1 hora. */
+export interface PasswordReset extends BaseEntity {
+  userId: ID;
+  tokenHash: string;
+  expiresAt: ISODate;
+  usedAt: ISODate | null;
+}
+
+/** RN-32 — convite de acesso: token aleatório (só o hash é guardado), vale 7 dias, uso único; reenviar revoga o anterior. */
+export interface UserInvite extends BaseEntity {
+  userId: ID;
+  tokenHash: string;
+  expiresAt: ISODate;
+  usedAt: ISODate | null;
+  revokedAt: ISODate | null;
 }
 
 /* ───────────── 6.2 Cadastros ───────────── */
@@ -615,6 +650,8 @@ export interface Database {
   projectMembers: ProjectMember[];
   featureFlags: FeatureFlag[];
   accessLogs: AccessLog[];
+  passwordResets: PasswordReset[];
+  userInvites: UserInvite[];
   clientGroups: ClientGroup[];
   clients: Client[];
   clientContacts: ClientContact[];

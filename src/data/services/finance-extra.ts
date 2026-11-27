@@ -1,5 +1,5 @@
 /** Financeiro (M5) — composições de API usadas pelas telas (upload de PDF + emissão, formulário público). */
-import { ApiError } from "./_core";
+import { ApiError, requireAccessNow } from "./_core";
 import { filesApi } from "./collab";
 import { financeApi, publicInvoiceApi } from "./finance";
 import type { ID } from "../types";
@@ -25,6 +25,7 @@ function assertPdf(file: File) {
 export const financeExtraApi = {
   /** RF-M5-02 — anexa o PDF (categoria `nf`) e emite a NF do recebível numa única chamada. */
   issueInvoiceWithFile: async (receivableId: ID, projectId: ID, input: { invoiceNumber: string; issuedAt: string; taxCents?: number; file?: File | null }) => {
+    requireAccessNow("receivables", "all", "Só o Financeiro e a administração emitem notas fiscais."); // antes de enviar o PDF
     let invoiceFileId: ID | null = null;
     if (input.file) {
       assertPdf(input.file);

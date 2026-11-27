@@ -180,10 +180,12 @@ erDiagram
 |---|---|
 | `organizations` | `name`, `slug`, `settings jsonb` (somente parâmetros técnicos): `freelancer_payment_day` (20), `due_soon_days` (2), `tax_rate_pct` (6 — alíquota sobre faturamento usada na planilha) |
 | `users` | `email citext unique`, `name`, `user_type` (`internal`/`freelancer`/`client`), `role` (enum fixo), `password_hash` (argon2id), `mfa_secret` (cifrado), `status`, `last_login_at` |
-| `sessions` | sessões (cookie httpOnly) |
+| `sessions` | sessões (cookie httpOnly) criadas **só depois do 2FA** (RN-30); revogadas ao redefinir a senha (RN-31). Mock: `users.session_version` (a sessão guardada com versão antiga deixa de valer) |
+| `password_resets` | `user_id`, `token_hash` (SHA-256; o token em claro só vai no e-mail), `expires_at` (1 h), `used_at` — RN-31 |
+| `user_invites` | `user_id`, `token_hash` (SHA-256, token aleatório de 256 bits), `expires_at` (7 dias), `used_at`, `revoked_at` (reenviar/gerar link novo revoga o anterior) — RN-32 |
 | `project_members` | `project_id`, `user_id` **ou** `freelancer_id`, `member_role` (`responsavel`/`designer`/`roteirista`/`advogado`/`apoio`), `agreed_amount_cents` (só para freelancer), `active` |
 | `feature_flags` | `organization_id`, `key`, `enabled` |
-| `access_logs` | login, falhas, revelações de segredo, acessos sensíveis |
+| `access_logs` | `action`: `login`, `login_failed`, `mfa_failed`, `logout`, `secret_revealed`, `sensitive_access`, `password_reset_requested`, `password_reset_done`, `invite_accepted`, `impersonate` (só demonstração: quem → qual perfil), `demo_reset`; `detail` |
 
 ### 6.2 Cadastros
 
@@ -441,6 +443,10 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | RN-14 | **Cobrança adicional** cria recebível `kind = adicional` ligado ao projeto, imposto pela alíquota da organização; não altera `contracted_amount_cents` (margem considera recebíveis adicionais à parte). |
 | RN-15 | **Imposto** de recebível = `amount_cents × organizations.settings.tax_rate_pct / 100` (padrão 6%, como na planilha). |
 | RN-16 | **Pastas**: raízes do sistema não são renomeadas/excluídas; pasta só é excluída vazia; arquivos de projeto não são movidos para fora do projeto; `allowed_roles` da pasta-mãe é herdado ao criar subpasta. |
+| RN-30 | **Autorização no serviço** (P7/RF-M1-04): toda função da API aplica a matriz da seção 9 antes de ler ou gravar (`requireAccess(me, recurso, read/write/all)`), com 403 e mensagem que diz o que fazer; recurso fora do escopo "P" responde 404. Detalhes: propostas (criar/editar/enviar/aprovar/recusar) exigem Comercial **T** e acesso a valores; mover cotação, perder e reabrir exigem Comercial **T**; mover etapa de projeto ativo exige escrita em Projetos (freelancer não move); pausar/retomar/arquivar/desarquivar/cancelar/concluir exigem Projetos **T**; registrar/decidir aprovação exige escrita em Projetos (não freelancer); criar/editar tarefa de projeto exige escrita em Tarefas (Financeiro só consulta); tarefa ADM segue o Administrativo antes da regra de Tarefas; Arquivos: enviar/nova versão no projeto exige escrita em Arquivos (exceções: PDF de NF por quem tem Contas a receber **T**, PDF de proposta por Comercial **T** com valores), fora de projeto e categoria/restaurar versão/liberar/excluir exigem Arquivos **T**; ver/baixar respeita projeto visível, liberação ao freelancer, categorias de valor e pastas restritas. **Login com 2FA não cria sessão:** devolve um desafio de 5 min; a sessão só nasce em `verify-mfa` (sair da tela descarta o desafio). |
+| RN-31 | **Recuperação de senha:** pedido sempre responde igual; só usuário `ativo` recebe token (aleatório, guardado como hash, vale 1 h, uso único; pedido novo invalida o anterior) e e-mail transacional `recuperar_senha`. Redefinir valida token (existe, não expirou, não usado), grava a senha, consome o token, encerra as sessões abertas do usuário e registra `password_reset_done`. Convidado, inativo e desconhecido: mesma resposta, sem token e sem e-mail. |
+| RN-32 | **Convite de acesso:** token aleatório (256 bits), guardado como hash, vale 7 dias, uso único; nunca é o id do usuário nem aparece em listagens. Reenviar (com e-mail) e "Gerar link do convite" (só admin, sem e-mail) emitem token novo e revogam o anterior. Convite de freelancer pelo cadastro usa a mesma rotina. Aceite registra `invite_accepted` e o evento `user.invite_accepted`. |
+| RN-33 | **Modo de demonstração** (fora de produção ou `NEXT_PUBLIC_DEMO_LOGIN=1`): só nele existem "Trocar perfil" (toda troca vai para `access_logs` como `impersonate`, com quem → qual perfil) e "Restaurar dados de demonstração" (só administrador, registrado como `demo_reset`). Fora dele o serviço responde 403 e o menu some. |
 | RN-50 | **Arquivar guarda o status anterior** (`status_before_archive`: `concluido`, `perdido` ou `cancelado`); desarquivar volta exatamente a ele (cancelado continua cancelado). Registros antigos sem o campo deduzem pelo último evento (`project.cancelled` → cancelado; `completed_at` → concluído; senão perdido). Arquivar/desarquivar exige `projects = T`. |
 | RN-51 | **Proposta ao cliente por link**: enviar exige `commercial = T` e acesso a valores, projeto em `cotacao` e proposta em rascunho; cria `share_link` `proposta` (30 dias, revogável) e e-mail transacional aos contatos escolhidos do cliente (sem contato com e-mail → 422). No link, **Aprovar** executa a mesma transação da RN-01 (sem ator; evento `proposal.approved` com `via = link_cliente` e o nome informado; sem IP) e avisa responsável, equipe, Financeiro e Gestão; **Pedir ajustes** exige comentário, leva a cotação a `negociacao`, registra `proposal.adjustments_requested` no histórico e avisa o responsável e quem enviou. Uma resposta por link; link de proposta já decidida por dentro fica "encerrado". |
 | RN-52 | **Aprovação/entrega ao cliente por link**: só perfis com escrita em projetos (nunca freelancer); só arquivos do próprio projeto, fora `proposta`/`nf`; aprovação só em projeto `ativo` (reaproveita a pendente da etapa, revogando o link anterior); entrega em `ativo` ou `concluido`. A resposta do cliente decide a Approval (`decided_via = link_cliente`, `decided_by_name`), avisa quem pediu, o responsável e a equipe (com freelancers). Reenviar renova 30 dias; revogar impede abrir. |
@@ -468,6 +474,12 @@ Fora do escopo: enviar ou ler e-mails de usuários dentro do sistema. Conversas 
 | Arquivos do projeto | T | T | T | L | P | P (liberados) |
 | Cofre | T | por item | por item | por item | por item | — |
 | Indicadores | T | T | comerciais | financeiros | — | — |
+
+> **Quem garante é o serviço (RN-30).** A tela só esconde ações; cada função de `src/data/services` (e cada rota do back-end)
+> aplica esta matriz e devolve 403 (ou 404 fora do escopo "P"). Usuários e configurações: a listagem de usuários é só de
+> quem lê Usuários (admin, gestão) e nunca traz token de convite; convites, links de convite, inativação, log de acessos,
+> regras da organização e e-mail de teste são só do administrador. Cobertura em `src/data/services/autorizacao.test.ts`
+> (perfil × endpoint, ao menos um caso permitido e um negado por função de escrita).
 
 ---
 
@@ -857,11 +869,15 @@ O front está completo e funcional com dados locais (localStorage + seed determi
 | `publicInvoiceApi.get / submit` | `GET/POST /public/freelancer-invoice/:token` |
 | `filesApi.*`, `driveApi.*` | `/files` (upload em duas etapas), `/folders`, `GET /drive?folder=` |
 | `commentsApi` (inclui `mentionables`), `approvalsApi`, `eventsApi`, `notificationsApi` | `/comments`, `GET /projects/:id/mentionables`, `/approvals`, `/events`, `/notifications` |
-| `authApi`, `usersApi`, `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/auth`, `/users`, `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
+| `authApi.login / verifyMfa / cancelMfa / logout / requestPasswordReset / resetPassword / getInvite / acceptInvite` | `POST /auth/login` (com 2FA devolve `mfa_challenge`, sem cookie), `POST /auth/verify-mfa` (cria a sessão), `POST /auth/logout`, `POST /auth/password-resets`, `POST /auth/password-resets/:token`, `GET/POST /auth/invites/:token` |
+| `authApi.demoProfiles / impersonate / resetDemo` | Só no front de demonstração (RN-33) — **não existem no back-end de produção** |
+| `usersApi.list / invite / inviteLink / resendInvite / update / setStatus / accessLogs / organization / updateOrganization` | `GET/POST /users`, `POST /users/:id/invite-link` (admin; gera link novo), `POST /users/:id/resend-invite`, `PATCH /users/:id`, `GET /access-logs`, `GET/PATCH /organization` |
+| `admApi`, `mailApi`, `importsApi`, `searchApi`, `metricsApi` | `/vault-items`, `/institutional-documents`, `/resources`, `/mail…`, `/imports`, `/search`, `/metrics/*` |
 
 ### 21.2 Divergências conscientes da versão 0.3
 
 - **Front:** Next.js, não Vite (ADR-011).
 - **Autenticação:** simulada no front, com credencial em variável de build. Serve só para demonstração; argon2id e sessão httpOnly vêm com o back-end.
-- **2FA:** a tela existe, mas o código não é validado.
+- **2FA:** a sessão só é criada depois do código (RN-30), mas o código ainda não é validado (qualquer 6 dígitos) e não há cadastro TOTP (segredo/QR/códigos de recuperação) — entra com o back-end.
+- **Tokens e sessão:** recuperação de senha e convite já seguem RN-31/RN-32 (hash, validade, uso único); o mock guarda o hash em localStorage e a "sessão" é o id do usuário + `session_version` no navegador. No back-end: cookie httpOnly e tabela `sessions`.
 - **XLSX:** a importação aceita CSV; XLSX entra com o back-end.

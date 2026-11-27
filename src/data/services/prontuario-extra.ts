@@ -4,10 +4,10 @@
  */
 import { baseFields } from "../db";
 import type { DeliverableMetricKey, ID, Milestone, ProjectDeliverableMetric } from "../types";
-import { ApiError, assertProjectVisible, emit, read, touch, write } from "./_core";
+import { ApiError, assertProjectVisible, emit, read, requireAccessNow, touch, write } from "./_core";
 import { filesApi } from "./collab";
 import { proposalsApi, type InstallmentInput } from "./proposals";
-import { canWriteAll } from "@/lib/permissions";
+import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 const canEditProject = (me: { role: string }) => canWriteAll(me as never, "projects") || me.role === "operacao";
 
@@ -83,6 +83,9 @@ export const proposalsExtraApi = {
     projectId: ID,
     input: { proposalId?: ID | null; amountCents: number; paymentTermsNote?: string; installments: InstallmentInput[]; file?: File | null; keepFileId?: ID | null },
   ) => {
+    // valida antes de enviar o PDF (RN-30): mesma regra de proposalsApi
+    const me = requireAccessNow("commercial", "all", "Seu perfil só consulta propostas. Peça ao Comercial para fazer essa alteração.");
+    if (!canSeeMoney(me)) throw new ApiError(403, "Seu perfil não tem acesso a valores e propostas.");
     let fileId = input.keepFileId ?? null;
     if (input.file) {
       const up = await filesApi.upload({ projectId, category: "proposta", file: input.file });

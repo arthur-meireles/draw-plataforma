@@ -1,8 +1,8 @@
 import { baseFields, nowIso } from "../db";
 import type { AdmArea, Database, ID, PriorityKey, Task, TaskStatusKey, User } from "../types";
-import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, touch, visibleProjects, write } from "./_core";
+import { ApiError, assertProjectVisible, emit, freelancerIdOf, notify, read, requireAccess, touch, visibleProjects, write } from "./_core";
 import { notifyMany } from "./audience";
-import { canRead, canWriteAll } from "@/lib/permissions";
+import { canRead, canWrite, canWriteAll } from "@/lib/permissions";
 
 export interface TaskFilters {
   projectId?: ID;
@@ -47,7 +47,8 @@ export function toTaskView(db: Database, t: Task): TaskView {
   };
 }
 
-function visibleTasks(db: Database, me: User): Task[] {
+/** Tarefas que o usuário pode ver (mesmo recorte na busca global). */
+export function visibleTasks(db: Database, me: User): Task[] {
   const projectIds = new Set(visibleProjects(db, me).map((p) => p.id));
   const flId = freelancerIdOf(db, me);
   return db.tasks.filter((t) => {
@@ -66,8 +67,9 @@ function assertTask(db: Database, me: User, id: ID): Task {
 }
 
 function canEditTask(db: Database, me: User, t: Task) {
-  if (canWriteAll(me, "tasks")) return true;
   if (t.module === "adm") return canWriteAll(me, "adm");
+  if (canWriteAll(me, "tasks")) return true;
+  if (!canWrite(me, "tasks")) return false; // L (Financeiro) só consulta tarefas de projeto
   const flId = freelancerIdOf(db, me);
   return t.assigneeUserId === me.id || (!!flId && t.assigneeFreelancerId === flId) || me.role === "operacao";
 }
@@ -127,6 +129,7 @@ export const tasksApi = {
       const taskModule = input.module ?? (input.projectId ? "projeto" : "adm");
       const p = input.projectId ? assertProjectVisible(db, me, input.projectId) : null;
       if (taskModule === "adm" && !canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão no Administrativo.");
+      if (taskModule === "projeto") requireAccess(me, "tasks", "write", "Seu perfil só consulta tarefas de projeto. Peça ao responsável do projeto para criar a tarefa.");
       if (taskModule === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
       const siblings = db.tasks.filter((t) => t.projectId === (p?.id ?? null) && t.parentTaskId === (input.parentTaskId ?? null));
       const parent = input.parentTaskId ? db.tasks.find((t) => t.id === input.parentTaskId) : null;
@@ -193,7 +196,7 @@ export const tasksApi = {
     }),
 
   /** Sprints do módulo Administrativo (RF-M6-01). */
-  sprints: () => read((db) => db.sprints.filter((s) => !s.deletedAt).sort((a, b) => a.startAt.localeCompare(b.startAt))),
+  sprints: () => read((db, me) => (requireAccess(me, "adm", "read"), db.sprints.filter((s) => !s.deletedAt).sort((a, b) => a.startAt.localeCompare(b.startAt)))),
 
   createSprint: (input: { name: string; startAt: string; endAt: string }) =>
     write((db, me) => {
