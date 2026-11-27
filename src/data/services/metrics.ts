@@ -3,7 +3,7 @@ import { FIRST_PROJECT_STAGE, PROJECT_STAGES } from "../reference";
 import type { ID } from "../types";
 import { ApiError, freelancerIdOf, read, visibleProjects } from "./_core";
 import { computeFinancials } from "./projects";
-import { access, canSeeMoney } from "@/lib/permissions";
+import { access, canSeeMoney, canWriteAll } from "@/lib/permissions";
 
 const DAY = 86_400_000;
 const median = (xs: number[]) => {
@@ -66,7 +66,11 @@ export const metricsApi = {
   indicators: (f: MetricsFilter = {}) =>
     read((db, me) => {
       if (access(me, "metrics") === "-") throw new ApiError(403, "Seu perfil não tem acesso a indicadores.");
-      const money = canSeeMoney(me);
+      // RN-66 — escopo "P" da seção 9: Comercial vê só os comerciais; Financeiro só os financeiros
+      const scoped = access(me, "metrics") === "P";
+      const showCommercial = !scoped || canWriteAll(me, "commercial");
+      const showOperation = !scoped;
+      const money = canSeeMoney(me) && (!scoped || access(me, "receivables") === "T");
       const from = f.from ? new Date(f.from).getTime() : 0;
       const to = f.to ? new Date(f.to).getTime() : Date.now() + 365 * DAY;
       const inRange = (iso: string | null) => !!iso && new Date(iso).getTime() >= from && new Date(iso).getTime() <= to;
@@ -110,8 +114,16 @@ export const metricsApi = {
       // vazão por mês (12 meses)
       const now = new Date();
       const months = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + i, 1)).toISOString().slice(0, 7));
-      const fin = money ? all.filter((p) => p.contractedAmountCents).map((p) => ({ p, f: computeFinancials(db, p.id) })) : [];
-      const recs = money ? db.receivables.filter((r) => !r.deletedAt && r.status !== "cancelado") : [];
+      // RN-66 — financeiro no período: projetos aprovados no período (com tipo/responsável); meses do período no gráfico
+      const finProjects = all.filter((p) => p.contractedAmountCents && inRange(p.approvedAt));
+      const fin = money ? finProjects.map((p) => ({ p, f: computeFinancials(db, p.id) })) : [];
+      const allIds = new Set(all.map((p) => p.id));
+      const recs = money ? db.receivables.filter((r) => !r.deletedAt && r.status !== "cancelado" && allIds.has(r.projectId)) : [];
+      const fromMonth = new Date(f.from ? from : Date.now() - 365 * DAY);
+      const toMonth = new Date(Math.min(to, Date.now()));
+      const periodMonths: string[] = [];
+      for (let d = new Date(Date.UTC(fromMonth.getUTCFullYear(), fromMonth.getUTCMonth(), 1)); d <= toMonth && periodMonths.length < 24; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) periodMonths.push(d.toISOString().slice(0, 7));
+      const finIds = new Set(finProjects.map((p) => p.id));
 
       const onTime = completed.filter((p) => p.estimatedEndAt && p.completedAt && new Date(p.completedAt) <= new Date(new Date(p.estimatedEndAt).getTime() + DAY));
       const openTasks = db.tasks.filter((t) => !t.deletedAt && t.statusKey !== "concluida" && t.module === "projeto");
@@ -129,7 +141,8 @@ export const metricsApi = {
       });
 
       return {
-        commercial: {
+        scope: { commercial: showCommercial, operation: showOperation, finance: money },
+        commercial: !showCommercial ? null : {
           conversionDaysMedian: median(approved.filter((p) => p.quoteSentAt && p.approvedAt).map((p) => days(p.quoteSentAt!, p.approvedAt!))),
           conversionRate: sent.length ? approved.length / sent.length : null,
           sent: sent.length,
@@ -139,7 +152,7 @@ export const metricsApi = {
           origin: { cotacao: entered.filter((p) => p.origin === "cotacao" && p.status !== "cotacao" && p.status !== "perdido").length, direto: entered.filter((p) => p.origin === "direto").length },
           lostReasons: Object.entries(all.filter((p) => p.status === "perdido" && p.lostReason).reduce<Record<string, number>>((a, p) => ({ ...a, [p.lostReason!]: (a[p.lostReason!] ?? 0) + 1 }), {})).map(([reason, count]) => ({ reason, count })),
         },
-        operation: {
+        operation: !showOperation ? null : {
           cycleDaysMedian: median(completed.filter((p) => p.startedAt && p.completedAt).map((p) => days(p.startedAt!, p.completedAt!))),
           cycleByType: [...cycleByType.entries()].map(([k, v]) => ({ key: k, label: typeName(k), days: median(v) ?? 0, count: v.length })),
           onTimePct: completed.length ? onTime.length / completed.length : null,
@@ -152,12 +165,14 @@ export const metricsApi = {
         },
         finance: money
           ? {
-              revenueByMonth: months.map((m) => ({
+              revenueByMonth: periodMonths.map((m) => ({
                 month: m,
-                contratado: all.filter((p) => p.approvedAt?.slice(0, 7) === m).reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0),
-                faturado: recs.filter((r) => r.issuedAt?.slice(0, 7) === m).reduce((a, r) => a + r.amountCents, 0),
-                recebido: recs.filter((r) => r.receivedAt?.slice(0, 7) === m).reduce((a, r) => a + r.amountCents, 0),
+                contratado: all.filter((p) => p.approvedAt?.slice(0, 7) === m && inRange(p.approvedAt)).reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0),
+                faturado: recs.filter((r) => r.issuedAt?.slice(0, 7) === m && inRange(r.issuedAt)).reduce((a, r) => a + r.amountCents, 0),
+                recebido: recs.filter((r) => r.receivedAt?.slice(0, 7) === m && inRange(r.receivedAt)).reduce((a, r) => a + r.amountCents, 0),
               })),
+              invoicedInPeriod: recs.filter((r) => inRange(r.issuedAt)).reduce((a, r) => a + r.amountCents, 0),
+              receivedInPeriod: recs.filter((r) => inRange(r.receivedAt)).reduce((a, r) => a + r.amountCents, 0),
               marginTotal: fin.reduce((a, x) => a + x.f.marginCents, 0),
               contractedTotal: fin.reduce((a, x) => a + x.f.contractedCents, 0),
               marginByType: Object.values(
@@ -180,7 +195,7 @@ export const metricsApi = {
                 }, {}),
               ).map((r) => ({ ...r, ticket: r.contracted / r.count })).sort((a, b) => b.contracted - a.contracted).slice(0, 10),
               freelancerCost: Object.values(
-                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
+                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt && x.projectId && finIds.has(x.projectId)).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
                   acc[x.freelancerId!] ??= { label: db.freelancers.find((fl) => fl.id === x.freelancerId)?.name ?? "—", total: 0, count: 0 };
                   acc[x.freelancerId!].total += x.invoicedAmountCents ?? x.agreedAmountCents;
                   acc[x.freelancerId!].count++;

@@ -51,7 +51,7 @@ export function PainelView() {
     <>
       <PageHeader crumbs={[{ label: "Painel", icon: "dashboard" }]} />
       <Tabs<TabKey> value={tab} onChange={(v) => set({ aba: v === tabs[0].value ? undefined : v })} items={tabs} listClassName="bg-surface" />
-      {tab !== "burndown" && <PainelFilterBar filters={filters} onChange={set} showOwner={tab !== "financeiro" && tab !== "equipe"} onlyPeriod={tab === "equipe"} />}
+      {tab !== "burndown" && <PainelFilterBar filters={filters} onChange={set} showOwner={tab !== "equipe"} onlyPeriod={tab === "equipe"} />}
       <PageBody>
         {tab === "geral" && <OverviewTab q={indicators} />}
         {tab === "comercial" && <CommercialTab q={indicators} />}

@@ -331,3 +331,32 @@ describe("Freelancer — e-mail único e sincronizado com o login", () => {
     expect(after.users.find((u) => u.id === "usr_julia")!.email).toBe("julia.nova@gmail.com");
   });
 });
+
+describe("RN-66 — indicadores com período e escopo do perfil", () => {
+  it("Comercial recebe só os comerciais; Financeiro só os financeiros", async () => {
+    const { metricsApi } = await import("./index");
+    as("usr_carlos");
+    const c = await metricsApi.indicators({});
+    expect(c.commercial).not.toBeNull();
+    expect(c.finance).toBeNull();
+    expect(c.operation).toBeNull();
+    as("usr_fernanda");
+    const f = await metricsApi.indicators({});
+    expect(f.finance).not.toBeNull();
+    expect(f.commercial).toBeNull();
+    as("usr_paula");
+    const a = await metricsApi.indicators({});
+    expect(a.commercial && a.operation && a.finance).toBeTruthy();
+  });
+
+  it("financeiro respeita o período (projetos aprovados no período e meses do período)", async () => {
+    const { metricsApi } = await import("./index");
+    const now = Date.now();
+    const all = await metricsApi.indicators({ from: new Date(now - 3650 * DAY).toISOString(), to: new Date(now).toISOString() });
+    const short = await metricsApi.indicators({ from: new Date(now - 30 * DAY).toISOString(), to: new Date(now).toISOString() });
+    expect(short.finance!.contractedTotal).toBeLessThanOrEqual(all.finance!.contractedTotal);
+    expect(short.finance!.revenueByMonth.length).toBeLessThanOrEqual(2);
+    const inShort = loadDb().projects.filter((p) => !p.deletedAt && p.contractedAmountCents && p.approvedAt && new Date(p.approvedAt).getTime() >= now - 30 * DAY).reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0);
+    expect(short.finance!.contractedTotal).toBe(inShort);
+  });
+});
