@@ -135,7 +135,7 @@ export const proposalsApi = {
       if (p.status !== "cotacao") throw new ApiError(409, "Só é possível criar propostas para projetos em cotação.");
       validateProposal(input);
       const version = Math.max(0, ...db.proposals.filter((x) => x.projectId === p.id).map((x) => x.version)) + 1;
-      const prop: Proposal = { ...baseFields(me.id), projectId: p.id, version, amountCents: input.amountCents, paymentTermsNote: input.paymentTermsNote ?? null, status: "rascunho", sentAt: null, approvedAt: null, fileId: input.fileId ?? null };
+      const prop: Proposal = { ...baseFields(me.id), projectId: p.id, version, amountCents: input.amountCents, paymentTermsNote: input.paymentTermsNote?.trim() || db.clients.find((c) => c.id === p.clientId)?.paymentTermsNote || null, status: "rascunho", sentAt: null, approvedAt: null, fileId: input.fileId ?? null };
       db.proposals.push(prop);
       input.installments.forEach((i, n) => db.proposalInstallments.push({ ...baseFields(me.id), proposalId: prop.id, number: n + 1, amountCents: i.amountCents, dueRule: i.dueRule, dueAt: i.dueAt }));
       if (p.quoteStageKey === "entrada" || p.quoteStageKey === "diagnostico") {

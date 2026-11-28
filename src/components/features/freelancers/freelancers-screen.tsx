@@ -1,5 +1,6 @@
 "use client";
 /** Listagem de freelancers (RF-M2-03). */
+import { InactivateFreelancerDialog } from "./inactivate-freelancer-dialog";
 import { useState } from "react";
 import { Button, ConfirmDialog, Fab, PageBody, PageHeader } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
@@ -60,13 +61,9 @@ export function FreelancersScreen() {
       </PageBody>
       {canWrite && <Fab label="Novo freelancer" onClick={openCreate} />}
       <FreelancerFormDialog open={form.open} onOpenChange={(o) => setForm((f) => ({ ...f, open: o }))} freelancer={form.freelancer} />
-      <ConfirmDialog
-        open={!!toInactivate}
+      <InactivateFreelancerDialog
+        freelancer={toInactivate}
         onOpenChange={(o) => !o && setToInactivate(null)}
-        title="Inativar freelancer"
-        description={toInactivate ? `${toInactivate.name} deixa de aparecer nas alocações novas. O histórico de projetos e pagamentos é mantido.` : undefined}
-        confirmLabel="Inativar freelancer"
-        destructive
         loading={setStatus.isPending}
         onConfirm={() => toInactivate && setStatus.mutate({ id: toInactivate.id, status: "inativo" })}
       />

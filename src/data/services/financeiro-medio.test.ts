@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { financeApi, financeMedioApi, freelancersApi, payablesExtraApi, projectLifecycleApi, projectsApi, publicInvoiceApi } from "./index";
+import { clientGroupsApi, clientsApi, financeApi, financeMedioApi, freelancerLifecycleApi, freelancersApi, payablesExtraApi, projectLifecycleApi, projectsApi, proposalsApi, publicInvoiceApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -224,5 +224,93 @@ describe("RN-89 — formulário público e cadastros validam documento no servi�
     await expect(freelancersApi.update(fl.id, { ...input, document: "12345678000190", pixKey: "???" })).rejects.toMatchObject({ status: 422, fieldErrors: { pixKey: expect.any(String) } });
     await freelancersApi.update(fl.id, { ...input, document: "12345678000190", pixKey: "nova@pix.com" });
     expect(loadDb().events.some((e) => e.entityId === fl.id && e.type === "freelancer.bank_data_changed" && (e.data.fields as string[]).includes("pixKey"))).toBe(true);
+  });
+});
+
+/* ───────── RN-88 — cadastros ───────── */
+
+describe("RN-88 — cliente inativo, grupos e exclusões", () => {
+  it("cliente inativo não recebe cotação nem projeto direto; reativado, volta", async () => {
+    const db = loadDb();
+    const c = db.clients.find((x) => !x.deletedAt)!;
+    c.status = "inativo";
+    save(db);
+    await expect(projectsApi.createQuote({ clientId: c.id, projectTypeId: typeByPrefix("APR").id, title: "Deck", ownerId: "usr_carlos" })).rejects.toMatchObject({ status: 409 });
+    as("usr_beatriz");
+    await expect(
+      projectsApi.createDirect({ clientId: c.id, projectTypeId: typeByPrefix("INF").id, title: "X", ownerId: "usr_beatriz", contractedAmountCents: 100, installments: [{ description: "U", amountCents: 100, expectedAt: new Date().toISOString() }], team: [], dueAt: null }),
+    ).rejects.toMatchObject({ status: 409 });
+    const db2 = loadDb();
+    db2.clients.find((x) => x.id === c.id)!.status = "ativo";
+    save(db2);
+    as("usr_carlos");
+    await expect(projectsApi.createQuote({ clientId: c.id, projectTypeId: typeByPrefix("APR").id, title: "Deck", ownerId: "usr_carlos" })).resolves.toBeTruthy();
+  });
+
+  it("grupo: nome único, renomear e excluir só vazio (Comercial/Gestão/Admin)", async () => {
+    as("usr_carlos");
+    const g = await clientsApi.createGroup("Grupo Teste");
+    await expect(clientsApi.createGroup(" grupo teste ")).rejects.toMatchObject({ status: 409 });
+    await clientGroupsApi.rename(g.id, "Grupo Novo");
+    await expect(clientGroupsApi.rename(g.id, " ")).rejects.toMatchObject({ status: 422 });
+    expect(loadDb().events.some((e) => e.type === "client_group.renamed" && e.entityId === g.id)).toBe(true);
+    as("usr_fernanda");
+    await expect(clientGroupsApi.rename(g.id, "Outro")).rejects.toMatchObject({ status: 403 });
+    await expect(clientGroupsApi.remove(g.id)).rejects.toMatchObject({ status: 403 });
+    as("usr_carlos");
+    const db = loadDb();
+    db.clients.find((c) => !c.deletedAt)!.groupId = g.id;
+    save(db);
+    await expect(clientGroupsApi.remove(g.id)).rejects.toMatchObject({ status: 409 });
+    const db2 = loadDb();
+    db2.clients.forEach((c) => c.groupId === g.id && (c.groupId = null));
+    save(db2);
+    await clientGroupsApi.remove(g.id);
+    expect((await clientsApi.groups()).some((x) => x.id === g.id)).toBe(false);
+  });
+
+  it("excluir cliente sem projetos remove também os contatos", async () => {
+    as("usr_carlos");
+    const input = { groupId: null, legalName: "Nova Cliente Ltda", tradeName: "Nova", cnpj: "11.222.333/0001-81", segment: "Teste", status: "ativo" as const, address: { street: "R", number: "1", complement: null, district: "B", city: "SP", state: "SP", zip: "01000-000" } };
+    const c = await clientsApi.create(input as never);
+    await clientsApi.saveContact(c.id, { name: "Ana", email: "ana@nova.com", phone: null, role: null, isBillingContact: true, isDecisionMaker: false } as never);
+    await clientsApi.remove(c.id);
+    expect(loadDb().clientContacts.filter((k) => k.clientId === c.id && !k.deletedAt)).toHaveLength(0);
+  });
+
+  it("freelancer: prévia de inativação e exclusão só sem histórico", async () => {
+    as("usr_fernanda");
+    const db = loadDb();
+    const withHistory = db.freelancers.find((f) => db.projectMembers.some((m) => m.freelancerId === f.id && m.active))!;
+    const impact = await freelancerLifecycleApi.inactivationImpact(withHistory.id);
+    expect(impact.activeProjects.length + impact.openTasks + impact.openPayables).toBeGreaterThan(0);
+    await expect(freelancerLifecycleApi.remove(withHistory.id)).rejects.toMatchObject({ status: 409 });
+    const fresh = await freelancersApi.create({ name: "Zé Novo", email: "ze.novo@gmail.com", phone: null, legalName: null, document: null, pixKey: null, bankName: null, bankAgency: null, bankAccount: null, jobTitle: "Designer", specialties: ["design"], status: "ativo", notes: null });
+    const f2 = await freelancersApi.create({ name: "Zé Dois", email: "ze.dois@gmail.com", phone: null, legalName: null, document: null, pixKey: null, bankName: null, bankAgency: null, bankAccount: null, jobTitle: "Designer", specialties: ["design"], status: "ativo", notes: null });
+    await freelancerLifecycleApi.remove(f2.id);
+    expect(loadDb().freelancers.find((f) => f.id === f2.id)!.deletedAt).toBeTruthy();
+    as("usr_carlos");
+    await expect(freelancerLifecycleApi.remove(fresh.id)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("proposta nova herda a política de pagamento do cliente quando vem em branco", async () => {
+    const db = loadDb();
+    const c = db.clients.find((x) => !x.deletedAt && x.status === "ativo")!;
+    c.paymentTermsNote = "50% na aprovação, 50% na entrega";
+    save(db);
+    as("usr_carlos");
+    const q = await projectsApi.createQuote({ clientId: c.id, projectTypeId: typeByPrefix("APR").id, title: "Deck", ownerId: "usr_carlos" });
+    const prop = await proposalsApi.create(q.id, { amountCents: 100_000, installments: [{ amountCents: 100_000, dueRule: "Na aprovação", dueAt: null }] });
+    expect(prop.paymentTermsNote).toBe("50% na aprovação, 50% na entrega");
+  });
+
+  it("contratado do cliente soma só projetos ativos, concluídos e arquivados", async () => {
+    as("usr_paula");
+    const list = await clientsApi.list();
+    const db = loadDb();
+    for (const c of list) {
+      const expected = db.projects.filter((p) => p.clientId === c.id && !p.deletedAt && ["ativo", "concluido", "arquivado"].includes(p.status)).reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0);
+      expect(c.contractedCents).toBe(expected);
+    }
   });
 });

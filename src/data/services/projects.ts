@@ -36,6 +36,7 @@ import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 import { effectiveReceivableStatus, financeAudience } from "./finance-rules";
 import { cancelOpenFreelancerPayables } from "./finance-medio";
+import { assertClientActive } from "./cadastros-medio";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -172,6 +173,7 @@ export const projectsApi = {
       const type = db.projectTypes.find((t) => t.id === input.projectTypeId);
       if (!type) throw new ApiError(422, "Escolha um tipo de projeto.", { projectTypeId: "Escolha um tipo de projeto" });
       if (!db.clients.some((c) => c.id === input.clientId)) throw new ApiError(422, "Escolha um cliente.", { clientId: "Escolha um cliente" });
+      assertClientActive(db, input.clientId);
       const billing = db.clientContacts.find((c) => c.clientId === input.clientId && c.isBillingContact);
       const now = nowIso();
       const p: Project = {
@@ -239,6 +241,7 @@ export const projectsApi = {
       const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
       if (input.installments.length && sum !== input.contractedAmountCents) errors.installments = "A soma das parcelas deve ser igual ao valor contratado";
       if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+      assertClientActive(db, input.clientId);
       const type = db.projectTypes.find((t) => t.id === input.projectTypeId)!;
       const billing = db.clientContacts.find((c) => c.clientId === input.clientId && c.isBillingContact);
       const now = nowIso();
@@ -324,6 +327,7 @@ export const projectsApi = {
         if (blocked.length) throw new ApiError(403, "Seu perfil edita só título, briefing, prioridade, tamanho e prazos. Peça à gestão para mudar responsável, cliente, faturamento ou valores.");
       }
       if (patch.clientId && patch.clientId !== p.clientId) {
+        assertClientActive(db, patch.clientId);
         const issued = db.receivables.some((r) => r.projectId === p.id && r.issuedAt);
         if (issued) throw new ApiError(409, "Este projeto já tem nota fiscal emitida e não pode trocar de cliente (RN-12).");
       }

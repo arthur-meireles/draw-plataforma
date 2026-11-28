@@ -49,7 +49,8 @@ export function AssigneePill({ value, name, color, onChange, restrictTo, size = 
 export function ClientField({ value, onChange, error, required = true, label = "Cliente", allowCreate = true }: { value: ID | null; onChange: (id: ID | null) => void; error?: string; required?: boolean; label?: string; allowCreate?: boolean }) {
   const clients = useClientOptions();
   const [creating, setCreating] = useState(false);
-  const options: Option[] = (clients.data ?? []).map((c) => ({ value: c.id, label: c.tradeName, description: `${c.legalName} · ${c.cnpj}`, keywords: [c.legalName, c.cnpj], icon: "client" }));
+  // RN-88 — cliente inativo não recebe projeto novo: some do seletor (exceto o já escolhido)
+  const options: Option[] = (clients.data ?? []).filter((c) => c.status !== "inativo" || c.id === value).map((c) => ({ value: c.id, label: c.tradeName, description: `${c.legalName} · ${c.cnpj}`, keywords: [c.legalName, c.cnpj], icon: "client" }));
   return (
     <>
       <SelectField
