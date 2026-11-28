@@ -354,6 +354,8 @@ export const usersApi = {
       const clean = { ...patch, ...(patch.name !== undefined ? { name: patch.name.trim() } : {}), ...(patch.jobTitle !== undefined ? { jobTitle: patch.jobTitle?.trim() || null } : {}), ...(patch.phone !== undefined ? { phone: patch.phone?.trim() || null } : {}) };
       Object.assign(u, clean);
       touch(u);
+      // RN-79 — o nome do usuário acompanha o cadastro de freelancer ligado (e vice-versa, em `freelancersApi.update`)
+      if (clean.name) db.freelancers.filter((f) => f.userId === u.id && !f.deletedAt && f.name !== clean.name).forEach((f) => ((f.name = clean.name!), touch(f)));
       if (patch.role && patch.role !== before) {
         u.userType = userTypeOf(patch.role);
         if (patch.role === "freelancer") ensureFreelancerRecord(db, me, u);

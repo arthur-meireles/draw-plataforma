@@ -38,10 +38,14 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     { label: "Caixa de entrada", icon: "inbox", href: "/caixa-de-entrada", show: true },
     { label: "Funil comercial", icon: "commercial", href: "/comercial", show: perm.canRead("commercial") },
     { label: "Contas a receber", icon: "receivable", href: "/financeiro/receber", show: perm.canRead("receivables") },
-    { label: "Contas a pagar", icon: "payable", href: "/financeiro/pagar", show: perm.canWriteAll("payables") },
+    { label: "Contas a pagar", icon: "payable", href: "/financeiro/pagar", show: perm.canRead("payables") && !perm.isFreelancer },
     { label: "Meus pagamentos", icon: "payable", href: "/financeiro/pagar", show: perm.isFreelancer },
     { label: "Minha conta", icon: "user", href: "/minha-conta", show: true },
     { label: "Clientes", icon: "clients", href: "/clientes", show: perm.canRead("clients") },
+    { label: "Arquivos", icon: "files", href: "/arquivos", show: perm.canRead("files") },
+    { label: "Administrativo — tarefas por área", icon: "adm", href: "/adm/tarefas", show: perm.canRead("adm") },
+    { label: "Administrativo — documentos", icon: "document", href: "/adm/documentos", show: perm.canRead("adm") },
+    { label: "Preferências e notificações", icon: "settings", href: "/configuracoes/preferencias", show: true },
     { label: "Painel de indicadores", icon: "dashboard", href: "/painel", show: perm.canRead("metrics") },
   ];
 

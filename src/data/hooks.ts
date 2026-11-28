@@ -28,7 +28,11 @@ interface MutateOpts<T, A = unknown> {
 export function useApiMutation<A, T>(fn: (args: A) => Promise<T>, opts: MutateOpts<T, A> = {}) {
   const qc = useQueryClient();
   return useMutation<T, ApiError, A>({
-    mutationFn: fn,
+    // RN-79 — sem conexão não há gravação: avisa na hora em vez de deixar o formulário falhar em silêncio no back-end real
+    mutationFn: (args) => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return Promise.reject(new ApiError(400, "Sem conexão com a internet. Esta ação só funciona online: reconecte e tente de novo (nada foi salvo)."));
+      return fn(args);
+    },
     onSuccess: (data, args) => {
       const delay = opts.invalidateDelay?.(args) ?? 0;
       if (delay > 0) setTimeout(() => qc.invalidateQueries(), delay);

@@ -290,6 +290,12 @@ export const freelancersApi = {
       }
       Object.assign(f, patch);
       touch(f);
+      // RN-79 — usuário e cadastro de freelancer são a mesma pessoa: o nome acompanha nos dois lados
+      const linked = f.userId ? db.users.find((x) => x.id === f.userId) : null;
+      if (linked && linked.name !== f.name) {
+        linked.name = f.name;
+        touch(linked);
+      }
       emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: {} });
       return f;
     }),
