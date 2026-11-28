@@ -93,7 +93,7 @@ export function InboxView() {
               onChange={(v) => set({ filtro: v })}
               options={[
                 { value: "todas", label: "Todas" },
-                { value: "nao-lidas", label: unread && !archivedView ? `Não lidas · ${unread}` : "Não lidas" },
+                { value: "nao-lidas", label: "Não lidas" },
                 { value: "arquivadas", label: "Arquivadas" },
               ]}
             />
