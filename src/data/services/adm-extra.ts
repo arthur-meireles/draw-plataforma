@@ -16,7 +16,7 @@ export const admExtraApi = {
       if (access(me, "vault") === "-") throw new ApiError(403, "Sem acesso ao cofre.");
       if (!id && me.role !== "admin") throw new ApiError(403, "Só administradores veem o log geral do cofre.");
       if (id) {
-        const v = db.vaultItems.find((x) => x.id === id && !x.deletedAt);
+        const v = db.vaultItems.find((x) => x.id === id && (me.role === "admin" || !x.deletedAt)); // admin ainda vê o histórico de item removido (RN-76)
         if (!v || (me.role !== "admin" && !v.allowedRoles.includes(me.role))) throw new ApiError(404, "Item não encontrado.");
       }
       return db.vaultAccessLogs

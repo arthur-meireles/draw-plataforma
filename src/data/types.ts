@@ -597,7 +597,10 @@ export interface VaultItem extends BaseEntity {
 export interface VaultAccessLog extends BaseEntity {
   vaultItemId: ID;
   userId: ID;
-  action: "revelar" | "copiar" | "editar";
+  /** RN-76 — criar e remover também ficam no log do item. */
+  action: "revelar" | "copiar" | "editar" | "criar" | "remover";
+  /** RN-76 — em `editar`: quem passou a ver/deixou de ver (perfis) e se a senha foi trocada. */
+  detail?: string | null;
   at: ISODate;
 }
 

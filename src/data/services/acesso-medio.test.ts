@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { SESSION_IDLE_MS, setSessionUserId } from "./_core";
-import { authApi, usersApi } from "./index";
+import { admApi, admExtraApi, mailApi, authApi, usersApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 
@@ -115,3 +115,64 @@ describe("RN-75 — conta e avisos", () => {
   });
 });
 
+
+describe("RN-76 — auditoria e histórico", () => {
+  it("log de acessos filtra por pessoa, ação e período", async () => {
+    as("usr_paula");
+    await usersApi.update("usr_lucas", { role: "comercial" });
+    transaction((db) => db.accessLogs.push({ ...db.accessLogs[0], id: "old", userId: "usr_carlos", action: "login", detail: null, at: new Date(Date.now() - 40 * 86_400_000).toISOString() }));
+    const all = await usersApi.accessLogs();
+    expect(all.length).toBeGreaterThan(1);
+    expect((await usersApi.accessLogs({ action: "role_changed" })).every((l) => l.action === "role_changed")).toBe(true);
+    expect((await usersApi.accessLogs({ userId: "usr_carlos" })).every((l) => l.userId === "usr_carlos")).toBe(true);
+    expect((await usersApi.accessLogs({ days: 30 })).some((l) => l.id === "old")).toBe(false);
+    as("usr_beatriz");
+    await expect(usersApi.accessLogs()).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("alterar regras da organização registra quem mudou e o antes/depois", async () => {
+    as("usr_paula");
+    await usersApi.updateOrganization({ freelancerPaymentDay: 10, dueSoonDays: 5, taxRatePct: 7 });
+    const org = await usersApi.organization();
+    expect(org.lastChange?.by).toBeTruthy();
+    expect(org.lastChange?.changes.some((c) => c.label === "Alíquota" && c.to === "7")).toBe(true);
+    as("usr_lucas");
+    expect((await usersApi.organization()).lastChange).toBeNull();
+  });
+
+  it("cofre registra criação, edição com diff de perfis e remoção", async () => {
+    as("usr_paula");
+    const id = await admApi.saveVaultItem({ title: "Hospedagem", secret: "s3nha", allowedRoles: ["gestao"] });
+    await admApi.saveVaultItem({ title: "Hospedagem", allowedRoles: ["financeiro"] }, id);
+    await admApi.removeVaultItem(id);
+    const logs = (await admExtraApi.vaultLogs(id)).map((l) => l.action).sort();
+    expect(logs).toEqual(["criar", "editar", "remover"]);
+    const edit = (await admExtraApi.vaultLogs(id)).find((l) => l.action === "editar");
+    expect(edit?.detail).toMatch(/passaram a ver: Financeiro.*deixaram de ver: Gestão/);
+  });
+
+  it("documentos institucionais emitem evento ao salvar e remover", async () => {
+    as("usr_paula");
+    const d = await admApi.saveDocument({ title: "Contrato social", category: "contrato_social", validUntil: null });
+    await admApi.saveDocument({ title: "Contrato social", category: "contrato_social", validUntil: "2027-01-01" }, d.id);
+    await admApi.removeDocument(d.id);
+    const types = loadDb().events.filter((e) => e.entityId === d.id).map((e) => e.type);
+    expect(types).toEqual(["document.saved", "document.saved", "document.removed"]);
+  });
+
+  it("reenviar e-mail só vale para falha/devolução e só para administradores", async () => {
+    as("usr_paula");
+    const l = transaction((db) => {
+      const row = db.emailLogs.find((x) => x.channel === "system")!;
+      row.status = "failed";
+      return row;
+    });
+    const n = loadDb().emailLogs.length;
+    await mailApi.resend(l.id);
+    expect(loadDb().emailLogs).toHaveLength(n + 1);
+    const ok = loadDb().emailLogs.find((x) => x.status === "sent")!;
+    await expect(mailApi.resend(ok.id)).rejects.toMatchObject({ status: 409 });
+    as("usr_beatriz");
+    await expect(mailApi.resend(l.id)).rejects.toMatchObject({ status: 403 });
+  });
+});

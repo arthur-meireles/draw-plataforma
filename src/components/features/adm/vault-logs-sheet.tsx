@@ -6,10 +6,12 @@ import { dateTime } from "@/lib/format";
 
 type LogRow = Awaited<ReturnType<typeof admExtraApi.vaultLogs>>[number];
 
-const ACTION: Record<LogRow["action"], { label: string; tone: "warning" | "info" | "neutral" }> = {
+const ACTION: Record<LogRow["action"], { label: string; tone: "warning" | "info" | "neutral" | "success" | "danger" }> = {
   revelar: { label: "Revelou", tone: "warning" },
   copiar: { label: "Copiou", tone: "info" },
   editar: { label: "Editou", tone: "neutral" },
+  criar: { label: "Criou", tone: "success" },
+  remover: { label: "Removeu", tone: "danger" },
 };
 
 /** Log de acesso ao cofre: de um item ou geral (admin). RF-M6-03. */
@@ -19,6 +21,7 @@ export function VaultLogsSheet({ open, onClose, itemId, itemTitle }: { open: boo
     { id: "at", header: "Quando", mobile: "subtitle", sortValue: (l) => l.at, cell: (l) => <span className="whitespace-nowrap text-fg-muted">{dateTime(l.at)}</span> },
     { id: "user", header: "Quem", mobile: "title", cell: (l) => <span className="font-medium text-fg">{l.userName}</span> },
     { id: "action", header: "Ação", mobile: "trailing", cell: (l) => <Badge tone={ACTION[l.action].tone}>{ACTION[l.action].label}</Badge> },
+    { id: "detail", header: "Detalhe", hideBelow: "md", cell: (l) => <span className="text-fg-subtle">{l.detail ?? "—"}</span> },
     ...(itemId ? [] : [{ id: "item", header: "Item", cell: (l: LogRow) => <span className="text-fg-muted">{l.itemTitle}</span> } satisfies Column<LogRow>]),
   ];
   return (

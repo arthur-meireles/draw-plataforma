@@ -5,7 +5,7 @@ import { Button, Section, Skeleton, Switch, TextField } from "@/components/ui";
 import { useApiMutation, useOrganization } from "@/data/hooks";
 import { usersApi } from "@/data/services";
 import { focusFirstInvalid } from "@/lib/focus";
-import { formatPhone } from "@/lib/format";
+import { dateTime, formatPhone } from "@/lib/format";
 
 /** Regras da organização: dia de pagamento de freelancers (RN-06), dias de alerta de vencimento (RF-M4-13), alíquota de imposto e contato do Financeiro (RN-67). */
 export function OrgSettingsSection() {
@@ -79,6 +79,12 @@ export function OrgSettingsSection() {
               </div>
             )}
           </fieldset>
+          {org.data?.lastChange && (
+            <p className="mt-4 border-t border-line pt-3 text-xs text-fg-subtle">
+              Última alteração por <span className="font-medium text-fg-muted">{org.data.lastChange.by}</span> em {dateTime(org.data.lastChange.at)}
+              {org.data.lastChange.changes.length > 0 && <> · {org.data.lastChange.changes.map((c) => `${c.label}: ${c.from} → ${c.to}`).join("; ")}</>}
+            </p>
+          )}
         </form>
       )}
     </Section>

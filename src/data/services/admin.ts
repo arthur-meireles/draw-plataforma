@@ -393,14 +393,30 @@ export const usersApi = {
       queueSystemEmail(db, { to: [u.email], subject: "Sua senha da plataforma Draw foi alterada", template: "senha_alterada" });
     }),
 
-  accessLogs: () =>
+  /**
+   * Log de acessos e trilha de segurança (RN-60/RN-76). Filtros por pessoa, ação e período (dias); mais recentes
+   * primeiro, até 1000 linhas (a tela pagina e exporta CSV). `GET /access-logs?user_id&action&days`.
+   */
+  accessLogs: (f: { userId?: ID; action?: AccessLogAction; days?: number } = {}) =>
     read((db, me) => {
       requireAccess(me, "users", "all", "Só administradores veem o log de acessos.");
-      return db.accessLogs.slice(-100).reverse().map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? l.detail ?? "—" }));
+      const since = f.days ? Date.now() - f.days * 86_400_000 : 0;
+      return db.accessLogs
+        .filter((l) => (!f.userId || l.userId === f.userId) && (!f.action || l.action === f.action) && (!since || Date.parse(l.at) >= since))
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 1000)
+        .map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? l.detail ?? "—" }));
     }),
 
   /** Parâmetros da organização: todos leem (prazos e alíquota aparecem nas telas); só admin altera. */
-  organization: () => read((db) => ({ org: db.organizations[0], flags: db.featureFlags })),
+  organization: () =>
+    read((db, me) => {
+      // RN-76 — quem mudou as regras por último (só para quem lê Configurações)
+      const ev = canRead(me, "settings") ? [...db.events].reverse().find((e) => e.type === "organization.settings_changed") : null;
+      const changes = (ev?.data.changes as { label: string; from: string; to: string }[] | undefined) ?? [];
+      const lastChange = ev ? { by: db.users.find((u) => u.id === ev.actorId)?.name ?? "—", at: ev.occurredAt, changes } : null;
+      return { org: db.organizations[0], flags: db.featureFlags, lastChange };
+    }),
 
   updateOrganization: (patch: { freelancerPaymentDay: number; dueSoonDays: number; taxRatePct?: number; financeContactEmail?: string | null; financeContactPhone?: string | null; requireMfaForAdmins?: boolean }) =>
     write((db, me) => {
@@ -413,8 +429,13 @@ export const usersApi = {
       settings.financeContactEmail = settings.financeContactEmail?.trim().toLowerCase() || null;
       settings.financeContactPhone = settings.financeContactPhone?.trim() || null;
       if (settings.financeContactEmail && !/^\S+@\S+\.\S+$/.test(settings.financeContactEmail)) throw new ApiError(422, "Informe um e-mail válido para o Financeiro.", { financeContactEmail: "Informe um e-mail válido, ex.: financeiro@draw.com.br" });
+      // RN-76 — o evento guarda o antes/depois de cada regra que mudou (aparece em "Última alteração" na tela)
+      const LABELS: Record<string, string> = { freelancerPaymentDay: "Dia de pagamento", dueSoonDays: "Dias de alerta", taxRatePct: "Alíquota", financeContactEmail: "E-mail do Financeiro", financeContactPhone: "Telefone do Financeiro", requireMfaForAdmins: "2FA dos administradores" };
+      const fmt = (v: unknown) => (v === null || v === undefined || v === "" ? "em branco" : typeof v === "boolean" ? (v ? "ligado" : "desligado") : String(v));
+      const prev = db.organizations[0].settings as unknown as Record<string, unknown>;
+      const changes = Object.keys(LABELS).filter((k) => fmt(prev[k]) !== fmt((settings as unknown as Record<string, unknown>)[k])).map((k) => ({ label: LABELS[k], from: fmt(prev[k]), to: fmt((settings as unknown as Record<string, unknown>)[k]) }));
       db.organizations[0].settings = settings;
-      emit(db, me, { type: "organization.settings_changed", entityType: "organization", entityId: db.organizations[0].id, data: settings });
+      emit(db, me, { type: "organization.settings_changed", entityType: "organization", entityId: db.organizations[0].id, data: { ...settings, changes } });
     }),
 };
 
@@ -434,19 +455,26 @@ export const admApi = {
       if (!input.title.trim()) throw new ApiError(422, "Informe o título.", { title: "Informe o título" });
       if (id) {
         const d = db.institutionalDocuments.find((x) => x.id === id)!;
+        const before = { validUntil: d.validUntil, fileId: d.fileId, title: d.title };
         Object.assign(d, { ...input, fileId: input.fileId ?? d.fileId });
         touch(d);
+        // RN-76 — histórico: quem trocou o PDF, a validade ou o título
+        emit(db, me, { type: "document.saved", entityType: "document", entityId: d.id, data: { title: d.title, validUntilFrom: before.validUntil, validUntilTo: d.validUntil, titleFrom: before.title, fileReplaced: before.fileId !== d.fileId } });
         return d;
       }
       const d: InstitutionalDocument = { ...baseFields(me.id), title: input.title.trim(), category: input.category, validUntil: input.validUntil, fileId: input.fileId ?? null };
       db.institutionalDocuments.push(d);
+      emit(db, me, { type: "document.saved", entityType: "document", entityId: d.id, data: { title: d.title, created: true, validUntilTo: d.validUntil } });
       return d;
     }),
   removeDocument: (id: ID) =>
     write((db, me) => {
       if (!canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão.");
-      const d = db.institutionalDocuments.find((x) => x.id === id);
-      if (d) d.deletedAt = nowIso();
+      const d = db.institutionalDocuments.find((x) => x.id === id && !x.deletedAt);
+      if (d) {
+        d.deletedAt = nowIso();
+        emit(db, me, { type: "document.removed", entityType: "document", entityId: d.id, data: { title: d.title, fileId: d.fileId } });
+      }
     }),
 
   /** RF-M6-03 — segredo nunca vem na listagem; só via `reveal`, que gera log. */
@@ -474,29 +502,30 @@ export const admApi = {
       if (!input.title.trim()) throw new ApiError(422, "Informe o título.", { title: "Informe o título" });
       if (id) {
         const v = db.vaultItems.find((x) => x.id === id)!;
+        // RN-76 — o log guarda quem passou a ver o quê (antes/depois dos perfis) e se a senha foi trocada
+        const added = input.allowedRoles.filter((r) => !v.allowedRoles.includes(r));
+        const removed = v.allowedRoles.filter((r) => !input.allowedRoles.includes(r));
+        const parts = [added.length ? `passaram a ver: ${added.map((r) => ROLE_LABEL[r]).join(", ")}` : "", removed.length ? `deixaram de ver: ${removed.map((r) => ROLE_LABEL[r]).join(", ")}` : "", input.secret ? "senha trocada" : ""].filter(Boolean);
         Object.assign(v, { ...input, secret: input.secret || v.secret });
         touch(v);
-        db.vaultAccessLogs.push({ ...baseFields(me.id), vaultItemId: v.id, userId: me.id, action: "editar", at: nowIso() });
+        db.vaultAccessLogs.push({ ...baseFields(me.id), vaultItemId: v.id, userId: me.id, action: "editar", detail: parts.join(" · ") || null, at: nowIso() });
         return v.id;
       }
       if (!input.secret) throw new ApiError(422, "Informe a senha.", { secret: "Informe a senha" });
       const v: VaultItem = { ...baseFields(me.id), title: input.title.trim(), url: input.url ?? null, username: input.username ?? null, secret: input.secret, notes: input.notes ?? null, allowedRoles: input.allowedRoles };
       db.vaultItems.push(v);
+      db.vaultAccessLogs.push({ ...baseFields(me.id), vaultItemId: v.id, userId: me.id, action: "criar", detail: `perfis com acesso: ${input.allowedRoles.length ? input.allowedRoles.map((r) => ROLE_LABEL[r]).join(", ") : "só administradores"}`, at: nowIso() });
       return v.id;
     }),
   removeVaultItem: (id: ID) =>
     write((db, me) => {
       if (me.role !== "admin") throw new ApiError(403, "Sem permissão.");
       const v = db.vaultItems.find((x) => x.id === id);
-      if (v) v.deletedAt = nowIso();
+      if (v && !v.deletedAt) {
+        v.deletedAt = nowIso();
+        db.vaultAccessLogs.push({ ...baseFields(me.id), vaultItemId: v.id, userId: me.id, action: "remover", detail: null, at: nowIso() });
+      }
     }),
-  /** Log do cofre: use `admExtraApi.vaultLogs` (com a regra por item). Mantido aqui só para o administrador. */
-  vaultLogs: (id?: ID) =>
-    read((db, me) => {
-      if (me.role !== "admin") throw new ApiError(403, "Só administradores veem o log geral do cofre.");
-      return db.vaultAccessLogs.filter((l) => !id || l.vaultItemId === id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100).map((l) => ({ ...l, userName: db.users.find((u) => u.id === l.userId)?.name ?? "—", itemTitle: db.vaultItems.find((v) => v.id === l.vaultItemId)?.title ?? "—" }));
-    }),
-
   resources: () =>
     read((db, me) => {
       requireAccess(me, "adm", "read");
@@ -553,6 +582,21 @@ export const mailApi = {
       touch(s);
       emit(db, me, { type: "mail.system_settings_changed", entityType: "system_mail_settings", entityId: s.id, data: { transport: s.transport } });
       return s;
+    }),
+  /**
+   * RN-76 — reenviar um e-mail transacional que falhou ou foi devolvido (convite, recuperação de senha, NF…): entra
+   * na fila de novo, com o mesmo destinatário e modelo; o registro original continua no histórico.
+   * `POST /system-emails/:id/resend`.
+   */
+  resend: (id: ID) =>
+    write((db, me) => {
+      requireAccess(me, "settings", "all", "Só administradores reenviam e-mails do sistema.");
+      const l = db.emailLogs.find((x) => x.id === id && x.channel === "system");
+      if (!l) throw new ApiError(404, "E-mail não encontrado.");
+      if (l.status !== "failed" && l.status !== "bounced") throw new ApiError(409, "Só e-mails que falharam ou foram devolvidos podem ser reenviados.");
+      queueSystemEmail(db, { to: l.to, subject: l.subject, template: l.template ?? "reenvio", projectId: l.projectId });
+      emit(db, me, { type: "mail.resent", entityType: "email_log", entityId: l.id, data: { to: l.to, template: l.template } });
+      return true;
     }),
   sendSystemTest: (to: string) =>
     write((db, me) => {
