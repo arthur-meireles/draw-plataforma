@@ -19,6 +19,10 @@ export class ApiError extends Error {
 const SESSION_KEY = "draw:session";
 /** Versão das sessões do usuário no momento do login (RN-31: redefinir senha derruba sessões abertas). */
 const SESSION_VERSION_KEY = "draw:session:v";
+/** Último uso da sessão (expiração por inatividade — RN-75). */
+const SESSION_ACTIVE_KEY = "draw:session:at";
+/** RN-75 — a sessão cai depois de 8 horas sem nenhuma chamada à API (expiração deslizante). */
+export const SESSION_IDLE_MS = 8 * 3_600_000;
 
 export function getSessionUserId(): ID | null {
   if (typeof window === "undefined") return null;
@@ -37,9 +41,11 @@ export function setSessionUserId(id: ID | null) {
       const version = loadDb().users.find((u) => u.id === id)?.sessionVersion ?? 0;
       window.localStorage.setItem(SESSION_KEY, id);
       window.localStorage.setItem(SESSION_VERSION_KEY, String(version));
+      window.localStorage.setItem(SESSION_ACTIVE_KEY, String(Date.now()));
     } else {
       window.localStorage.removeItem(SESSION_KEY);
       window.localStorage.removeItem(SESSION_VERSION_KEY);
+      window.localStorage.removeItem(SESSION_ACTIVE_KEY);
     }
   } catch {
     /* ignore */
@@ -54,11 +60,21 @@ function sessionVersion(): number {
   }
 }
 
-/** Usuário da sessão, se ela ainda vale: usuário ativo e sessão não revogada (RN-31). */
+/** RN-75 — a sessão está parada há mais que o limite? (sem registro = sessão antiga, ainda vale). */
+function sessionIdle(): boolean {
+  try {
+    const at = Number(window.localStorage.getItem(SESSION_ACTIVE_KEY) ?? "");
+    return !!at && Date.now() - at > SESSION_IDLE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/** Usuário da sessão, se ela ainda vale: usuário ativo, sessão não revogada (RN-31) e não expirada por inatividade (RN-75). */
 export function sessionUser(db: Database = loadDb()): User | null {
   const id = getSessionUserId();
   const u = id ? db.users.find((x) => x.id === id && x.status === "ativo") : undefined;
-  if (!u || (u.sessionVersion ?? 0) !== sessionVersion()) return null;
+  if (!u || (u.sessionVersion ?? 0) !== sessionVersion() || sessionIdle()) return null;
   return u;
 }
 
@@ -66,6 +82,11 @@ export function sessionUser(db: Database = loadDb()): User | null {
 export function actor(db: Database = loadDb()): User {
   const u = sessionUser(db);
   if (!u) throw new ApiError(401, "Sessão expirada. Entre novamente.");
+  try {
+    window.localStorage.setItem(SESSION_ACTIVE_KEY, String(Date.now())); // expiração deslizante (RN-75)
+  } catch {
+    /* ignore */
+  }
   return u;
 }
 

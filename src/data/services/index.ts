@@ -31,3 +31,4 @@ export { freelancerPaymentDataApi } from "./freelancer-payment-data";
 export { clientBillingApi } from "./client-billing";
 export { collectionApi, type CollectionChannel } from "./collection";
 export { projectFinanceImpactApi } from "./project-finance-impact";
+export { sessionsApi, LOGIN_MAX_FAILS, LOGIN_WINDOW_MS } from "./login-guard";

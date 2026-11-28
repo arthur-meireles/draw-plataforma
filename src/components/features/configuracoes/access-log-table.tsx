@@ -30,6 +30,8 @@ const ACTION: Record<Row["action"], { label: string; tone: "success" | "danger" 
   mfa_recovery_used: { label: "Entrou com código de recuperação", tone: "warning" },
   mfa_recovery_regenerated: { label: "Gerou novos códigos de recuperação", tone: "neutral" },
   bank_data_changed: { label: "Alterou dados bancários", tone: "warning" },
+  login_blocked: { label: "Conta bloqueada por tentativas", tone: "danger" },
+  sessions_revoked: { label: "Encerrou outras sessões", tone: "neutral" },
 };
 
 /** Ações cujo detalhe ajuda na auditoria (e-mail tentado, item do cofre, perfil assumido). */

@@ -19,6 +19,7 @@ const TYPES: { type: NotificationType; label: string; description: string }[] = 
   { type: "nf_recebida", label: "Nota fiscal recebida", description: "Quando um freelancer de um projeto seu envia a NF" },
   { type: "cadastro", label: "Dados de pagamento de freelancers", description: "Quando um freelancer muda PIX, banco ou documento (Financeiro)" },
   { type: "vencimento", label: "Vencimentos financeiros", description: "Recebíveis vencidos ou a vencer e NFs de freelancer pendentes, nos projetos que você acompanha" },
+  { type: "seguranca", label: "Segurança da conta", description: "Seu perfil mudou, conta bloqueada por tentativas, convite aceito" },
   { type: "pagamento", label: "Seus pagamentos", description: "Quando sua NF é aprovada, fica divergente, é paga ou o pagamento é estornado" },
 ];
 

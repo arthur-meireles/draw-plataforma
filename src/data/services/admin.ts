@@ -1,18 +1,17 @@
 /** Administrativo (M6), usuários e autenticação (M1), e-mail (M11), importação, busca. */
 import { baseFields, loadDb, nowIso, resetDb, transaction } from "../db";
 import type { AccessLogAction, Database, ID, ImportKind, InstitutionalDocument, Resource, Role, SystemMailSettings, User, VaultItem } from "../types";
-import { ApiError, actor, emit, getSessionUserId, latency, queueSystemEmail, read, requireAccess, secureToken, sessionUser, setSessionUserId, sha256Hex, taxOf, touch, visibleProjects, write } from "./_core";
+import { ApiError, actor, emit, getSessionUserId, latency, notify, queueSystemEmail, read, requireAccess, secureToken, sessionUser, setSessionUserId, sha256Hex, taxOf, touch, visibleProjects, write } from "./_core";
 import { ROLE_LABEL } from "../reference";
 import { visibleTasks } from "./tasks";
 import { access, canRead, canWriteAll } from "@/lib/permissions";
 import { isDemoMode } from "@/lib/demo";
 import { isValidCnpj, onlyDigits } from "@/lib/format";
 import { checkSecondFactor, issueEnrollChallenge, mfaRequiredFor, needsMfaEnrollment } from "./mfa";
+import { loginLock, lockedError, recordLoginBlocked } from "./login-guard";
 import { ensureFreelancerRecord, roleChangeDetail, securityLog, userTypeOf, usersExtraApi } from "./users-extra";
 
 /* ───────── Autenticação (mock) ───────── */
-const failures = new Map<string, number>();
-
 const MFA_CHALLENGE_TTL_MS = 5 * 60_000;
 const RESET_TTL_MS = 60 * 60_000; // RN-31: 1 hora
 const INVITE_TTL_MS = 7 * 86_400_000; // RN-32: 7 dias
@@ -80,17 +79,25 @@ export const authApi = {
   login: async (email: string, password: string): Promise<{ id: ID; mfaRequired: false } | { id: ID; mfaRequired: true; mfaChallenge: string; mfaEnroll: boolean }> => {
     await latency(500);
     const key = email.trim().toLowerCase();
-    const fails = failures.get(key) ?? 0;
-    if (fails >= 5) throw new ApiError(429 as 403, "Muitas tentativas. Aguarde alguns minutos ou recupere a senha.");
-    return transaction((db) => {
+    // RN-75 — a contagem vive no log de acessos: persiste entre abas/recargas e expira sozinha (15 min).
+    // O log é gravado e o erro lançado DEPOIS da transação (lançar dentro dela desfaz o log).
+    const lock = loginLock(loadDb(), key);
+    if (lock.locked) {
+      transaction((db) => recordLoginBlocked(db, key));
+      throw lockedError(lock.minutes);
+    }
+    const outcome = transaction((db) => {
       const u = db.users.find((x) => x.email.toLowerCase() === key);
       if (!u || u.passwordMock !== password || u.status !== "ativo") {
-        failures.set(key, fails + 1);
         log(db, u?.id ?? null, "login_failed", key);
-        if (u?.status === "inativo") throw new ApiError(403, "Este usuário está inativo. Fale com a administração.");
-        throw new ApiError(401, "E-mail ou senha incorretos.");
+        if (u?.status === "inativo") return { error: new ApiError(403, "Este usuário está inativo. Fale com a administração.") };
+        const after = loginLock(db, key);
+        if (after.locked) {
+          recordLoginBlocked(db, key);
+          return { error: lockedError(after.minutes) };
+        }
+        return { error: new ApiError(401, "E-mail ou senha incorretos.") };
       }
-      failures.delete(key);
       // RN-37 — administrador sem 2FA cadastra antes de entrar (desafio de cadastro, sem sessão)
       if (needsMfaEnrollment(db, u)) {
         setSessionUserId(null);
@@ -107,6 +114,8 @@ export const authApi = {
       setSessionUserId(u.id);
       return { id: u.id, mfaRequired: false as const };
     });
+    if ("error" in outcome) throw outcome.error;
+    return outcome;
   },
 
   /**
@@ -119,6 +128,13 @@ export const authApi = {
     if (!ch || ch.expiresAt < Date.now()) {
       mfaChallenges.delete(mfaChallenge);
       throw new ApiError(401, "A verificação expirou. Entre com e-mail e senha de novo.");
+    }
+    // RN-75 — errar o código do 2FA também conta para o bloqueio
+    const mfaUser = loadDb().users.find((x) => x.id === ch.userId);
+    const mfaLock = mfaUser ? loginLock(loadDb(), mfaUser.email.toLowerCase()) : null;
+    if (mfaLock?.locked) {
+      mfaChallenges.delete(mfaChallenge);
+      throw lockedError(mfaLock.minutes);
     }
     const how = await checkSecondFactor(ch.userId, code);
     if (!how) {
@@ -185,14 +201,22 @@ export const authApi = {
       const key = email.trim().toLowerCase();
       const u = db.users.find((x) => x.email.toLowerCase() === key && !x.deletedAt);
       log(db, u?.id ?? null, "password_reset_requested", key);
-      if (!u || u.status !== "ativo") return false;
+      // convidado que ainda não aceitou: em vez de recuperar senha, recebe o convite de novo (link novo, o anterior deixa de valer)
+      if (u?.status === "convidado") {
+        const nowInv = nowIso();
+        invitesOf(db).filter((i) => i.userId === u.id && !i.usedAt && !i.revokedAt).forEach((i) => (i.revokedAt = nowInv));
+        invitesOf(db).push({ ...baseFields(null), userId: u.id, tokenHash, expiresAt: new Date(Date.now() + INVITE_TTL_MS).toISOString(), usedAt: null, revokedAt: null });
+        queueSystemEmail(db, { to: [u.email], subject: "Convite para a plataforma Draw", template: "convite" });
+        return "convite" as const;
+      }
+      if (!u || u.status !== "ativo") return false; // inativo ou desconhecido: nada é enviado
       const now = nowIso();
       resetsOf(db).filter((r) => r.userId === u.id && !r.usedAt).forEach((r) => (r.usedAt = now)); // só o link mais recente vale
       resetsOf(db).push({ ...baseFields(null), userId: u.id, tokenHash, expiresAt: new Date(Date.now() + RESET_TTL_MS).toISOString(), usedAt: null });
       queueSystemEmail(db, { to: [u.email], subject: "Recuperação de senha", template: "recuperar_senha" });
       return true;
     });
-    return { demoLink: issued && isDemoMode() ? `/recuperar-senha?token=${token}` : null };
+    return { demoLink: issued && isDemoMode() ? (issued === "convite" ? `/convite/${token}` : `/recuperar-senha?token=${token}`) : null };
   },
 
   /** RN-31 — valida o token (existe, não expirou, não foi usado), grava a senha, consome o token e derruba as sessões abertas. */
@@ -211,7 +235,6 @@ export const authApi = {
       touch(u);
       r.usedAt = nowIso();
       touch(r);
-      failures.delete(u.email.toLowerCase());
       log(db, u.id, "password_reset_done");
       if (getSessionUserId() === u.id) setSessionUserId(null);
       return true;
@@ -241,6 +264,8 @@ export const authApi = {
       touch(inv);
       log(db, u.id, "invite_accepted");
       emit(db, null, { type: "user.invite_accepted", entityType: "user", entityId: u.id, data: { email: u.email } });
+      // RN-75 — quem convidou fica sabendo que a pessoa entrou (Caixa de entrada)
+      notify(db, u, { userId: inv.createdBy, type: "seguranca", title: `${u.name} aceitou o convite`, body: `${ROLE_LABEL[u.role]} · ${u.email}`, entityType: "user", entityId: u.id });
       // RN-37 — convite de administrador: cadastra o 2FA antes da primeira sessão
       if (mfaRequiredFor(db, u) && !u.mfaEnabled) {
         setSessionUserId(null);
@@ -325,6 +350,7 @@ export const usersApi = {
       if (patch.role && id === me.id && patch.role !== "admin" && me.role === "admin" && db.users.filter((x) => x.role === "admin" && x.status === "ativo").length === 1) throw new ApiError(409, "Você é o único administrador. Promova outra pessoa antes.");
       if (patch.role && !canWriteAll(me, "users")) delete patch.role;
       const before = u.role;
+      const sessionBefore = u.sessionVersion ?? 0;
       const clean = { ...patch, ...(patch.name !== undefined ? { name: patch.name.trim() } : {}), ...(patch.jobTitle !== undefined ? { jobTitle: patch.jobTitle?.trim() || null } : {}), ...(patch.phone !== undefined ? { phone: patch.phone?.trim() || null } : {}) };
       Object.assign(u, clean);
       touch(u);
@@ -335,6 +361,9 @@ export const usersApi = {
         if (patch.role === "admin" && !u.mfaEnabled && (db.organizations[0]?.settings.requireMfaForAdmins ?? true)) u.sessionVersion = (u.sessionVersion ?? 0) + 1;
         emit(db, me, { type: "user.role_changed", entityType: "user", entityId: u.id, data: { from: before, to: patch.role } });
         securityLog(db, me.id, "role_changed", roleChangeDetail(u, before, patch.role));
+        // RN-75 — a pessoa é avisada e a sessão aberta cai: o novo perfil vale no próximo acesso (como o diálogo promete)
+        notify(db, me, { userId: u.id, type: "seguranca", title: `Seu perfil mudou para ${ROLE_LABEL[patch.role]}`, body: `Alterado por ${me.name}. Entre de novo para ver as telas do novo perfil.`, entityType: "user", entityId: u.id });
+        if (u.id !== me.id && (u.sessionVersion ?? 0) === sessionBefore) u.sessionVersion = sessionBefore + 1;
       }
       if (id === me.id && (patch.name !== undefined || patch.jobTitle !== undefined || patch.phone !== undefined || patch.avatarColor !== undefined)) securityLog(db, me.id, "profile_updated", u.name);
       if (id === me.id && getSessionUserId() === me.id) setSessionUserId(me.id); // mantém a própria sessão válida
@@ -354,11 +383,14 @@ export const usersApi = {
       const u = db.users.find((x) => x.id === me.id)!;
       if (u.passwordMock !== current) throw new ApiError(422, "Senha atual incorreta.", { current: "Senha atual incorreta" });
       if (next.length < 8) throw new ApiError(422, "Use pelo menos 8 caracteres.", { next: "Use pelo menos 8 caracteres" });
+      if (next === current) throw new ApiError(422, "A nova senha precisa ser diferente da atual.", { next: "Escolha uma senha diferente da atual" });
       u.passwordMock = next;
       u.sessionVersion = (u.sessionVersion ?? 0) + 1; // outras sessões abertas caem (RN-31)
       touch(u);
       setSessionUserId(u.id); // esta continua
       securityLog(db, me.id, "password_changed");
+      // RN-75 — aviso transacional à própria pessoa: se não foi ela, tem como reagir
+      queueSystemEmail(db, { to: [u.email], subject: "Sua senha da plataforma Draw foi alterada", template: "senha_alterada" });
     }),
 
   accessLogs: () =>

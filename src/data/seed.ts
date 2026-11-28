@@ -1095,8 +1095,6 @@ export function createSeed(): Database {
     featureFlags: [
       { ...base("ff", -400), key: "portal_cliente", enabled: false },
       { ...base("ff", -400), key: "ambientes_juridicos", enabled: false },
-      { ...base("ff", -400), key: "email_usuario", enabled: true },
-      { ...base("ff", -400), key: "login_google", enabled: false },
     ],
     accessLogs: [],
     passwordResets: [],

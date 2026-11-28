@@ -108,7 +108,10 @@ export type AccessLogAction =
   | "mfa_disabled"
   | "mfa_recovery_used"
   | "mfa_recovery_regenerated"
-  | "bank_data_changed";
+  | "bank_data_changed"
+  /* RN-75 — bloqueio por tentativas e sessões encerradas */
+  | "login_blocked"
+  | "sessions_revoked";
 
 export interface AccessLog extends BaseEntity {
   userId: ID | null;
@@ -643,7 +646,9 @@ export type NotificationType =
   /** Recebível vencido ou a vencer, NF de freelancer pendente perto do vencimento (Financeiro envolvido — RN-46). */
   | "vencimento"
   /** Andamento do seu pagamento (freelancer): NF divergente, aprovada, paga ou estornada (RN-46). */
-  | "pagamento";
+  | "pagamento"
+  /** Segurança da conta: seu perfil mudou, conta bloqueada por tentativas, convite aceito (RN-75). */
+  | "seguranca";
 
 export interface Notification extends BaseEntity {
   userId: ID;

@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { MfaEnrollment, RecoveryCodesList } from "@/components/domain";
-import { Badge, Button, Callout, Dialog, ErrorState, PasswordField, PasswordStrength, Section, Skeleton } from "@/components/ui";
+import { Badge, Button, Callout, ConfirmDialog, Dialog, ErrorState, PasswordField, PasswordStrength, Section, Skeleton } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
-import { mfaApi, usersApi } from "@/data/services";
+import { mfaApi, sessionsApi, usersApi } from "@/data/services";
 import { dateFull } from "@/lib/format";
 import { focusFirstInvalid } from "@/lib/focus";
 
@@ -143,6 +143,22 @@ function MfaBlock() {
   );
 }
 
+/** RN-75 — "Encerrar outras sessões": derruba os outros navegadores/aparelhos e mantém este. */
+function SessionsBlock() {
+  const [open, setOpen] = useState(false);
+  const revoke = useApiMutation(() => sessionsApi.revokeOthers(), { success: "Outras sessões encerradas", onSuccess: () => setOpen(false), onError: () => setOpen(false) });
+  return (
+    <div className="border-t border-line pt-5">
+      <h3 className="mb-1 text-sm font-semibold text-fg">Sessões abertas</h3>
+      <p className="mb-3 max-w-md text-xs text-fg-subtle">Perdeu um aparelho ou entrou num computador emprestado? Encerre as outras sessões — esta continua. A sessão também expira sozinha depois de 8 horas sem uso.</p>
+      <Button variant="outline" size="sm" icon="logout" onClick={() => setOpen(true)}>
+        Encerrar outras sessões…
+      </Button>
+      <ConfirmDialog open={open} onOpenChange={setOpen} title="Encerrar as outras sessões?" description="Todos os outros aparelhos e navegadores onde você está conectado(a) precisam entrar de novo. Esta sessão continua." confirmLabel="Encerrar outras sessões" onConfirm={() => revoke.mutate(undefined)} loading={revoke.isPending} />
+    </div>
+  );
+}
+
 /** Segurança da conta: 2FA (obrigatório para admin — RF-M1-06/RN-37) e troca de senha. */
 export function SecuritySection() {
   return (
@@ -153,6 +169,7 @@ export function SecuritySection() {
           <h3 className="mb-3 text-sm font-semibold text-fg">Alterar senha</h3>
           <ChangePasswordForm />
         </div>
+        <SessionsBlock />
       </div>
     </Section>
   );

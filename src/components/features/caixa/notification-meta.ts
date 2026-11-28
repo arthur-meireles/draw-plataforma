@@ -18,6 +18,7 @@ export const notificationMeta: Record<NotificationType, { label: string; icon: I
   cadastro: { label: "Dados de pagamento", icon: "freelancer" },
   vencimento: { label: "Vencimento", icon: "warning" },
   pagamento: { label: "Pagamento", icon: "payable" },
+  seguranca: { label: "Segurança", icon: "shield" },
 };
 
 export const notificationTypeOptions = (Object.keys(notificationMeta) as NotificationType[]).map((value) => ({ value, label: notificationMeta[value].label, icon: notificationMeta[value].icon }));
