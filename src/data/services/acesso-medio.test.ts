@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { SESSION_IDLE_MS, setSessionUserId } from "./_core";
-import { admApi, admExtraApi, mailApi, authApi, usersApi } from "./index";
+import { admApi, admExtraApi, filesApi, mailApi, authApi, notificationsApi, usersApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 
@@ -174,5 +174,63 @@ describe("RN-76 — auditoria e histórico", () => {
     await expect(mailApi.resend(ok.id)).rejects.toMatchObject({ status: 409 });
     as("usr_beatriz");
     await expect(mailApi.resend(l.id)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("RN-77 — Caixa de entrada", () => {
+  const mine = (userId: string) => loadDb().notifications.filter((n) => n.userId === userId);
+
+  it("arquivar não é definitivo: visão Arquivadas, desarquivar e arquivar lidas", async () => {
+    as("usr_beatriz");
+    const [a, b] = mine("usr_beatriz");
+    expect(a && b).toBeTruthy();
+    await notificationsApi.markRead(a.id, true);
+    await notificationsApi.archive(a.id);
+    expect((await notificationsApi.list()).some((n) => n.id === a.id)).toBe(false);
+    expect((await notificationsApi.list({ archived: true })).map((n) => n.id)).toEqual([a.id]);
+    await notificationsApi.unarchive(a.id);
+    expect((await notificationsApi.list()).some((n) => n.id === a.id)).toBe(true);
+    await expect(notificationsApi.unarchive(a.id)).rejects.toMatchObject({ status: 404 });
+    const n = await notificationsApi.archiveRead();
+    expect(n).toBeGreaterThanOrEqual(1);
+    expect((await notificationsApi.list()).every((x) => !x.readAt)).toBe(true);
+    // ninguém arquiva a notificação dos outros
+    as("usr_lucas");
+    await notificationsApi.archive(a.id);
+    expect(loadDb().notifications.find((x) => x.id === a.id)?.deletedAt).toBeTruthy();
+  });
+
+  it("notificação de comentário de tarefa traz o taskId e a de NF traz o link do formulário", async () => {
+    const { taskId, payId, freelancerUser } = transaction((db) => {
+      const t = db.tasks.find((x) => x.projectId && !x.deletedAt)!;
+      const p = db.projects.find((x) => x.id === t.projectId)!;
+      const pay = db.payables.find((x) => x.freelancerId && x.status === "aguardando_nf" && db.freelancers.find((f) => f.id === x.freelancerId)?.userId)!;
+      const fl = db.freelancers.find((f) => f.id === pay.freelancerId)!;
+      const cm = { ...db.comments[0], id: "cm_x", taskId: t.id, projectId: p.id };
+      db.comments.push(cm);
+      const base = { ...db.notifications[0], id: "nt_x", userId: "usr_beatriz", type: "comentario" as const, projectId: p.id, entityType: "comment", entityId: cm.id, readAt: null, deletedAt: null };
+      db.notifications.push(base);
+      db.notifications.push({ ...base, id: "nt_y", userId: fl.userId!, type: "nf_solicitada", entityType: "payable", entityId: pay.id });
+      return { taskId: t.id, payId: pay.id, freelancerUser: fl.userId! };
+    });
+    as("usr_beatriz");
+    expect((await notificationsApi.list()).find((n) => n.id === "nt_x")?.taskId).toBe(taskId);
+    as(freelancerUser);
+    const nf = (await notificationsApi.list()).find((n) => n.id === "nt_y");
+    const link = loadDb().shareLinks.find((l) => l.purpose === "nf_freelancer" && l.targetId === payId);
+    expect(nf?.invoiceToken ?? null).toBe(link && !link.revokedAt && (link.maxUses === null || link.useCount < link.maxUses) && Date.parse(link.expiresAt) > Date.now() ? link.token : null);
+  });
+
+  it("arquivo enviado por freelancer avisa o responsável do projeto", async () => {
+    const { projectId, ownerId, flUser } = transaction((db) => {
+      const m = db.projectMembers.find((x) => x.active && x.freelancerId && db.freelancers.find((f) => f.id === x.freelancerId)?.userId)!;
+      const p = db.projects.find((x) => x.id === m.projectId)!;
+      return { projectId: p.id, ownerId: p.ownerId, flUser: db.freelancers.find((f) => f.id === m.freelancerId)!.userId! };
+    });
+    as(flUser);
+    const before = mine(ownerId).length;
+    await filesApi.upload({ projectId, category: "entrega", file: new File(["x"], "arte-final.png", { type: "image/png" }) });
+    expect(mine(ownerId).length).toBe(before + 1);
+    expect(mine(ownerId).at(-1)).toMatchObject({ type: "projeto", entityType: "file" });
   });
 });

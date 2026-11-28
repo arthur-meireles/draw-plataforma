@@ -14,7 +14,7 @@ import { InboxDetail } from "./inbox-detail";
 import { InboxItem, type InboxNotification } from "./inbox-item";
 import { notificationMeta, notificationTypeOptions } from "./notification-meta";
 
-type Filter = "todas" | "nao-lidas";
+type Filter = "todas" | "nao-lidas" | "arquivadas";
 
 function InboxSkeleton() {
   return (
@@ -46,16 +46,19 @@ function groupByProject(list: InboxNotification[]) {
 export function InboxView() {
   const [f, set] = useUrlState({ filtro: "todas", tipo: undefined as string | undefined, n: undefined as string | undefined, agrupar: undefined as string | undefined });
   const byProject = f.agrupar === "projeto";
-  const filter: Filter = f.filtro === "nao-lidas" ? "nao-lidas" : "todas";
+  const filter: Filter = f.filtro === "nao-lidas" || f.filtro === "arquivadas" ? f.filtro : "todas";
+  const archivedView = filter === "arquivadas";
   const type = f.tipo && f.tipo in notificationMeta ? (f.tipo as NotificationType) : undefined;
 
-  const q = useApiQuery(["notifications", "list"], () => notificationsApi.list());
+  // a lista também atualiza sozinha (como o contador do menu); arquivadas é uma visão à parte (RN-77)
+  const q = useApiQuery(["notifications", "list", archivedView], () => notificationsApi.list({ archived: archivedView }), { refetchInterval: 30_000 });
   const markRead = useApiMutation((v: { id: string; read: boolean }) => notificationsApi.markRead(v.id, v.read), { success: false });
   const markAll = useApiMutation(notificationsApi.markAllRead, { success: "Todas as notificações foram marcadas como lidas" });
+  const archiveRead = useApiMutation(notificationsApi.archiveRead, { success: (n: number) => (n ? `${n} notificação(ões) lida(s) arquivada(s). Veja em Arquivadas.` : "Não há notificações lidas para arquivar.") });
 
   const all = useMemo(() => q.data ?? [], [q.data]);
   const unread = all.filter((n) => !n.readAt).length;
-  const list = useMemo(() => all.filter((n) => (filter === "todas" || !n.readAt) && (!type || n.type === type)), [all, filter, type]);
+  const list = useMemo(() => all.filter((n) => (filter !== "nao-lidas" || !n.readAt) && (!type || n.type === type)), [all, filter, type]);
   const groups = useMemo(() => groupByProject(list), [list]);
   const selected = f.n ? all.find((n) => n.id === f.n) ?? null : null;
 
@@ -68,12 +71,17 @@ export function InboxView() {
     <>
       <PageHeader
         crumbs={[{ label: "Caixa de entrada", icon: "inbox" }]}
-        count={q.data ? unread : undefined}
+        count={q.data && !archivedView ? unread : undefined}
         actions={
-          <Button size="sm" variant="secondary" icon="check" onClick={() => markAll.mutate(undefined)} loading={markAll.isPending} disabled={!unread} className={cn(selected && "max-md:hidden")}>
-            <span className="max-sm:hidden">Marcar todas como lidas</span>
-            <span className="sm:hidden">Ler todas</span>
-          </Button>
+          <>
+            <Button size="sm" variant="ghost" icon="archive" onClick={() => archiveRead.mutate(undefined)} loading={archiveRead.isPending} disabled={archivedView || !all.some((n) => n.readAt)} className={cn("max-md:hidden", selected && "max-md:hidden")}>
+              Arquivar lidas
+            </Button>
+            <Button size="sm" variant="secondary" icon="check" onClick={() => markAll.mutate(undefined)} loading={markAll.isPending} disabled={!unread || archivedView} className={cn(selected && "max-md:hidden")}>
+              <span className="max-sm:hidden">Marcar todas como lidas</span>
+              <span className="sm:hidden">Ler todas</span>
+            </Button>
+          </>
         }
       />
       <div className="flex min-h-0 flex-1">
@@ -85,7 +93,8 @@ export function InboxView() {
               onChange={(v) => set({ filtro: v })}
               options={[
                 { value: "todas", label: "Todas" },
-                { value: "nao-lidas", label: unread ? `Não lidas · ${unread}` : "Não lidas" },
+                { value: "nao-lidas", label: unread && !archivedView ? `Não lidas · ${unread}` : "Não lidas" },
+                { value: "arquivadas", label: "Arquivadas" },
               ]}
             />
             <Combobox<NotificationType>
@@ -108,8 +117,8 @@ export function InboxView() {
             ) : !list.length ? (
               <EmptyState
                 icon={all.length ? "search" : "success"}
-                title={all.length ? "Nada com esses filtros" : "Você está em dia"}
-                description={all.length ? "Remova os filtros para ver todas as notificações." : "Movimentos dos seus projetos e tarefas, menções e respostas de clientes aparecem aqui."}
+                title={all.length ? "Nada com esses filtros" : archivedView ? "Nenhuma notificação arquivada" : "Você está em dia"}
+                description={all.length ? "Remova os filtros para ver todas as notificações." : archivedView ? "O que você arquivar fica guardado aqui e pode voltar para a caixa." : "Prazos, atrasos, movimentos dos seus projetos e tarefas, menções e respostas de clientes aparecem aqui."}
                 action={all.length ? { label: "Limpar filtros", onClick: () => set({ filtro: undefined, tipo: undefined }) } : undefined}
               />
             ) : (
