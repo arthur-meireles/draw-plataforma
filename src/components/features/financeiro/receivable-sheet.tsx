@@ -104,7 +104,22 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
                 { label: "Vencimento", value: row.dueBasis ? `${dateFull(row.expectedAt)} · ${row.dueBasis}` : dateFull(row.expectedAt) },
                 { label: "Impostos sobre o faturamento", value: <Money cents={row.taxCents} /> },
                 ...(row.status === "cancelado" && row.cancelReason ? [{ label: "Motivo do cancelamento", value: row.cancelReason }] : []),
-                { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.issuedAt ? ` · emitida em ${dateFull(row.issuedAt)}` : ""}` : "Ainda não emitida" },
+                {
+                  label: "NF",
+                  value: row.invoiceNumber ? (
+                    <span className="inline-flex flex-wrap items-center gap-x-2">
+                      <span>{`Nº ${row.invoiceNumber}${row.issuedAt ? ` · emitida em ${dateFull(row.issuedAt)}` : ""}`}</span>
+                      {row.invoiceFileId && (
+                        <Link href={`/projetos/${row.projectCode}?aba=arquivos`} className="text-accent hover:underline">
+                          Ver PDF nos arquivos
+                        </Link>
+                      )}
+                    </span>
+                  ) : (
+                    "Ainda não emitida"
+                  ),
+                  copy: row.invoiceNumber,
+                },
                 { label: "Recebimento", value: row.receivedAt ? dateFull(row.receivedAt) : "—" },
               ]}
             />
