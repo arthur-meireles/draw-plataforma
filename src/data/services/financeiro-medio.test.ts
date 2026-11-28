@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDb, resetDb } from "../db";
 import { setSessionUserId } from "./_core";
-import { clientGroupsApi, clientsApi, financeApi, financeMedioApi, freelancerLifecycleApi, freelancersApi, payablesExtraApi, projectLifecycleApi, projectsApi, proposalsApi, publicInvoiceApi } from "./index";
+import { clientGroupsApi, clientsApi, collectionApi, eventsApi, financeApi, financeMedioApi, freelancerLifecycleApi, freelancersApi, payablesExtraApi, projectLifecycleApi, metricsApi, projectsApi, proposalsApi, publicInvoiceApi } from "./index";
 
 const as = (userId: string) => setSessionUserId(userId);
 const typeByPrefix = (p: string) => loadDb().projectTypes.find((t) => t.codePrefix === p)!;
@@ -312,5 +312,52 @@ describe("RN-88 — cliente inativo, grupos e exclusões", () => {
       const expected = db.projects.filter((p) => p.clientId === c.id && !p.deletedAt && ["ativo", "concluido", "arquivado"].includes(p.status)).reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0);
       expect(c.contractedCents).toBe(expected);
     }
+  });
+});
+
+/* ───────── RN-91 a RN-93 — painel, visão geral e cobrança ───────── */
+
+describe("RN-91 — painel", () => {
+  it("burndown exige acesso a Indicadores", async () => {
+    const p = loadDb().projects.find((x) => x.status === "ativo")!;
+    as("usr_lucas");
+    await expect(metricsApi.burndown(p.id)).rejects.toMatchObject({ status: 403 });
+    as("usr_paula");
+    await expect(metricsApi.burndown(p.id)).resolves.toBeTruthy();
+  });
+
+  it("projeto pausado não conta como atrasado", async () => {
+    const db = loadDb();
+    const p = db.projects.find((x) => x.status === "ativo")!;
+    p.dueAt = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    p.pausedAt = null;
+    save(db);
+    expect((await metricsApi.dashboard()).overdueProjects.some((x) => x.id === p.id)).toBe(true);
+    const db2 = loadDb();
+    db2.projects.find((x) => x.id === p.id)!.pausedAt = new Date().toISOString();
+    save(db2);
+    expect((await metricsApi.dashboard()).overdueProjects.some((x) => x.id === p.id)).toBe(false);
+  });
+});
+
+describe("RN-92 — visão geral separa a faturar de faturado em aberto", () => {
+  it("toInvoice + invoicedOpen + vencido = a receber", async () => {
+    as("usr_fernanda");
+    const t = (await financeApi.overview()).totals;
+    expect(t.toInvoice).toBeGreaterThanOrEqual(0);
+    expect(t.toInvoice + t.invoicedOpen + t.overdue).toBe(t.toReceive);
+  });
+});
+
+describe("RN-93 — registro de cobranças", () => {
+  it("cobrança enviada e nota ficam como eventos com canal e texto", async () => {
+    const p = await directProject();
+    const r = recsOf(p.id)[0];
+    as("usr_fernanda");
+    await financeApi.setCollectionNote(r.id, "Cliente pediu reenvio");
+    await collectionApi.registerSent(r.id, { channel: "whatsapp", note: "falei com a Ana" });
+    const events = (await eventsApi.list({ entityType: "receivable", entityId: r.id })).filter((e) => e.type.startsWith("receivable.collection"));
+    expect(events.map((e) => e.type).sort()).toEqual(["receivable.collection_note", "receivable.collection_sent"]);
+    expect(events.find((e) => e.type === "receivable.collection_note")!.data.note).toBe("Cliente pediu reenvio");
   });
 });

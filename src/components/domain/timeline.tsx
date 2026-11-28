@@ -105,7 +105,7 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "receivable.additional_created":
       return { icon: "receivable", text: <>lançou a cobrança adicional {b(String(d.description ?? ""))} de {b(money(d.amountCents as number))}</> };
     case "receivable.collection_note":
-      return { icon: "comment", text: <>atualizou a nota de cobrança</> };
+      return { icon: "comment", text: <>atualizou a nota de cobrança{d.note ? <>: &ldquo;{String(d.note).slice(0, 140)}&rdquo;</> : null}</> };
     case "receivable.delivery_due":
       return { icon: "receivable", text: <>trouxe {b(`${d.count} parcela(s) "na entrega"`)} para vencer hoje na conclusão</> };
     case "receivable.cancelled":

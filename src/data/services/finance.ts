@@ -351,6 +351,9 @@ export const financeApi = {
       return {
         totals: {
           toReceive: recs.filter((r) => r.status !== "recebido").reduce((a, r) => a + r.amountCents, 0),
+          // RN-92 — "a receber" separado: previsto (ainda sem NF), faturado em aberto (NF emitida, no prazo) e vencido
+          toInvoice: recs.filter((r) => r.status === "previsto").reduce((a, r) => a + r.amountCents, 0),
+          invoicedOpen: recs.filter((r) => r.status === "faturado").reduce((a, r) => a + r.amountCents, 0),
           overdue: recs.filter((r) => r.status === "vencido").reduce((a, r) => a + r.amountCents, 0),
           receivedMonth: recs.filter((r) => r.receivedAt?.slice(0, 7) === thisMonth).reduce((a, r) => a + r.amountCents, 0),
           toPay: pays.filter((p) => p.status !== "pago").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0),

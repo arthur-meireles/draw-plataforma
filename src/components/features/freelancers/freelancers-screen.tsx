@@ -2,7 +2,7 @@
 /** Listagem de freelancers (RF-M2-03). */
 import { InactivateFreelancerDialog } from "./inactivate-freelancer-dialog";
 import { useState } from "react";
-import { Button, ConfirmDialog, Fab, PageBody, PageHeader } from "@/components/ui";
+import { Button, Fab, PageBody, PageHeader } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
 import { freelancersApi, freelancersExtraApi } from "@/data/services";

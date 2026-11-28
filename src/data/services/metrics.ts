@@ -33,8 +33,9 @@ export const metricsApi = {
       const money = canSeeMoney(me) && access(me, "receivables") === "T";
       return {
         byStage: PROJECT_STAGES.filter((s) => s.key !== "concluido").map((s) => ({ key: s.key, label: s.label, category: s.category, count: active.filter((p) => p.projectStageKey === s.key).length })),
-        overdueProjects: active.filter((p) => p.dueAt && new Date(p.dueAt).getTime() < now).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
-        dueThisWeek: active.filter((p) => p.dueAt && new Date(p.dueAt).getTime() >= now && new Date(p.dueAt).getTime() <= week).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, stageKey: p.projectStageKey, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
+        // RN-13/RN-91 — projeto pausado não conta como atrasado nem como "vence esta semana"
+        overdueProjects: active.filter((p) => !p.pausedAt && p.dueAt && new Date(p.dueAt).getTime() < now).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
+        dueThisWeek: active.filter((p) => !p.pausedAt && p.dueAt && new Date(p.dueAt).getTime() >= now && new Date(p.dueAt).getTime() <= week).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, stageKey: p.projectStageKey, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
         openQuotes: projects.filter((p) => p.status === "cotacao").length,
         openQuotesValue: money ? db.proposals.filter((pr) => pr.status === "enviada" && projects.some((p) => p.id === pr.projectId && p.status === "cotacao")).reduce((a, pr) => a + pr.amountCents, 0) : null,
         activeCount: active.length,
@@ -254,6 +255,8 @@ export const metricsApi = {
   /** RF-M8-05 — burndown por projeto. */
   burndown: (projectId: ID) =>
     read((db, me) => {
+      // RN-91 — burndown é um indicador: exige acesso a Indicadores, além de ver o projeto
+      if (access(me, "metrics") === "-") throw new ApiError(403, "Seu perfil não tem acesso a indicadores.");
       const p = visibleProjects(db, me).find((x) => x.id === projectId || x.code === projectId);
       if (!p) throw new ApiError(404, "Projeto não encontrado.");
       const tasks = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt);
