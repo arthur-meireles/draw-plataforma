@@ -19,11 +19,15 @@ export const SprintStatusBadge = ({ status }: { status: SprintStatus }) => (
 );
 
 /** Lista de sprints com período, status, progresso e ações de iniciar/concluir (RF-M6-01). */
-export function SprintList({ sprints, tasks, isLoading, error, onRetry, canEdit, onOpenBoard, onCreate }: { sprints: Sprint[] | undefined; tasks: TaskView[] | undefined; isLoading?: boolean; error?: { message?: string; status?: number } | null; onRetry?: () => void; canEdit: boolean; onOpenBoard: (s: Sprint) => void; onCreate: () => void }) {
+export function SprintList({ sprints, tasks, isLoading, error, onRetry, canEdit, onOpenBoard, onCreate, onEdit }: { sprints: Sprint[] | undefined; tasks: TaskView[] | undefined; isLoading?: boolean; error?: { message?: string; status?: number } | null; onRetry?: () => void; canEdit: boolean; onOpenBoard: (s: Sprint) => void; onCreate: () => void; onEdit?: (s: Sprint) => void }) {
   const [starting, setStarting] = useState<Sprint | null>(null);
   const [finishing, setFinishing] = useState<Sprint | null>(null);
+  const [deleting, setDeleting] = useState<Sprint | null>(null);
+  /** RN-78 — na conclusão, as pendentes voltam ao backlog (padrão) ou ficam na sprint, para histórico. */
+  const [keepPending, setKeepPending] = useState(false);
+  const remove = useApiMutation((id: string) => tasksApi.deleteSprint(id), { success: (r) => (r.moved ? `Sprint excluída · ${plural(r.moved, "tarefa voltou", "tarefas voltaram")} ao backlog` : "Sprint excluída"), onSuccess: () => setDeleting(null), onError: () => setDeleting(null) });
   const start = useApiMutation((id: string) => tasksApi.setSprintStatus(id, "ativa"), { success: "Sprint iniciada", onSuccess: () => setStarting(null) });
-  const finish = useApiMutation((id: string) => admExtraApi.finishSprint(id, "backlog"), {
+  const finish = useApiMutation((id: string) => admExtraApi.finishSprint(id, keepPending ? "keep" : "backlog"), {
     success: (r) => (r.moved ? `Sprint concluída · ${plural(r.moved, "tarefa voltou", "tarefas voltaram")} ao backlog` : "Sprint concluída"),
     onSuccess: () => setFinishing(null),
   });
@@ -81,7 +85,7 @@ export function SprintList({ sprints, tasks, isLoading, error, onRetry, canEdit,
             </Button>
           )}
           {canEdit && s.status === "ativa" && (
-            <Button size="sm" variant="outline" icon="check" onClick={() => setFinishing(s)}>
+            <Button size="sm" variant="outline" icon="check" onClick={() => (setKeepPending(false), setFinishing(s))}>
               Concluir…
             </Button>
           )}
@@ -90,7 +94,10 @@ export function SprintList({ sprints, tasks, isLoading, error, onRetry, canEdit,
             items={[
               { label: "Abrir quadro", icon: "viewKanban", onSelect: () => onOpenBoard(s) },
               { label: "Iniciar sprint…", icon: "stageOpen", hidden: !canEdit || s.status !== "planejada", onSelect: () => setStarting(s) },
-              { label: "Concluir sprint…", icon: "check", hidden: !canEdit || s.status !== "ativa", onSelect: () => setFinishing(s) },
+              { label: "Concluir sprint…", icon: "check", hidden: !canEdit || s.status !== "ativa", onSelect: () => (setKeepPending(false), setFinishing(s)) },
+              { label: "Concluir e manter as pendentes na sprint…", icon: "history", hidden: !canEdit || s.status !== "ativa", onSelect: () => (setKeepPending(true), setFinishing(s)) },
+              { label: "Editar sprint", icon: "edit", hidden: !canEdit || s.status === "concluida", onSelect: () => onEdit?.(s) },
+              { label: "Excluir sprint…", icon: "delete", destructive: true, separatorBefore: true, hidden: !canEdit || s.status !== "planejada", onSelect: () => setDeleting(s) },
             ]}
           />
         </div>
@@ -120,22 +127,18 @@ export function SprintList({ sprints, tasks, isLoading, error, onRetry, canEdit,
         description={hasActive ? "A sprint em andamento será concluída e as tarefas não finalizadas dela voltam ao backlog." : "A sprint passa a ser a sprint atual e aparece no quadro."}
         confirmLabel="Iniciar sprint"
         loading={start.isPending}
-        onConfirm={() => {
-          if (!starting) return;
-          const current = (sprints ?? []).find((s) => s.status === "ativa");
-          if (current) finish.mutate(current.id, { onSuccess: () => start.mutate(starting.id) });
-          else start.mutate(starting.id);
-        }}
+        onConfirm={() => starting && start.mutate(starting.id)}
       />
       <ConfirmDialog
         open={!!finishing}
         onOpenChange={(o) => !o && setFinishing(null)}
         title={`Concluir ${finishing?.name ?? "sprint"}?`}
-        description={pending > 0 ? `${plural(pending, "tarefa não foi concluída", "tarefas não foram concluídas")} e ${pending === 1 ? "volta" : "voltam"} ao backlog.` : "Todas as tarefas desta sprint estão concluídas."}
+        description={pending > 0 ? (keepPending ? `${plural(pending, "tarefa não foi concluída e fica", "tarefas não foram concluídas e ficam")} nesta sprint, só para histórico.` : `${plural(pending, "tarefa não foi concluída", "tarefas não foram concluídas")} e ${pending === 1 ? "volta" : "voltam"} ao backlog.`) : "Todas as tarefas desta sprint estão concluídas."}
         confirmLabel="Concluir sprint"
         loading={finish.isPending}
         onConfirm={() => finishing && finish.mutate(finishing.id)}
       />
+      <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title={`Excluir ${deleting?.name ?? "sprint"}?`} description="As tarefas da sprint voltam ao backlog. A sprint some da lista." confirmLabel="Excluir sprint" destructive loading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
     </>
   );
 }

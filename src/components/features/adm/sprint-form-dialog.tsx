@@ -4,10 +4,11 @@ import { Button, DateField, Dialog, TextField } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
 import { tasksApi } from "@/data/services";
 import { focusFirstInvalid } from "@/lib/focus";
+import type { Sprint } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
 
-/** Criação de sprint com validação (RF-M6-01). */
-export function SprintFormDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated?: (id: string) => void }) {
+/** Criação (e edição, RN-78) de sprint com validação (RF-M6-01). */
+export function SprintFormDialog({ open, onOpenChange, onCreated, sprint }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated?: (id: string) => void; sprint?: Sprint | null }) {
   const [name, setName] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
@@ -17,15 +18,15 @@ export function SprintFormDialog({ open, onOpenChange, onCreated }: { open: bool
     if (open) {
       const start = new Date();
       const end = new Date(Date.now() + 13 * 86_400_000);
-      setName("");
-      setStartAt(toDateInput(start.toISOString()));
-      setEndAt(toDateInput(end.toISOString()));
+      setName(sprint?.name ?? "");
+      setStartAt(toDateInput(sprint?.startAt ?? start.toISOString()));
+      setEndAt(toDateInput(sprint?.endAt ?? end.toISOString()));
       setErrors({});
     }
-  }, [open]);
+  }, [open, sprint]);
 
-  const create = useApiMutation(tasksApi.createSprint, {
-    success: "Sprint criada",
+  const create = useApiMutation((v: { name: string; startAt: string; endAt: string }) => (sprint ? tasksApi.updateSprint(sprint.id, v) : tasksApi.createSprint(v)), {
+    success: sprint ? "Sprint atualizada" : "Sprint criada",
     onSuccess: (s) => {
       onOpenChange(false);
       onCreated?.(s.id);
@@ -52,7 +53,7 @@ export function SprintFormDialog({ open, onOpenChange, onCreated }: { open: bool
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Nova sprint"
+      title={sprint ? "Editar sprint" : "Nova sprint"}
       description="Sprints organizam as tarefas internas do Administrativo em ciclos."
       footer={
         <>
@@ -60,7 +61,7 @@ export function SprintFormDialog({ open, onOpenChange, onCreated }: { open: bool
             Cancelar
           </Button>
           <Button variant="primary" loading={create.isPending} onClick={submit}>
-            Criar sprint
+            {sprint ? "Salvar sprint" : "Criar sprint"}
           </Button>
         </>
       }

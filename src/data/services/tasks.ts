@@ -251,14 +251,70 @@ export const tasksApi = {
       return s;
     }),
 
+  /** RN-78 — editar nome/datas de sprint planejada ou em andamento. `PATCH /sprints/:id`. */
+  updateSprint: (id: ID, input: { name: string; startAt: string; endAt: string }) =>
+    write((db, me) => {
+      if (!canWriteAll(me, "adm")) throw new ApiError(403, "Só quem gerencia o Administrativo edita sprints. Peça à gestão.");
+      const s = db.sprints.find((x) => x.id === id && !x.deletedAt);
+      if (!s) throw new ApiError(404, "Sprint não encontrada.");
+      if (s.status === "concluida") throw new ApiError(409, "Sprint concluída não pode ser editada.");
+      if (!input.name.trim()) throw new ApiError(422, "Dê um nome à sprint.", { name: "Dê um nome à sprint" });
+      if (input.endAt < input.startAt) throw new ApiError(422, "A data final deve ser depois da inicial.", { endAt: "A data final deve ser depois da inicial" });
+      Object.assign(s, { name: input.name.trim(), startAt: input.startAt, endAt: input.endAt });
+      touch(s);
+      emit(db, me, { type: "sprint.updated", entityType: "sprint", entityId: s.id, data: { name: s.name } });
+      return s;
+    }),
+
+  /** RN-78 — excluir sprint planejada: as tarefas dela voltam ao backlog. `DELETE /sprints/:id`. */
+  deleteSprint: (id: ID) =>
+    write((db, me) => {
+      if (!canWriteAll(me, "adm")) throw new ApiError(403, "Só quem gerencia o Administrativo exclui sprints. Peça à gestão.");
+      const s = db.sprints.find((x) => x.id === id && !x.deletedAt);
+      if (!s) throw new ApiError(404, "Sprint não encontrada.");
+      if (s.status !== "planejada") throw new ApiError(409, s.status === "ativa" ? "Sprint em andamento não se exclui: conclua a sprint para encerrar o ciclo." : "Sprint concluída fica no histórico e não pode ser excluída.");
+      const tasks = db.tasks.filter((t) => t.sprintId === s.id && !t.deletedAt);
+      tasks.forEach((t) => {
+        t.sprintId = null;
+        touch(t);
+      });
+      s.deletedAt = nowIso();
+      emit(db, me, { type: "sprint.deleted", entityType: "sprint", entityId: s.id, data: { name: s.name, movedToBacklog: tasks.length } });
+      return { moved: tasks.length };
+    }),
+
+  /**
+   * Iniciar/concluir sprint. RN-78 — iniciar uma sprint com outra ativa conclui a ativa pela MESMA rotina de
+   * `finishSprint` (pendências voltam ao backlog e sai o evento `sprint.finished`); concluir por aqui idem.
+   */
   setSprintStatus: (id: ID, status: "planejada" | "ativa" | "concluida") =>
     write((db, me) => {
       if (!canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão.");
-      const s = db.sprints.find((x) => x.id === id);
+      const s = db.sprints.find((x) => x.id === id && !x.deletedAt);
       if (!s) throw new ApiError(404, "Sprint não encontrada.");
-      if (status === "ativa") db.sprints.filter((x) => x.status === "ativa").forEach((x) => (x.status = "concluida"));
+      if (status === "concluida") return closeSprint(db, me, s, "backlog").sprint;
+      if (status === "ativa") db.sprints.filter((x) => x.status === "ativa" && x.id !== s.id && !x.deletedAt).forEach((x) => closeSprint(db, me, x, "backlog"));
       s.status = status;
       touch(s);
       return s;
     }),
 };
+
+/** RN-78 — conclusão de sprint (única): devolve pendências ao backlog (ou mantém na sprint) e registra `sprint.finished`. */
+export function closeSprint(db: Database, me: User, s: { id: ID; name: string; status: "planejada" | "ativa" | "concluida"; updatedAt: string }, unfinished: "backlog" | "keep") {
+  if (s.status === "concluida") throw new ApiError(409, "Esta sprint já foi concluída.");
+  s.status = "concluida";
+  touch(s);
+  let moved = 0;
+  if (unfinished === "backlog") {
+    db.tasks
+      .filter((t) => t.sprintId === s.id && t.module === "adm" && !t.deletedAt && t.statusKey !== "concluida")
+      .forEach((t) => {
+        t.sprintId = null;
+        touch(t);
+        moved++;
+      });
+  }
+  emit(db, me, { type: "sprint.finished", entityType: "sprint", entityId: s.id, data: { name: s.name, movedToBacklog: moved } });
+  return { moved, sprint: s };
+}

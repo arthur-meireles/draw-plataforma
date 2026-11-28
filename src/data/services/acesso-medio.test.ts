@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { SESSION_IDLE_MS, setSessionUserId } from "./_core";
-import { admApi, admExtraApi, filesApi, mailApi, authApi, notificationsApi, usersApi } from "./index";
+import { admApi, admExtraApi, filesApi, mailApi, authApi, notificationsApi, tasksApi, usersApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 
@@ -232,5 +232,43 @@ describe("RN-77 — Caixa de entrada", () => {
     await filesApi.upload({ projectId, category: "entrega", file: new File(["x"], "arte-final.png", { type: "image/png" }) });
     expect(mine(ownerId).length).toBe(before + 1);
     expect(mine(ownerId).at(-1)).toMatchObject({ type: "projeto", entityType: "file" });
+  });
+});
+
+describe("RN-78 — sprints do Administrativo", () => {
+  it("iniciar sprint com outra ativa conclui a ativa pela mesma rotina (pendências ao backlog + evento)", async () => {
+    as("usr_paula");
+    const active = loadDb().sprints.find((x) => x.status === "ativa")!;
+    const pending = loadDb().tasks.filter((t) => t.sprintId === active.id && t.statusKey !== "concluida" && t.module === "adm");
+    const next = await tasksApi.createSprint({ name: "Próxima", startAt: new Date().toISOString(), endAt: new Date(Date.now() + 9e8).toISOString() });
+    await tasksApi.setSprintStatus(next.id, "ativa");
+    const db = loadDb();
+    expect(db.sprints.find((x) => x.id === active.id)?.status).toBe("concluida");
+    expect(db.sprints.filter((x) => x.status === "ativa")).toHaveLength(1);
+    expect(pending.every((t) => db.tasks.find((x) => x.id === t.id)?.sprintId === null)).toBe(true);
+    expect(db.events.some((e) => e.type === "sprint.finished" && e.entityId === active.id)).toBe(true);
+  });
+
+  it("concluir mantendo as pendentes deixa as tarefas na sprint", async () => {
+    as("usr_paula");
+    const active = loadDb().sprints.find((x) => x.status === "ativa")!;
+    const pending = loadDb().tasks.filter((t) => t.sprintId === active.id && t.statusKey !== "concluida" && t.module === "adm");
+    await admExtraApi.finishSprint(active.id, "keep");
+    expect(pending.every((t) => loadDb().tasks.find((x) => x.id === t.id)?.sprintId === active.id)).toBe(true);
+  });
+
+  it("editar sprint e excluir planejada (tarefas voltam ao backlog); ativa e concluída não se excluem", async () => {
+    as("usr_paula");
+    const s = await tasksApi.createSprint({ name: "Rascunho", startAt: "2026-12-01T12:00:00.000Z", endAt: "2026-12-10T12:00:00.000Z" });
+    await tasksApi.updateSprint(s.id, { name: "Rascunho 2", startAt: s.startAt, endAt: "2026-12-12T12:00:00.000Z" });
+    await expect(tasksApi.updateSprint(s.id, { name: "x", startAt: "2026-12-10T12:00:00.000Z", endAt: "2026-12-01T12:00:00.000Z" })).rejects.toMatchObject({ status: 422 });
+    const t = (await tasksApi.list({ module: "adm", sprintId: "backlog" }))[0];
+    await tasksApi.update(t.id, { sprintId: s.id });
+    expect(await tasksApi.deleteSprint(s.id)).toEqual({ moved: 1 });
+    expect(loadDb().tasks.find((x) => x.id === t.id)?.sprintId).toBeNull();
+    const active = loadDb().sprints.find((x) => x.status === "ativa")!;
+    await expect(tasksApi.deleteSprint(active.id)).rejects.toMatchObject({ status: 409 });
+    as("usr_lucas");
+    await expect(tasksApi.updateSprint(active.id, { name: "x", startAt: active.startAt, endAt: active.endAt })).rejects.toMatchObject({ status: 403 });
   });
 });
