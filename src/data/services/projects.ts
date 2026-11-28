@@ -35,7 +35,7 @@ import { settleCompletionPayables, type CompletionDecision } from "./payables-ex
 import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 import { effectiveReceivableStatus } from "./finance-rules";
-import { newProjectErrors, notifyDirectCreated, notifyOwner, propagateClientChange, recomputeDeliveryDue, validateNewProject } from "./project-intake";
+import { newProjectErrors, notifyDirectCreated, notifyOwner, propagateClientChange, recomputeDeliveryDue, validateNewProject, withdrawIdleApprovals, closeOpenProjectTasks } from "./project-intake";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -366,9 +366,11 @@ export const projectsApi = {
         if (p.pausedAt && to !== p.projectStageKey) throw new ApiError(409, "Projeto pausado não muda de etapa. Retome o projeto primeiro.");
         if (to !== p.projectStageKey) {
           emit(db, me, { type: "project.stage_changed", entityType: "project", entityId: p.id, project: p, data: { from: p.projectStageKey, to } });
+          const leaving = p.projectStageKey;
           p.projectStageKey = to;
           const stage = PROJECT_STAGES.find((s) => s.key === to);
-          if (stage?.category === "waiting") {
+          withdrawIdleApprovals(db, me, p, leaving); // RN-101
+          if (stage?.category === "waiting" && !db.approvals.some((x) => x.projectId === p.id && x.stageKey === to && x.decision === "pendente" && !x.deletedAt)) {
             db.approvals.push({ ...baseFields(me.id), projectId: p.id, stageKey: to, requestedFrom: db.clientContacts.find((c) => c.id === p.billingContactId)?.name ?? "Cliente", decision: "pendente", reason: null, decidedBy: null, decidedAt: null, requestedBy: me.id, shareLinkId: null, decidedVia: null, decidedByName: null });
           }
           // RN-53 — responsável e equipe (inclusive freelancers com acesso), nunca quem moveu.
@@ -442,7 +444,7 @@ export const projectsApi = {
     }),
 
   /** RF-M4-12 / RN-03 — concluir gera contas a pagar, share links e e-mails. */
-  complete: (id: ID, decisions: CompletionDecision[] = []) =>
+  complete: (id: ID, decisions: CompletionDecision[] = [], opts: { closeOpenTasks?: boolean } = {}) =>
     write((db, me) => {
       const p = assertProjectVisible(db, me, id);
       if (p.status !== "ativo") throw new ApiError(409, "Só projetos ativos podem ser concluídos.");
@@ -457,8 +459,10 @@ export const projectsApi = {
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);
+      withdrawIdleApprovals(db, me, p, null); // RN-101 — pedidos sem resposta saem com a conclusão
+      const closedTasks = opts.closeOpenTasks ? closeOpenProjectTasks(db, p) : 0; // RN-101 — "Concluir também as tarefas abertas"
       const deliveryDue = billDeliveryOnCompletion(db, me, p);
-      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length, deliveryInstallmentsDue: deliveryDue } });
+      emit(db, me, { type: "project.completed", entityType: "project", entityId: p.id, project: p, data: { payablesCreated: created.length, deliveryInstallmentsDue: deliveryDue, tasksClosed: closedTasks } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto concluído", body: `${me.name} concluiu o projeto`, project: p });
       return { project: p, payablesCreated: created.length };
     }),
@@ -539,6 +543,7 @@ export const projectsApi = {
     write((db, me) => {
       const p = assertProjectVisible(db, me, projectId);
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Sem permissão para alterar a equipe.");
+      if (!["cotacao", "ativo", "concluido"].includes(p.status)) throw new ApiError(409, "Este projeto está encerrado e não recebe pessoas novas. Reabra ou reative o projeto primeiro.");
       if (!!input.userId === !!input.freelancerId) throw new ApiError(422, "Escolha uma pessoa da equipe ou um freelancer.");
       const existing = db.projectMembers.find((m) => m.projectId === p.id && !m.deletedAt && ((input.userId && m.userId === input.userId) || (input.freelancerId && m.freelancerId === input.freelancerId)));
       if (existing?.active) throw new ApiError(409, "Essa pessoa já faz parte da equipe.");
@@ -583,7 +588,17 @@ export const projectsApi = {
       if (m.memberRole === "responsavel" && m.userId === p.ownerId) throw new ApiError(409, "Troque o responsável do projeto antes de removê-lo da equipe.");
       m.active = false;
       touch(m);
-      emit(db, me, { type: "project.member_removed", entityType: "project", entityId: p.id, project: p, data: { memberId } });
+      // RN-101 — tarefas abertas da pessoa ficam sem responsável (o dono do projeto decide); ela e o responsável são avisados
+      const open = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida" && ((m.userId && t.assigneeUserId === m.userId) || (m.freelancerId && t.assigneeFreelancerId === m.freelancerId)));
+      open.forEach((t) => {
+        t.assigneeUserId = null;
+        t.assigneeFreelancerId = null;
+        touch(t);
+      });
+      emit(db, me, { type: "project.member_removed", entityType: "project", entityId: p.id, project: p, data: { memberId, tasksUnassigned: open.length } });
+      notifyMany(db, me, [m.userId ?? freelancerUserId(db, m.freelancerId)], { type: "atribuicao", title: `Você saiu do projeto ${p.code}`, body: p.title, project: p });
+      if (open.length) notifyMany(db, me, [p.ownerId], { type: "atribuicao", title: `${open.length} tarefa(s) ficaram sem responsável`, body: `${memberDisplay(db, m).name} saiu da equipe de ${p.code}`, project: p });
+      return { tasksUnassigned: open.length };
     }),
 
   /** `v_project_financials` */
@@ -601,7 +616,7 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
   const pays = db.payables.filter((r) => r.projectId === projectId && !r.deletedAt);
   const contracted = p.contractedAmountCents ?? 0;
   const freelancerCommitted = db.projectMembers
-    .filter((m) => m.projectId === projectId && m.freelancerId && m.agreedAmountCents && !m.deletedAt)
+    .filter((m) => m.projectId === projectId && m.freelancerId && m.agreedAmountCents && m.active && !m.deletedAt)
     .reduce((a, m) => a + (m.agreedAmountCents ?? 0), 0);
   const freelancerCost = Math.max(freelancerCommitted, pays.filter((x) => x.kind === "freelancer").reduce((a, x) => a + (x.invoicedAmountCents ?? x.agreedAmountCents), 0));
   const otherCost = pays.filter((x) => x.kind === "despesa_projeto").reduce((a, x) => a + x.agreedAmountCents, 0);

@@ -38,7 +38,7 @@ export function useDefaultView(): ViewMode {
 export const matchesDue = (p: ProjectListItem, due: string) => {
   const d = daysUntil(p.dueAt);
   if (due === "atrasado") return p.isOverdue;
-  if (d == null || p.isOverdue) return false;
+  if (d == null || p.isOverdue || p.pausedAt) return false; // projeto parado não gera alertas de prazo (RN-13)
   if (due === "proximos") return d <= 2;
   if (due === "semana") return d <= 7;
   if (due === "mes") return d <= 30;

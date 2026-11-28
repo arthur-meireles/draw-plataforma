@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Money } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Badge, Button, Dialog, MoneyField, SegmentedControl, Skeleton } from "@/components/ui";
+import { Badge, Button, Checkbox, Dialog, MoneyField, SegmentedControl, Skeleton } from "@/components/ui";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
 import { MEMBER_ROLE_LABEL } from "@/data/reference";
 import { projectsApi, projectsExtraApi, type CompletionDecision } from "@/data/services";
@@ -20,6 +20,7 @@ export function CompleteProjectDialog({ project, open, onOpenChange }: { project
   const preview = useApiQuery(["completion-preview", project.id], () => projectsExtraApi.completionPreview(project.id), { enabled: open });
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [closeTasks, setCloseTasks] = useState(false);
   const p = preview.data;
   const pending = p?.freelancers.filter((f) => f.needsDecision) ?? [];
 
@@ -27,6 +28,7 @@ export function CompleteProjectDialog({ project, open, onOpenChange }: { project
     if (!open) return;
     setErrors({});
     setChoices({});
+    setCloseTasks(false);
   }, [open]);
 
   const choiceOf = (id: string, fallbackAmount: number | null): Choice => choices[id] ?? { action: "pagar", amount: fallbackAmount ?? 0 };
@@ -36,7 +38,7 @@ export function CompleteProjectDialog({ project, open, onOpenChange }: { project
       return c.action === "sem_pagamento" ? { memberId: f.memberId, action: "sem_pagamento" } : { memberId: f.memberId, action: "pagar", amountCents: c.amount > 0 ? c.amount : null };
     });
 
-  const complete = useApiMutation(() => projectsApi.complete(project.id, decisions()), {
+  const complete = useApiMutation(() => projectsApi.complete(project.id, decisions(), { closeOpenTasks: closeTasks }), {
     success: (r) => (r.payablesCreated ? `Projeto concluído · ${plural(r.payablesCreated, "pedido de NF enviado", "pedidos de NF enviados")}` : "Projeto concluído"),
     onSuccess: () => onOpenChange(false),
     onError: (e) => e.fieldErrors && setErrors(e.fieldErrors),
@@ -84,6 +86,7 @@ export function CompleteProjectDialog({ project, open, onOpenChange }: { project
           <div className="space-y-1 rounded-lg border border-line bg-layer p-3 text-xs">
             <p className="font-medium text-fg">{willPay ? plural(willPay, "pedido de NF será enviado", "pedidos de NF serão enviados") : "Nenhum pedido de NF será enviado"}</p>
             {p.openTasks > 0 && <p>{plural(p.openTasks, "tarefa ainda está aberta", "tarefas ainda estão abertas")}.</p>}
+            {p.openTasks > 0 && <Checkbox checked={closeTasks} onCheckedChange={(v) => setCloseTasks(!!v)} label={`Concluir também ${p.openTasks === 1 ? "a tarefa aberta" : `as ${p.openTasks} tarefas abertas`}`} />}
           </div>
         )}
         {pending.length > 0 && (

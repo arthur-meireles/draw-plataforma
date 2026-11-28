@@ -54,6 +54,8 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
     success: (a) => (a.decision === "aprovado" ? (a.stageKey === "validacao_cliente" ? "Validação registrada. O projeto está pronto para concluir." : "Aprovação registrada. O projeto avança de etapa quando estava nela.") : a.decision === "ajustes" ? "Pedido de ajustes registrado. O projeto volta para a etapa de ajustes." : "Negativa registrada"),
     onSuccess: () => setDeciding(null),
   });
+  const [withdrawing, setWithdrawing] = useState<Approval | null>(null);
+  const withdraw = useApiMutation((id: ID) => approvalsApi.withdraw(id), { success: "Pedido retirado", onSuccess: () => setWithdrawing(null) });
   const canDecide = !isFreelancer && canWrite("projects");
   const canRequest = canDecide && project.status === "ativo";
   const canDeliver = canDecide && (project.status === "ativo" || project.status === "concluido");
@@ -98,6 +100,7 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
                   <Button size="sm" variant="primary" icon="check" loading={decide.isPending && decide.variables?.id === a.id && decide.variables.decision === "aprovado"} onClick={() => decide.mutate({ id: a.id, decision: "aprovado" })}>Registrar aprovação</Button>
                   <Button size="sm" onClick={() => setDeciding({ approval: a, decision: "ajustes" })}>Pedir ajustes…</Button>
                   <Button size="sm" variant="destructive-ghost" onClick={() => setDeciding({ approval: a, decision: "negado" })}>Registrar negativa…</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setWithdrawing(a)}>Retirar pedido…</Button>
                   {project.status === "ativo" && (
                     <Button size="sm" variant="ghost" icon="send" onClick={() => setSending({ kind: "aprovacao", approvalId: a.id, stageKey: a.stageKey })}>
                       {a.shareLinkId ? "Enviar de novo ao cliente…" : "Enviar ao cliente…"}
@@ -116,6 +119,16 @@ export function ProjectApprovals({ project }: { project: ProjectDetail }) {
       )}
       {requesting && <RequestDialog project={project} onClose={() => setRequesting(false)} />}
       {sending && <SendToClientDialog projectId={project.id} mode={sending} defaultStage={defaultStage} onClose={() => setSending(null)} />}
+      <ConfirmDialog
+        open={!!withdrawing}
+        onOpenChange={(o) => !o && setWithdrawing(null)}
+        title="Retirar pedido de aprovação?"
+        description="Use quando o pedido foi criado por engano ou perdeu o sentido. O registro sai da lista e fica no histórico; se já foi enviado ao cliente, o link é desativado."
+        confirmLabel="Retirar pedido"
+        destructive
+        loading={withdraw.isPending}
+        onConfirm={() => withdrawing && withdraw.mutate(withdrawing.id)}
+      />
       <ConfirmDialog
         open={!!deciding}
         onOpenChange={(o) => !o && setDeciding(null)}

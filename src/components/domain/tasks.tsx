@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Avatar, Button, Combobox, ConfirmDialog, DateInput, EmptyState, ErrorState, Icon, IconButton, Input, Pill, PropertyRow, RowActions, Sheet, Skeleton, Textarea, ProgressRing, useEntrance, useExitingItems, Collapse } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
-import { tasksApi, type TaskView } from "@/data/services";
+import { projectsApi, tasksApi, type TaskView } from "@/data/services";
 import type { AdmArea, ID, PriorityKey, TaskStatusKey } from "@/data/types";
 import { fromDateInput, toDateInput } from "@/lib/format";
 import { ADM_AREAS, PROJECT_STATUS_LABEL, projectStage, quoteStage } from "@/data/reference";
@@ -254,8 +254,12 @@ export function TaskList({ tasks, isLoading, error, onRetry, groupBy = "none", o
 }
 
 /** Painel lateral com o detalhe da tarefa (peek). Controlado pela URL no pai (?tarefa=id). */
-export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | null; onClose: () => void; restrictAssignees?: PersonRef[] }) {
+export function TaskPeek({ taskId, onClose, restrictAssignees: restrictProp }: { taskId: ID | null; onClose: () => void; restrictAssignees?: PersonRef[] }) {
   const q = useApiQuery(["task", taskId], () => tasksApi.get(taskId!), { enabled: !!taskId });
+  // RN-100 — sem equipe informada (Minhas tarefas), o seletor de responsável usa a equipe do projeto da tarefa
+  const peekProjectId = q.data?.projectId ?? null;
+  const members = useApiQuery(["project-members", peekProjectId], () => projectsApi.members(peekProjectId!), { enabled: !!peekProjectId && !restrictProp });
+  const restrictAssignees: PersonRef[] | undefined = restrictProp ?? (members.data ? members.data.filter((m) => m.active).map((m) => (m.userId ? { kind: "user" as const, id: m.userId } : { kind: "freelancer" as const, id: m.freelancerId! })) : undefined);
   const update = useTaskUpdate();
   const remove = useApiMutation(tasksApi.remove, { success: "Tarefa excluída", onSuccess: onClose });
   const [title, setTitle] = useState("");
@@ -353,7 +357,7 @@ export function TaskPeek({ taskId, onClose, restrictAssignees }: { taskId: ID | 
               </h3>
               <div className="overflow-hidden rounded-lg border border-line">
                 {t.subtasks.map((s) => (
-                  <TaskRow key={s.id} task={s} restrictAssignees={restrictAssignees} readOnly={ro && s.assigneeUserId !== null} />
+                  <TaskRow key={s.id} task={s} restrictAssignees={restrictAssignees} readOnly={!s.canChangeStatus} />
                 ))}
                 {canAddSub && <TaskQuickAdd projectId={t.projectId} parentTaskId={t.id} module={t.module} label="Adicionar subtarefa" />}
                 {!canAddSub && !t.subtasks.length && <p className="px-3 py-2 text-xs text-fg-subtle">Sem subtarefas.</p>}

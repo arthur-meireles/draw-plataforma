@@ -310,6 +310,23 @@ export const approvalsApi = {
       if (me.role === "freelancer") throw new ApiError(403, "Decisões de aprovação são registradas pela equipe da Draw.");
       return decideApprovalTx(db, me, a, decision, reason, { via: "interno" });
     }),
+
+  /** RN-101 — retira um pedido pendente (criado por engano ou pela mudança automática de etapa): soft delete com evento; o link enviado ao cliente é revogado. */
+  withdraw: (id: ID) =>
+    write((db, me) => {
+      const a = db.approvals.find((x) => x.id === id && !x.deletedAt);
+      if (!a) throw new ApiError(404, "Aprovação não encontrada.");
+      const p = assertProjectVisible(db, me, a.projectId);
+      requireAccess(me, "projects", "write", "Seu perfil só consulta este projeto. Peça ao responsável para retirar o pedido.");
+      if (me.role === "freelancer") throw new ApiError(403, "Aprovações do cliente são registradas pela equipe da Draw.");
+      if (a.decision !== "pendente") throw new ApiError(409, "Só pedidos pendentes podem ser retirados.");
+      const now = nowIso();
+      a.deletedAt = now;
+      touch(a);
+      db.shareLinks.filter((l) => l.id === a.shareLinkId && !l.revokedAt && !l.response).forEach((l) => (l.revokedAt = now));
+      emit(db, me, { type: "approval.withdrawn", entityType: "approval", entityId: a.id, project: p, data: { stageKey: a.stageKey, byUser: true } });
+      return a;
+    }),
 };
 
 export const eventsApi = {

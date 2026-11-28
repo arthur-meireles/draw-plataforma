@@ -149,7 +149,7 @@ export function ProjectTeam({ project }: { project: ProjectDetail }) {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={`Remover ${removing?.name ?? ""} da equipe?`}
-        description="A pessoa perde o acesso ao projeto, mas tarefas, comentários, arquivos e pagamentos já registrados são preservados (RN-08)."
+        description={`A pessoa perde o acesso ao projeto, mas tarefas, comentários, arquivos e pagamentos já registrados são preservados (RN-08).${removing && removing.openTasks > 0 ? ` As ${removing.openTasks} tarefa(s) abertas dela ficam sem responsável e o responsável do projeto é avisado para reatribuir.` : ""}`}
         confirmLabel="Remover da equipe"
         destructive
         loading={remove.isPending}

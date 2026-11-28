@@ -82,7 +82,20 @@ function assertTask(db: Database, me: User, id: ID): Task {
   return t;
 }
 
+/** RN-100 — pessoas que podem receber tarefa do projeto: responsável e equipe ativa (interna e freelancers). */
+function assertAssignable(db: Database, p: Project | null, userId: ID | null | undefined, freelancerId: ID | null | undefined) {
+  if (!p) return;
+  const inTeam = db.projectMembers.some((m) => m.projectId === p.id && m.active && !m.deletedAt && ((userId && m.userId === userId) || (freelancerId && m.freelancerId === freelancerId)));
+  if ((!userId && !freelancerId) || inTeam || (userId && userId === p.ownerId)) return;
+  throw new ApiError(422, "Essa pessoa não está na equipe do projeto. Adicione-a na aba Equipe antes de atribuir a tarefa.", { assigneeUserId: "Escolha alguém da equipe do projeto" });
+}
+
 function canEditTask(db: Database, me: User, t: Task) {
+  // RN-100 — projeto encerrado (concluído, cancelado, perdido ou arquivado) não aceita edição de tarefas; reabra o projeto
+  if (t.projectId) {
+    const st = db.projects.find((x) => x.id === t.projectId)?.status;
+    if (st && !OPEN_PROJECT_STATUSES.includes(st)) return false;
+  }
   if (t.module === "adm") return canWriteAll(me, "adm");
   if (canWriteAll(me, "tasks")) return true;
   if (!canWrite(me, "tasks")) return false; // L (Financeiro) só consulta tarefas de projeto
@@ -164,6 +177,7 @@ export const tasksApi = {
       if (taskModule === "projeto") requireAccess(me, "tasks", "write", "Seu perfil só consulta tarefas de projeto. Peça ao responsável do projeto para criar a tarefa.");
       if (taskModule === "projeto" && me.role === "freelancer" && !input.parentTaskId) throw new ApiError(403, "Freelancers só criam subtarefas.");
       if (p && !OPEN_PROJECT_STATUSES.includes(p.status)) throw new ApiError(409, "Este projeto está encerrado e não recebe tarefas novas. Reabra o projeto para continuar.");
+      if (taskModule === "projeto") assertAssignable(db, p, input.assigneeUserId, input.assigneeFreelancerId);
       const siblings = db.tasks.filter((t) => t.projectId === (p?.id ?? null) && t.parentTaskId === (input.parentTaskId ?? null));
       const parent = input.parentTaskId ? db.tasks.find((t) => t.id === input.parentTaskId) : null;
       const t: Task = {
@@ -202,6 +216,7 @@ export const tasksApi = {
         if (!statusOnly) throw new ApiError(403, "Nas tarefas do Administrativo você pode mudar só o status das suas. Peça à gestão para alterar prazo, responsável ou área.");
       }
       const p = t.projectId ? db.projects.find((x) => x.id === t.projectId) ?? null : null;
+      if (t.module === "projeto" && ((patch.assigneeUserId && patch.assigneeUserId !== t.assigneeUserId) || (patch.assigneeFreelancerId && patch.assigneeFreelancerId !== t.assigneeFreelancerId))) assertAssignable(db, p, patch.assigneeUserId, patch.assigneeFreelancerId);
       const before = { ...t };
       Object.assign(t, patch);
       if (patch.statusKey) t.completedAt = patch.statusKey === "concluida" ? (before.completedAt ?? nowIso()) : null;
@@ -224,7 +239,12 @@ export const tasksApi = {
         notify(db, me, { userId: t.assigneeUserId ?? flUser, type: "atribuicao", title: `Tarefa atribuída: ${t.title}`, project: p, entityType: "task", entityId: t.id });
         emit(db, me, { type: "task.assigned", entityType: "task", entityId: t.id, project: p, data: { title: t.title } });
       }
-      if (patch.dueAt !== undefined && patch.dueAt !== before.dueAt) emit(db, me, { type: "task.due_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.dueAt, to: patch.dueAt, title: t.title } });
+      if (patch.dueAt !== undefined && patch.dueAt !== before.dueAt) {
+        emit(db, me, { type: "task.due_changed", entityType: "task", entityId: t.id, project: p, data: { from: before.dueAt, to: patch.dueAt, title: t.title } });
+        // RN-100 — quem executa é avisado do novo prazo (nunca quem mudou)
+        const doer = t.assigneeUserId ?? (t.assigneeFreelancerId ? db.freelancers.find((f) => f.id === t.assigneeFreelancerId)?.userId : null);
+        notifyMany(db, me, [doer], { type: "prazo", title: `Prazo alterado: ${t.title}`, body: `${me.name} mudou o prazo`, project: p, entityType: "task", entityId: t.id });
+      }
       return t;
     }),
 

@@ -88,6 +88,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "comment", text: <>comentou: &ldquo;{String(d.excerpt ?? "")}&rdquo;</> };
     case "approval.requested":
       return { icon: "approval", text: <>pediu aprovação a {b(String(d.requestedFrom))}</> };
+    case "approval.withdrawn":
+      return { icon: "approval", text: <>{d.byUser ? "retirou um pedido de aprovação" : "retirou o pedido de aprovação sem resposta (a etapa mudou)"}</> };
     case "approval.decided":
       return { icon: "approval", text: <>registrou aprovação: {b(APPROVAL_DECISION_LABEL[d.decision as keyof typeof APPROVAL_DECISION_LABEL])}{d.reason ? <> — {String(d.reason)}</> : null}</> };
     case "file.uploaded":

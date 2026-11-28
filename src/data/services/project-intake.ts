@@ -2,6 +2,7 @@
  * Entrada de projetos (onda 3, RN-95..RN-97): validação no serviço (não só no assistente), avisos da criação
  * direta, condição de pagamento derivada da proposta e recálculo da parcela "na entrega" quando o prazo muda.
  */
+import { nowIso } from "../db";
 import { touch } from "./_core";
 import type { Database, ID, PaymentCondition, Project, User } from "../types";
 import { ApiError, emit, notify } from "./_core";
@@ -81,4 +82,32 @@ export function propagateClientChange(db: Database, p: Project) {
     touch(f);
   });
   p.billingContactId = db.clientContacts.find((c) => c.clientId === p.clientId && c.isBillingContact)?.id ?? null;
+}
+
+/**
+ * RN-101 — pedido de aprovação pendente só vale enquanto o projeto está na etapa dele: ao sair da etapa (ou concluir)
+ * os pendentes sem link enviado ao cliente são retirados (soft delete, evento `approval.withdrawn`). Os que têm link
+ * público ativo ficam — o cliente ainda pode responder.
+ */
+export function withdrawIdleApprovals(db: Database, me: User, p: Project, stageKey: string | null) {
+  const now = nowIso();
+  const idle = db.approvals.filter((a) => a.projectId === p.id && a.decision === "pendente" && !a.deletedAt && !a.shareLinkId && (stageKey === null || a.stageKey === stageKey));
+  idle.forEach((a) => {
+    a.deletedAt = now;
+    touch(a);
+    emit(db, me, { type: "approval.withdrawn", entityType: "approval", entityId: a.id, project: p, data: { stageKey: a.stageKey } });
+  });
+  return idle.length;
+}
+
+/** RN-101 — conclui as tarefas abertas do projeto (e subtarefas) junto com a conclusão; devolve quantas. */
+export function closeOpenProjectTasks(db: Database, p: Project) {
+  const now = nowIso();
+  const open = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida");
+  open.forEach((t) => {
+    t.statusKey = "concluida";
+    t.completedAt = now;
+    t.updatedAt = now;
+  });
+  return open.length;
 }
