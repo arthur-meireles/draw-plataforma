@@ -5,7 +5,7 @@ import { usePermissions } from "@/components/layout/session";
 import { Button, ClearFiltersButton, Switch, EmptyState, Fab, PageBody, PageHeader, SearchInput, SelectField, Tabs, Toolbar, ViewSwitcher } from "@/components/ui";
 import { useApiQuery } from "@/data/hooks";
 import { tasksApi, type TaskView } from "@/data/services";
-import type { AdmArea, TaskStatusKey } from "@/data/types";
+import type { AdmArea, Sprint, TaskStatusKey } from "@/data/types";
 import { useUrlState } from "@/lib/use-url-state";
 import { areaKanbanColumns } from "./area-board";
 import { AdmTaskDialog } from "./adm-task-dialog";
@@ -26,6 +26,7 @@ function Content() {
   const tasks = useApiQuery(["tasks", "adm"], () => tasksApi.list({ module: "adm" }));
 
   const [sprintDialog, setSprintDialog] = useState(false);
+  const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [taskDialog, setTaskDialog] = useState<{ statusKey?: TaskStatusKey; sprintId?: string | null; area?: AdmArea | null } | null>(null);
 
   const current = useMemo(() => {
@@ -133,11 +134,12 @@ function Content() {
           ) : (
             <TaskViews tasks={backlogTasks} isLoading={tasks.isLoading} error={tasks.error} onRetry={() => tasks.refetch()} view={view} onViewChange={setView} onOpen={openTask} readOnly={!canEdit} onAdd={(statusKey) => setTaskDialog({ statusKey: statusKey as TaskStatusKey, sprintId: null })} />
           ))}
-        {vista === "sprints" && <SprintList sprints={sprints.data} tasks={tasks.data} isLoading={sprints.isLoading} error={sprints.error} onRetry={() => sprints.refetch()} canEdit={canEdit} onCreate={() => setSprintDialog(true)} onOpenBoard={(s) => setUrl({ vista: "sprint", sprint: s.id })} />}
+        {vista === "sprints" && <SprintList sprints={sprints.data} tasks={tasks.data} isLoading={sprints.isLoading} error={sprints.error} onRetry={() => sprints.refetch()} canEdit={canEdit} onCreate={() => setSprintDialog(true)} onEdit={setEditingSprint} onOpenBoard={(s) => setUrl({ vista: "sprint", sprint: s.id })} />}
       </PageBody>
 
       {canEdit && <Fab label={vista === "sprints" ? "Nova sprint" : "Nova tarefa"} onClick={() => (vista === "sprints" ? setSprintDialog(true) : setTaskDialog({ sprintId: vista === "sprint" ? current?.id : null }))} />}
       <SprintFormDialog open={sprintDialog} onOpenChange={setSprintDialog} />
+      <SprintFormDialog open={!!editingSprint} sprint={editingSprint} onOpenChange={(o) => !o && setEditingSprint(null)} />
       <AdmTaskDialog open={!!taskDialog} onOpenChange={(o) => !o && setTaskDialog(null)} defaults={taskDialog ?? undefined} sprintOptions={sprintOptions} />
       <TaskPeek taskId={url.tarefa ?? null} onClose={() => setUrl({ tarefa: undefined })} />
     </>

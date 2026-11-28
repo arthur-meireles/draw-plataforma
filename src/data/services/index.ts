@@ -33,3 +33,5 @@ export { collectionApi, type CollectionChannel } from "./collection";
 export { financeMedioApi, type NewReceivableInput, type PayablePatch } from "./finance-medio";
 export { clientGroupsApi, freelancerLifecycleApi } from "./cadastros-medio";
 export { projectFinanceImpactApi } from "./project-finance-impact";
+export { sessionsApi, LOGIN_MAX_FAILS, LOGIN_WINDOW_MS } from "./login-guard";
+export { driveTrashApi, TRASH_DAYS } from "./drive-trash";

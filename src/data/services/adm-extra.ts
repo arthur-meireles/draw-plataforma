@@ -1,10 +1,10 @@
 /** Administrativo — extensões de autorização (cofre) usadas pelas telas do M6. */
-import { nowIso } from "../db";
 import type { ID, InstitutionalDocument } from "../types";
-import { ApiError, emit, read, requireAccessNow, touch, write } from "./_core";
+import { ApiError, read, requireAccessNow, write } from "./_core";
 import { access, canWriteAll } from "@/lib/permissions";
 import { admApi } from "./admin";
 import { filesApi } from "./collab";
+import { closeSprint } from "./tasks";
 
 export const admExtraApi = {
   /**
@@ -16,7 +16,7 @@ export const admExtraApi = {
       if (access(me, "vault") === "-") throw new ApiError(403, "Sem acesso ao cofre.");
       if (!id && me.role !== "admin") throw new ApiError(403, "Só administradores veem o log geral do cofre.");
       if (id) {
-        const v = db.vaultItems.find((x) => x.id === id && !x.deletedAt);
+        const v = db.vaultItems.find((x) => x.id === id && (me.role === "admin" || !x.deletedAt)); // admin ainda vê o histórico de item removido (RN-76)
         if (!v || (me.role !== "admin" && !v.allowedRoles.includes(me.role))) throw new ApiError(404, "Item não encontrado.");
       }
       return db.vaultAccessLogs
@@ -39,21 +39,7 @@ export const admExtraApi = {
       if (!canWriteAll(me, "adm")) throw new ApiError(403, "Sem permissão.");
       const s = db.sprints.find((x) => x.id === id && !x.deletedAt);
       if (!s) throw new ApiError(404, "Sprint não encontrada.");
-      if (s.status === "concluida") throw new ApiError(409, "Esta sprint já foi concluída.");
-      s.status = "concluida";
-      touch(s);
-      let moved = 0;
-      if (unfinished === "backlog") {
-        db.tasks
-          .filter((t) => t.sprintId === id && t.module === "adm" && !t.deletedAt && t.statusKey !== "concluida")
-          .forEach((t) => {
-            t.sprintId = null;
-            t.updatedAt = nowIso();
-            moved++;
-          });
-      }
-      emit(db, me, { type: "sprint.finished", entityType: "sprint", entityId: s.id, data: { name: s.name, movedToBacklog: moved } });
-      return { moved };
+      return { moved: closeSprint(db, me, s, unfinished).moved };
     }),
 
   /** RF-M6-02 — salva o documento e, se houver PDF novo, envia (nova versão quando já havia arquivo). */

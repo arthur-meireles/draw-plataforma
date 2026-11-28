@@ -5,20 +5,20 @@ import { useOrganization } from "@/data/hooks";
 const FLAG: Record<string, { label: string; description: string }> = {
   portal_cliente: { label: "Portal do cliente", description: "Acesso do cliente aos próprios projetos (futuro)" },
   ambientes_juridicos: { label: "Ambientes jurídicos", description: "Conteúdo sob medida para escritórios (futuro)" },
-  email_usuario: { label: "E-mail do usuário", description: "Enviar e-mails do projeto pela caixa de cada pessoa" },
-  login_google: { label: "Login com Google", description: "Entrar com a conta Google, além de e-mail e senha" },
 };
+
+/** Só os recursos que existem na lista; o resto (e-mail do usuário, login com Google) saiu do escopo e não aparece. */
 
 /** Recursos liberados por configuração do sistema — somente leitura (P13). */
 export function FeatureFlagsSection() {
   const org = useOrganization();
   return (
-    <Section title="Recursos do sistema" description="Liberados pela equipe técnica; não podem ser alterados aqui" icon="sparkle">
+    <Section title="Recursos do sistema" description="Recursos futuros, liberados pela equipe técnica; não podem ser alterados aqui" icon="sparkle">
       {org.isLoading ? (
         <Skeleton className="h-24" />
       ) : (
         <ul className="divide-y divide-line">
-          {org.data?.flags.map((f) => (
+          {org.data?.flags.filter((f) => f.key in FLAG).map((f) => (
             <li key={f.id} className="flex items-center justify-between gap-4 py-2.5">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">{FLAG[f.key]?.label ?? f.key}</p>

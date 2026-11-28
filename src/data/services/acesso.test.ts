@@ -101,16 +101,21 @@ describe("RN-31 — recuperação de senha", () => {
     await expect(authApi.resetPassword(a, "novaSenha1")).rejects.toMatchObject({ status: 409 });
   });
 
-  it("desconhecido, convidado e inativo recebem a mesma resposta, sem token nem e-mail", async () => {
+  it("desconhecido e inativo recebem a mesma resposta, sem token nem e-mail; convidado recebe o convite de novo (RN-75)", async () => {
     as("usr_paula");
     await usersExtraApi.deactivate("usr_marina", { reassignTo: "usr_beatriz" }); // RN-36: projetos dela passam a outra pessoa
     as(null);
     const emails = loadDb().emailLogs.length;
-    for (const email of ["ninguem@draw.com.br", "thiago@draw.com.br", "marina@draw.com.br"]) {
+    for (const email of ["ninguem@draw.com.br", "marina@draw.com.br"]) {
       expect(await authApi.requestPasswordReset(email)).toEqual({ demoLink: null });
     }
     expect(loadDb().passwordResets).toHaveLength(0);
     expect(loadDb().emailLogs.length).toBe(emails);
+    // convidado: não há senha a recuperar — o convite é reenviado (link novo), nunca um token de recuperação
+    await authApi.requestPasswordReset("thiago@draw.com.br");
+    expect(loadDb().passwordResets).toHaveLength(0);
+    expect(loadDb().emailLogs.length).toBe(emails + 1);
+    expect(loadDb().emailLogs.at(-1)?.template).toBe("convite");
   });
 
   it("fora do modo de demonstração o link nunca volta na resposta", async () => {

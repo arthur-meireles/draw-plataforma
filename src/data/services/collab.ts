@@ -162,6 +162,11 @@ export const filesApi = {
         db.files.push(file);
       }
       emit(db, me, { type: version > 1 ? "file.version_added" : "file.uploaded", entityType: "file", entityId: fileId, project: p, data: { name: input.file.name, version, sha256: hash } });
+      // RN-77 — entrega de freelancer avisa quem responde pelo projeto (e quem pediu a tarefa, se o arquivo é de uma tarefa)
+      if (me.role === "freelancer" && p) {
+        const taskOwner = input.taskId ? db.tasks.find((t) => t.id === input.taskId)?.createdBy : null;
+        notifyMany(db, me, [p.ownerId, taskOwner], { type: "projeto", title: `${me.name} enviou ${version > 1 ? "uma nova versão de" : "o arquivo"} ${input.file.name}`, project: p, entityType: "file", entityId: fileId });
+      }
       return { fileId, versionId: v.id, version };
     }, 300);
   },
@@ -353,14 +358,26 @@ export const eventsApi = {
 };
 
 export const notificationsApi = {
-  list: (f: { unread?: boolean; type?: NotificationType } = {}) =>
+  /**
+   * Caixa de entrada. `archived: true` lista só as arquivadas (RN-77). Cada linha traz o destino exato: `taskId`
+   * (comentário de tarefa) e `invoiceToken` (link do formulário de NF do freelancer, quando o pedido ainda vale).
+   */
+  list: (f: { unread?: boolean; type?: NotificationType; archived?: boolean } = {}) =>
     read((db, me) =>
       db.notifications
-        .filter((n) => n.userId === me.id && !n.deletedAt)
+        .filter((n) => n.userId === me.id && (f.archived ? !!n.deletedAt : !n.deletedAt))
         .filter((n) => !f.unread || !n.readAt)
         .filter((n) => !f.type || n.type === f.type)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((n) => ({ ...n, projectCode: n.projectId ? db.projects.find((p) => p.id === n.projectId)?.code ?? null : null })),
+        .map((n) => ({
+          ...n,
+          projectCode: n.projectId ? db.projects.find((p) => p.id === n.projectId)?.code ?? null : null,
+          taskId: n.entityType === "comment" ? (db.comments.find((c) => c.id === n.entityId)?.taskId ?? null) : null,
+          invoiceToken:
+            n.type === "nf_solicitada" && n.entityType === "payable" && n.entityId
+              ? (db.shareLinks.find((l) => l.purpose === "nf_freelancer" && l.targetId === n.entityId && !l.revokedAt && (!l.expiresAt || Date.parse(l.expiresAt) > Date.now()) && (l.maxUses === null || l.useCount < l.maxUses))?.token ?? null)
+              : null,
+        })),
     ),
   unreadCount: () => read((db, me) => db.notifications.filter((n) => n.userId === me.id && !n.readAt && !n.deletedAt).length, 40),
   markRead: (id: ID, read = true) =>
@@ -378,6 +395,22 @@ export const notificationsApi = {
       const n = db.notifications.find((x) => x.id === id && x.userId === me.id);
       if (n) n.deletedAt = nowIso();
     }, 60),
+  /** RN-77 — arquivar não é definitivo: "Desarquivar" devolve a notificação à caixa (lida, como estava). */
+  unarchive: (id: ID) =>
+    write((db, me) => {
+      const n = db.notifications.find((x) => x.id === id && x.userId === me.id && x.deletedAt);
+      if (!n) throw new ApiError(404, "Notificação arquivada não encontrada.");
+      n.deletedAt = null;
+      touch(n);
+    }, 60),
+  /** RN-77 — "Arquivar lidas": limpa a caixa de uma vez (as não lidas ficam). */
+  archiveRead: () =>
+    write((db, me) => {
+      const now = nowIso();
+      const rows = db.notifications.filter((n) => n.userId === me.id && !n.deletedAt && !!n.readAt);
+      rows.forEach((n) => (n.deletedAt = now));
+      return rows.length;
+    }),
   preferences: () => read((db, me) => db.notificationPreferences.filter((p) => p.userId === me.id)),
   /** Liga/desliga um tipo na Caixa de entrada (só no app — não há e-mail interno). Menções não podem ser desligadas. */
   setPreference: (type: NotificationType, enabled: boolean) =>

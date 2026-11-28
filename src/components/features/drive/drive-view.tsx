@@ -17,6 +17,7 @@ import { DriveSidebar, driveHref } from "./drive-sidebar";
 import { FolderFormDialog, type FolderFormTarget } from "./folder-form-dialog";
 import { FolderItem } from "./folder-item";
 import { MoveFileDialog } from "./move-file-dialog";
+import { TrashSheet } from "./trash-sheet";
 
 export function DriveView() {
   const { canWriteAll, isFreelancer } = usePermissions();
@@ -31,6 +32,7 @@ export function DriveView() {
   const [toDelete, setToDelete] = useState<DriveFolder | null>(null);
   const [deleteError, setDeleteError] = useState<string>();
   const [toMove, setToMove] = useState<FileRow | null>(null);
+  const [trash, setTrash] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   const remove = useApiMutation((id: string) => driveApi.removeFolder(id), {
@@ -161,6 +163,7 @@ export function DriveView() {
                 Enviar arquivos
               </Button>
             )}
+            {manage && <IconButton icon="restore" label="Lixeira" onClick={() => setTrash(true)} />}
             {loc?.canCreateFolder && <IconButton icon="folderAdd" label="Nova pasta" onClick={openCreate} className="md:hidden" />}
           </>
         }
@@ -231,6 +234,7 @@ export function DriveView() {
       />
       <FolderFormDialog open={form.open} onOpenChange={(o) => setForm((f) => ({ ...f, open: o }))} target={form.target} />
       <MoveFileDialog file={toMove} onClose={() => setToMove(null)} />
+      <TrashSheet open={trash} onClose={() => setTrash(false)} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

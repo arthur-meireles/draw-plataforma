@@ -308,6 +308,12 @@ export const freelancersApi = {
       const bankFields = (["legalName", "document", "pixKey", "bankName", "bankAgency", "bankAccount"] as const).filter((k) => k in patch && (f[k] ?? null) !== ((patch as unknown as Record<string, string | null | undefined>)[k] ?? null));
       Object.assign(f, patch);
       touch(f);
+      // RN-79 — usuário e cadastro de freelancer são a mesma pessoa: o nome acompanha nos dois lados
+      const linked = f.userId ? db.users.find((x) => x.id === f.userId) : null;
+      if (linked && linked.name !== f.name) {
+        linked.name = f.name;
+        touch(linked);
+      }
       emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: {} });
       if (bankFields.length) emit(db, me, { type: "freelancer.bank_data_changed", entityType: "freelancer", entityId: f.id, data: { fields: bankFields, by: id === myFl ? "freelancer" : "financeiro" } });
       return f;

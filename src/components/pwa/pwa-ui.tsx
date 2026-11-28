@@ -29,7 +29,7 @@ export function OfflineIndicator() {
   return (
     <div role="status" className="flex shrink-0 items-center justify-center gap-2 bg-warning-subtle px-3 py-1.5 text-xs font-medium text-warning pt-safe">
       <Icon name="offline" size="xs" />
-      Sem conexão — mostrando a última versão carregada, somente leitura.
+      Sem conexão — mostrando a última versão carregada, somente leitura. Salvar e enviar ficam indisponíveis até reconectar.
     </div>
   );
 }

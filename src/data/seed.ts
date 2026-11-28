@@ -52,7 +52,7 @@ import type {
 import { PROJECT_STAGES } from "./reference";
 import { CLIENT_LINK_DEFAULTS } from "./defaults";
 
-export const SEED_VERSION = 16;
+export const SEED_VERSION = 17;
 const ORG = "org_draw";
 
 /* ───────────── PRNG determinístico ───────────── */
@@ -1095,8 +1095,6 @@ export function createSeed(): Database {
     featureFlags: [
       { ...base("ff", -400), key: "portal_cliente", enabled: false },
       { ...base("ff", -400), key: "ambientes_juridicos", enabled: false },
-      { ...base("ff", -400), key: "email_usuario", enabled: true },
-      { ...base("ff", -400), key: "login_google", enabled: false },
     ],
     accessLogs: [],
     passwordResets: [],

@@ -12,7 +12,7 @@ import { notificationMeta } from "./notification-meta";
 
 /** Para onde o botão principal leva, conforme o tipo e a entidade da notificação. */
 export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: string; label: string } | null {
-  if (n.type === "nf_solicitada" && isFreelancer) return { href: "/", label: "Enviar nota fiscal" };
+  if (n.type === "nf_solicitada" && isFreelancer) return n.invoiceToken ? { href: `/nf/${n.invoiceToken}`, label: "Enviar nota fiscal" } : { href: "/", label: "Ver meus pagamentos" };
   if (n.entityType === "receivable" && n.entityId) return { href: `/financeiro/receber?aberto=${n.entityId}`, label: "Abrir lançamento a receber" };
   if (n.entityType === "payable" && n.entityId) return { href: `/financeiro/pagar?aberto=${n.entityId}`, label: "Abrir conta a pagar" };
   if (n.type === "nf_solicitada" || n.type === "nf_recebida") return { href: n.entityType === "payable" && n.entityId ? `/financeiro/pagar?aberto=${n.entityId}` : "/financeiro/pagar", label: "Abrir contas a pagar" };
@@ -23,7 +23,9 @@ export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: s
   if (n.entityType === "task" && n.entityId && !n.projectCode) return { href: `/adm/tarefas?tarefa=${n.entityId}`, label: "Abrir tarefa" };
   if (!n.projectCode) return null;
   if (n.entityType === "task" && n.entityId) return { href: `/projetos/${n.projectCode}?aba=tarefas&tarefa=${n.entityId}`, label: "Abrir tarefa" };
+  if (n.entityType === "comment" && n.taskId) return { href: `/projetos/${n.projectCode}?aba=tarefas&tarefa=${n.taskId}`, label: "Abrir tarefa" };
   if (n.entityType === "comment") return { href: `/projetos/${n.projectCode}?aba=comentarios`, label: "Abrir conversa" };
+  if (n.entityType === "file") return { href: `/projetos/${n.projectCode}?aba=arquivos`, label: "Ver arquivos do projeto" };
   if (n.entityType === "approval" || n.type === "aprovacao") return { href: `/projetos/${n.projectCode}?aba=aprovacoes`, label: "Ver aprovações" };
   if (n.entityType === "proposal") return { href: `/projetos/${n.projectCode}?aba=visao-geral`, label: "Ver propostas" };
   return { href: `/projetos/${n.projectCode}`, label: "Abrir projeto" };
@@ -32,7 +34,8 @@ export function targetOf(n: InboxNotification, isFreelancer: boolean): { href: s
 export function InboxDetail({ item: n, onBack, onClose }: { item: InboxNotification; onBack: () => void; onClose: () => void }) {
   const project = useApiQuery(["project", n.projectId], () => projectsApi.get(n.projectId!), { enabled: !!n.projectId, retry: false });
   const markRead = useApiMutation((read: boolean) => notificationsApi.markRead(n.id, read), { success: false });
-  const archive = useApiMutation(() => notificationsApi.archive(n.id), { success: "Notificação arquivada", onSuccess: onClose });
+  const archived = !!n.deletedAt;
+  const archive = useApiMutation(() => (archived ? notificationsApi.unarchive(n.id) : notificationsApi.archive(n.id)), { success: archived ? "Notificação desarquivada" : "Notificação arquivada. Veja em Arquivadas.", onSuccess: onClose });
   const { isFreelancer } = usePermissions();
   const meta = notificationMeta[n.type];
   const target = targetOf(n, isFreelancer);
@@ -49,8 +52,8 @@ export function InboxDetail({ item: n, onBack, onClose }: { item: InboxNotificat
         <Button size="sm" variant="ghost" icon={n.readAt ? "inbox" : "check"} onClick={() => markRead.mutate(!n.readAt)} loading={markRead.isPending}>
           {n.readAt ? "Marcar como não lida" : "Marcar como lida"}
         </Button>
-        <Button size="sm" variant="ghost" icon="archive" onClick={() => archive.mutate(undefined)} loading={archive.isPending}>
-          Arquivar
+        <Button size="sm" variant="ghost" icon={archived ? "restore" : "archive"} onClick={() => archive.mutate(undefined)} loading={archive.isPending}>
+          {archived ? "Desarquivar" : "Arquivar"}
         </Button>
       </header>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 scrollbar-thin md:p-6">

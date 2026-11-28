@@ -27,7 +27,7 @@ const STATUS: Record<UserStatus, { label: string; tone: "success" | "info" | "ne
 function Content() {
   const p = usePermissions();
   const canEdit = p.canWriteAll("users");
-  const [f, setF] = useUrlState({ aba: "usuarios", q: "", perfil: "", status: "" });
+  const [f, setF] = useUrlState({ aba: "usuarios", q: "", perfil: "", status: "", tipo: "" });
   const aba = f.aba === "permissoes" || (f.aba === "acessos" && canEdit) ? f.aba : "usuarios";
   const users = useApiQuery(["users", "list"], () => usersApi.list());
   const [invite, setInvite] = useState(false);
@@ -56,7 +56,7 @@ function Content() {
   });
 
   const term = f.q.trim().toLowerCase();
-  const rows = users.data?.filter((u) => (!f.perfil || u.role === f.perfil) && (!f.status || u.status === f.status) && (!term || `${u.name} ${u.email}`.toLowerCase().includes(term)));
+  const rows = users.data?.filter((u) => (!f.perfil || u.role === f.perfil) && (!f.status || u.status === f.status) && (!f.tipo || u.userType === f.tipo) && (!term || `${u.name} ${u.email}`.toLowerCase().includes(term)));
 
   const columns: Column<Row>[] = [
     {
@@ -133,7 +133,8 @@ function Content() {
           <SearchInput value={f.q} onChange={(v) => setF({ q: v })} placeholder="Buscar por nome ou e-mail…" className="max-md:w-52 max-md:shrink-0" />
           <FilterSelect label="Perfil" value={f.perfil || null} options={INVITABLE_ROLES.map((r) => ({ value: r as Role, label: ROLE_LABEL[r] }))} onChange={(v) => setF({ perfil: v ?? "" })} />
           <FilterSelect label="Status" value={f.status || null} options={(Object.keys(STATUS) as UserStatus[]).map((s) => ({ value: s, label: STATUS[s].label }))} onChange={(v) => setF({ status: v ?? "" })} />
-          <ClearFiltersButton show={!!(f.q || f.perfil || f.status)} onClick={() => setF({ q: "", perfil: "", status: "" })} />
+          <FilterSelect label="Tipo" value={f.tipo || null} options={[{ value: "internal", label: "Equipe interna" }, { value: "freelancer", label: "Freelancers" }]} onChange={(v) => setF({ tipo: v ?? "" })} />
+          <ClearFiltersButton show={!!(f.q || f.perfil || f.status || f.tipo)} onClick={() => setF({ q: "", perfil: "", status: "", tipo: "" })} />
         </Toolbar>
       )}
       <PageBody padded={false}>

@@ -27,7 +27,7 @@ describe("Drive — pastas", () => {
     const root = loadDb().folders.find((f) => f.systemKey === "marketing")!;
     const f = await driveApi.createFolder(root.id, "Campanha");
     await filesApi.upload({ category: "outro", file: pdf("a.pdf"), folderId: f.id });
-    await expect(driveApi.removeFolder(f.id)).rejects.toThrow(/Esvazie/);
+    await expect(driveApi.removeFolder(f.id)).rejects.toThrow(/Mova ou exclua/);
   });
 });
 

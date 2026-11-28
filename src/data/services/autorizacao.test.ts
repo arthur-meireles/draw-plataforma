@@ -9,6 +9,7 @@ import { setSessionUserId } from "./_core";
 import type { Database } from "../types";
 import {
   admApi,
+  admExtraApi,
   approvalsApi,
   authApi,
   clientsApi,
@@ -86,8 +87,8 @@ const CASES: Case[] = [
   ["admApi.saveResource", "comercial", () => admApi.saveResource({ title: "Manual", url: "https://draw.com.br", category: "outros", description: null } as never), false],
   ["admApi.saveDocument", "admin", () => admApi.saveDocument({ title: "Contrato social", category: "societario" as never, validUntil: null }), true],
   ["admApi.saveDocument", "operacao", () => admApi.saveDocument({ title: "Contrato social", category: "societario" as never, validUntil: null }), false],
-  ["admApi.vaultLogs", "admin", () => admApi.vaultLogs(), true],
-  ["admApi.vaultLogs", "financeiro", () => admApi.vaultLogs(), false],
+  ["admExtraApi.vaultLogs", "admin", () => admExtraApi.vaultLogs(), true],
+  ["admExtraApi.vaultLogs", "financeiro", () => admExtraApi.vaultLogs(), false],
   ["admApi.saveVaultItem", "admin", () => admApi.saveVaultItem({ title: "Banco", secret: "x", allowedRoles: [] }), true],
   ["admApi.saveVaultItem", "gestao", () => admApi.saveVaultItem({ title: "Banco", secret: "x", allowedRoles: [] }), false],
   ["tasksApi.sprints", "operacao", () => tasksApi.sprints(), true],

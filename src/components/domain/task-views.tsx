@@ -155,7 +155,8 @@ export function TaskViews({ tasks, isLoading, error, onRetry, view, onViewChange
         getId={(t) => t.id}
         getColumn={columns.getColumn}
         getPosition={(t) => t.position}
-        canDrag={() => !readOnly}
+        // RN-78 — somente leitura ainda deixa o responsável arrastar a PRÓPRIA tarefa entre status (colunas customizadas, como área, mudam outros campos)
+        canDrag={(t) => !readOnly || (!kanbanColumns && !!t.canChangeStatus)}
         renderCard={(t) => <TaskCard task={t} onOpen={onOpen} showProject={showProject} showStatus={!!kanbanColumns} />}
         onMove={move}
         onAdd={readOnly ? undefined : onAdd}

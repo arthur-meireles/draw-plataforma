@@ -286,9 +286,12 @@ export const metricsApi = {
       return {
         projects: projects.length,
         openTasks: db.tasks.filter((t) => !t.deletedAt && t.assigneeFreelancerId === flId && t.statusKey !== "concluida").length,
-        pendingInvoices: db.payables.filter((p) => p.freelancerId === flId && p.status === "aguardando_nf").map((p) => {
+        /** RN-79 — sem cadastro de freelancer ligado ao acesso, não há pagamentos: a tela avisa em vez de ficar vazia. */
+        missingRecord: !flId,
+        /** NF a enviar (`aguardando_nf`) e NF divergente (com o motivo e o que fazer); `dueAt` = pagamento previsto (RN-06). */
+        pendingInvoices: db.payables.filter((p) => p.freelancerId === flId && (p.status === "aguardando_nf" || p.status === "divergente")).map((p) => {
           const req = db.freelancerInvoiceRequests.find((r) => r.payableId === p.id);
-          return { id: p.id, description: p.description, agreedAmountCents: p.agreedAmountCents, token: req ? db.shareLinks.find((s) => s.id === req.shareLinkId)?.token ?? null : null };
+          return { id: p.id, description: p.description, agreedAmountCents: p.agreedAmountCents, status: p.status as "aguardando_nf" | "divergente", divergenceNote: p.status === "divergente" ? p.divergenceNote : null, dueAt: p.dueAt, token: p.status === "aguardando_nf" && req ? db.shareLinks.find((s) => s.id === req.shareLinkId)?.token ?? null : null };
         }),
       };
     }),
