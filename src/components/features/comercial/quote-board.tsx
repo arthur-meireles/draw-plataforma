@@ -12,9 +12,9 @@ import { QuoteCard } from "./quote-card";
 
 const COLUMNS: KanbanColumn<QuoteStageKey>[] = QUOTE_STAGES.map((s) => ({
   key: s.key,
-  label: s.key === "aprovada" ? "Aprovada (30 dias)" : s.label,
+  label: s.key === "aprovada" ? "Aprovada (30 dias)" : s.key === "perdida" ? "Perdida (30 dias)" : s.label,
   icon: <StageIcon category={s.category} progress={s.category === "open" ? (s.order - 1) / 5 : undefined} />,
-  lockedHint: s.key === "aprovada" ? "Aprovações dos últimos 30 dias aparecem aqui" : undefined,
+  lockedHint: s.key === "aprovada" ? "Aprovações dos últimos 30 dias aparecem aqui" : s.key === "perdida" ? "Perdidas dos últimos 30 dias; o histórico completo está na lista" : undefined,
 }));
 
 export function QuoteBoard({ items, isLoading, canMove }: { items: QuoteItem[] | undefined; isLoading?: boolean; canMove: boolean }) {
@@ -35,6 +35,8 @@ export function QuoteBoard({ items, isLoading, canMove }: { items: QuoteItem[] |
     onSuccess: () => setLost(null),
   });
 
+  const reopen = useApiMutation((id: string) => projectsApi.reopenQuote(id), { success: "Cotação reaberta em Negociação" });
+
   return (
     <>
       <Kanban
@@ -47,7 +49,7 @@ export function QuoteBoard({ items, isLoading, canMove }: { items: QuoteItem[] |
         mobileColumn="entrada"
         emptyColumnText="Nenhuma cotação"
         canDrag={(i) => canMove && i.status === "cotacao"}
-        renderCard={(i, { dragging }) => <QuoteCard quote={i} dragging={dragging} />}
+        renderCard={(i, { dragging }) => <QuoteCard quote={i} dragging={dragging} onReopen={canMove ? (q) => reopen.mutate(q.id) : undefined} />}
         onMove={(item, to) => {
           if (to.column === "aprovada") {
             toast.info("Para aprovar, abra o projeto e aprove uma proposta enviada.", { description: `${item.code} só vira projeto ativo com uma proposta aprovada.` });

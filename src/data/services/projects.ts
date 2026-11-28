@@ -35,6 +35,7 @@ import { settleCompletionPayables, type CompletionDecision } from "./payables-ex
 import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 import { effectiveReceivableStatus } from "./finance-rules";
+import { newProjectErrors, notifyDirectCreated, notifyOwner, propagateClientChange, recomputeDeliveryDue, validateNewProject } from "./project-intake";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -124,7 +125,7 @@ function applyFilters(db: Database, rows: Project[], f: ProjectFilters): Project
     if (f.projectTypeId && p.projectTypeId !== f.projectTypeId) return false;
     if (f.ownerId && p.ownerId !== f.ownerId) return false;
     if (f.priority && p.priorityKey !== f.priority) return false;
-    if (f.memberUserId && !db.projectMembers.some((m) => m.projectId === p.id && m.active && (m.userId === f.memberUserId || p.ownerId === f.memberUserId))) return false;
+    if (f.memberUserId && p.ownerId !== f.memberUserId && !db.projectMembers.some((m) => m.projectId === p.id && m.active && m.userId === f.memberUserId)) return false;
     if (f.memberFreelancerId && !db.projectMembers.some((m) => m.projectId === p.id && m.active && m.freelancerId === f.memberFreelancerId)) return false;
     if (f.from && new Date(p.enteredAt) < new Date(f.from)) return false;
     if (f.to && new Date(p.enteredAt) > new Date(f.to)) return false;
@@ -168,9 +169,8 @@ export const projectsApi = {
   createQuote: (input: { clientId: ID; projectTypeId: ID; title: string; ownerId: ID; briefing?: string; priorityKey?: PriorityKey; dueAt?: string | null; size?: ProjectSize | null }) =>
     write((db, me) => {
       if (!canWriteAll(me, "commercial")) throw new ApiError(403, "Seu perfil não pode criar cotações.");
-      const type = db.projectTypes.find((t) => t.id === input.projectTypeId);
-      if (!type) throw new ApiError(422, "Escolha um tipo de projeto.", { projectTypeId: "Escolha um tipo de projeto" });
-      if (!db.clients.some((c) => c.id === input.clientId)) throw new ApiError(422, "Escolha um cliente.", { clientId: "Escolha um cliente" });
+      validateNewProject(db, input); // RN-95
+      const type = db.projectTypes.find((t) => t.id === input.projectTypeId)!;
       const billing = db.clientContacts.find((c) => c.clientId === input.clientId && c.isBillingContact);
       const now = nowIso();
       const p: Project = {
@@ -231,8 +231,7 @@ export const projectsApi = {
   }) =>
     write((db, me) => {
       if (!canWriteAll(me, "projects")) throw new ApiError(403, "Seu perfil não pode criar projetos.");
-      const errors: Record<string, string> = {};
-      if (!input.clientId) errors.clientId = "Escolha um cliente";
+      const errors = newProjectErrors(db, input); // RN-95 — o serviço não confia no assistente
       if (!input.contractedAmountCents || input.contractedAmountCents <= 0) errors.contractedAmountCents = "Informe o valor contratado";
       if (!input.installments.length) errors.installments = "Informe ao menos uma parcela";
       const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
@@ -308,6 +307,7 @@ export const projectsApi = {
       }
       generateTasksFromTemplate(db, me, p);
       emit(db, me, { type: "project.direct_created", entityType: "project", entityId: p.id, project: p, data: { contractedAmountCents: p.contractedAmountCents, installments: input.installments.length } });
+      notifyDirectCreated(db, me, p, input.installments.length); // RN-96
       return p;
     }),
 
@@ -336,6 +336,8 @@ export const projectsApi = {
       Object.assign(p, patch);
       touch(p);
       if (patch.ownerId && patch.ownerId !== before.ownerId) syncOwnerMember(db, me, p, before.ownerId);
+      if (patch.clientId && patch.clientId !== before.clientId) propagateClientChange(db, p); // RN-98
+      if (patch.dueAt !== undefined && patch.dueAt !== before.dueAt && p.status === "ativo") recomputeDeliveryDue(db, me, p); // RN-97
       const changed = Object.keys(patch).filter((k) => (before as unknown as Record<string, unknown>)[k] !== (p as unknown as Record<string, unknown>)[k]);
       if (changed.length) emit(db, me, { type: "project.updated", entityType: "project", entityId: p.id, project: p, data: { fields: changed } });
       if (patch.ownerId && patch.ownerId !== before.ownerId) notify(db, me, { userId: patch.ownerId, type: "atribuicao", title: "Você agora é responsável pelo projeto", project: p });
@@ -421,6 +423,7 @@ export const projectsApi = {
       touch(p);
       db.proposals.filter((pr) => pr.projectId === p.id && pr.status === "enviada").forEach((pr) => (pr.status = "recusada"));
       emit(db, me, { type: "project.lost", entityType: "project", entityId: p.id, project: p, data: { reason } });
+      notifyOwner(db, me, p, "Sua cotação foi marcada como perdida", `Motivo: ${reason.trim()}`);
       return p;
     }),
 
@@ -434,6 +437,7 @@ export const projectsApi = {
       p.lostReason = null;
       touch(p);
       emit(db, me, { type: "project.reopened", entityType: "project", entityId: p.id, project: p });
+      notifyOwner(db, me, p, "Sua cotação foi reaberta");
       return p;
     }),
 

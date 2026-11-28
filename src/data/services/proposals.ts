@@ -6,6 +6,7 @@ import { notifyMany, projectAudience } from "./audience";
 import { createClientLink, resolveRecipients } from "./client-links";
 import { closeQuoteTasks, generateTasksFromTemplate } from "./projects";
 import { installmentDue } from "./finance-rules";
+import { inferPaymentCondition, notifyOwner } from "./project-intake";
 import { canSeeMoney } from "@/lib/permissions";
 
 /** Guarda comum das ações comerciais sobre propostas (seção 9: comercial = T e acesso a valores). */
@@ -27,6 +28,8 @@ export function approveProposalTx(db: Database, me: User | null, prop: Proposal,
   if (!p) throw new ApiError(404, "Projeto não encontrado.");
   if (p.status !== "cotacao") throw new ApiError(409, "Este projeto não está em cotação.");
   if (prop.status !== "enviada") throw new ApiError(409, "Envie a proposta antes de aprová-la.");
+  const insts0 = db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt);
+  if (!insts0.length || !(prop.amountCents > 0)) throw new ApiError(422, "Esta proposta não tem valor ou parcelas. Crie uma nova versão com as parcelas antes de aprovar.");
   const now = nowIso();
   prop.status = "aprovada";
   prop.approvedAt = now;
@@ -38,6 +41,7 @@ export function approveProposalTx(db: Database, me: User | null, prop: Proposal,
   p.approvedAt = now;
   p.startedAt = now;
   p.contractedAmountCents = prop.amountCents;
+  p.paymentCondition = inferPaymentCondition(insts0.map((i) => i.amountCents)); // RN-97
   touch(p);
   const insts = db.proposalInstallments.filter((i) => i.proposalId === prop.id && !i.deletedAt).sort((a, b) => a.number - b.number);
   insts.forEach((i) => {
@@ -181,6 +185,7 @@ export const proposalsApi = {
       markSent(db, me, prop, p);
       const link = createClientLink(db, me, { purpose: "proposta", project: p, targetId: prop.id, recipients, message: opts.message ?? null, fileVersionIds: [] });
       emit(db, me, { type: "proposal.sent", entityType: "proposal", entityId: prop.id, project: p, data: { version: prop.version, amountCents: prop.amountCents, recipients: link.recipients, shareLinkId: link.id } });
+      notifyOwner(db, me, p, `Proposta v${prop.version} enviada ao cliente`, `${me.name} enviou a proposta`);
       return prop;
     }),
 

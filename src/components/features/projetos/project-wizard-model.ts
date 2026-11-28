@@ -40,7 +40,7 @@ export const initialWizardState = (origin: ProjectOrigin, clientId: string | nul
   paymentCondition: null,
 });
 
-const todayInput = (plusDays = 0) => {
+export const todayInput = (plusDays = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + plusDays);
   return d.toISOString().slice(0, 10);
@@ -49,16 +49,17 @@ const todayInput = (plusDays = 0) => {
 /**
  * Parcelas das condições prontas: "À vista" (1 parcela) e "50/50" (na aprovação / na entrega).
  * Mantém chave e data de linhas já existentes para não perder o que a pessoa editou.
+ * `termDays` é o prazo de pagamento do cliente (RN-45): a parcela de hoje vence em hoje + prazo.
  */
-export function installmentsForCondition(condition: PaymentCondition, totalCents: number, dueAt: string, current: InstallmentRow[]): InstallmentRow[] {
+export function installmentsForCondition(condition: PaymentCondition, totalCents: number, dueAt: string, current: InstallmentRow[], termDays = 0): InstallmentRow[] {
   if (condition === "parcelado") return current;
   const base =
     condition === "a_vista"
-      ? [{ description: "Pagamento à vista", amountCents: totalCents, expectedAt: todayInput() }]
+      ? [{ description: "Pagamento à vista", amountCents: totalCents, expectedAt: todayInput(termDays) }]
       : (() => {
           const half = Math.floor(totalCents / 2);
           return [
-            { description: "50% na aprovação", amountCents: half, expectedAt: todayInput() },
+            { description: "50% na aprovação", amountCents: half, expectedAt: todayInput(termDays) },
             { description: "50% na entrega", amountCents: totalCents - half, expectedAt: dueAt || todayInput(30) },
           ];
         })();

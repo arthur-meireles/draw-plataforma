@@ -14,6 +14,8 @@ export interface QuoteFilters {
   /** Período de entrada: últimos N dias. */
   periodDays?: number;
   q?: string;
+  /** RN-99 — traz todas as perdidas (a lista e o histórico); sem isso, o funil mostra só as perdidas dos últimos 30 dias. */
+  allLost?: boolean;
 }
 
 export interface QuoteItem extends ProjectListItem {
@@ -30,6 +32,11 @@ export interface QuoteItem extends ProjectListItem {
   daysSinceSent: number | null;
 }
 
+/** Data em que a cotação foi marcada como perdida (último `project.lost`; sem evento, a última alteração). */
+function lostAtOf(events: { projectId?: ID | null; type: string; occurredAt: string }[], p: Project): string {
+  return events.filter((e) => e.projectId === p.id && e.type === "project.lost").map((e) => e.occurredAt).sort().at(-1) ?? p.updatedAt;
+}
+
 export const commercialApi = {
   /** Funil: cotações abertas + perdidas + aprovadas nos últimos 30 dias (histórico somente leitura). */
   quotes: (f: QuoteFilters = {}) =>
@@ -42,7 +49,8 @@ export const commercialApi = {
       for (const p of db.projects as Project[]) {
         if (p.deletedAt || p.isEnvironment) continue;
         const open = p.status === "cotacao";
-        const lost = p.status === "perdido";
+        const lostAt = p.status === "perdido" ? lostAtOf(db.events, p) : null;
+        const lost = p.status === "perdido" && (!!f.allLost || now - new Date(lostAt!).getTime() <= 30 * DAY);
         const won = p.origin === "cotacao" && !!p.approvedAt && p.status !== "cotacao" && p.status !== "perdido" && now - new Date(p.approvedAt).getTime() <= 30 * DAY;
         if (!open && !lost && !won) continue;
         const column: QuoteStageKey = open ? (p.quoteStageKey ?? "entrada") : lost ? "perdida" : "aprovada";
@@ -55,7 +63,8 @@ export const commercialApi = {
         if (q && !`${p.code} ${p.title} ${item.clientName}`.toLowerCase().includes(q)) continue;
         const props = db.proposals.filter((pr) => pr.projectId === p.id && !pr.deletedAt).sort((a, b) => b.version - a.version);
         const latest = props.find((pr) => pr.status === "aprovada") ?? props[0] ?? null;
-        const lastEvent = db.events.filter((e) => e.projectId === p.id).map((e) => e.occurredAt).sort().at(-1);
+        // RN-99 — "dias parada" só conta movimento do funil (etapa e proposta), não comentário nem arquivo
+        const lastEvent = db.events.filter((e) => e.projectId === p.id && (e.type === "project.quote_stage_changed" || e.type.startsWith("proposal."))).map((e) => e.occurredAt).sort().at(-1);
         const lastMove = [lastEvent, p.quoteSentAt, p.enteredAt].filter(Boolean).sort().at(-1)!;
         const owner = db.users.find((u) => u.id === p.ownerId);
         rows.push({

@@ -83,7 +83,7 @@ export function QuoteList({ items, isLoading, error, onRetry, canMove, hasFilter
       id: "actions",
       header: <span className="sr-only">Ações</span>,
       width: "2.5rem",
-      mobile: "hidden",
+      mobile: "meta", // RN-99 — no celular o menu da linha também aparece (reabrir, abrir)
       cell: (q) => (
         <RowActions
           items={[

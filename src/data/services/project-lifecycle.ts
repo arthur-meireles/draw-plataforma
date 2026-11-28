@@ -80,6 +80,7 @@ export const projectLifecycleApi = {
       p.approvedAt = null;
       p.startedAt = null;
       p.contractedAmountCents = null;
+      p.paymentCondition = null;
       p.pausedAt = null;
       p.pausedReason = null;
       touch(p);

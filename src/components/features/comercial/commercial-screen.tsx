@@ -13,9 +13,10 @@ const NEW_QUOTE = "/projetos/novo?origem=cotacao";
 
 export function CommercialScreen() {
   const filters = useQuoteFilters();
-  const q = useQuotes(filters.filters);
   const mobile = useIsMobile();
   const view: ViewMode = filters.state.visao === "kanban" || filters.state.visao === "lista" ? filters.state.visao : mobile ? "lista" : "kanban";
+  // RN-99 — o quadro mostra as perdidas dos últimos 30 dias; a lista traz o histórico completo
+  const q = useQuotes({ ...filters.filters, allLost: view === "lista" });
   const canCreate = !!q.data?.canMove;
   const openCount = q.data?.items.filter((i) => i.status === "cotacao").length;
 

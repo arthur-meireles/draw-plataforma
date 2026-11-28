@@ -108,6 +108,8 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
       return { icon: "comment", text: <>atualizou a nota de cobrança</> };
     case "receivable.delivery_due":
       return { icon: "receivable", text: <>trouxe {b(`${d.count} parcela(s) "na entrega"`)} para vencer hoje na conclusão</> };
+    case "receivable.delivery_rescheduled":
+      return { icon: "receivable", text: <>recalculou {b(`${d.count} vencimento(s)`)} após mudar o prazo do projeto</> };
     case "receivable.cancelled":
       return { icon: "close", text: <>cancelou o lançamento a receber</> };
     case "receivable.collection_sent":

@@ -148,7 +148,7 @@ describe("RN-51 — proposta enviada ao cliente por link", () => {
   });
 
   it("Financeiro não envia nem aprova proposta (comercial = L)", async () => {
-    const p = await projectsApi.createQuote({ clientId: clientWithContact().id, projectTypeId: typeByPrefix("APR").id, title: "X", ownerId: "usr_carlos" });
+    const p = await projectsApi.createQuote({ clientId: clientWithContact().id, projectTypeId: typeByPrefix("APR").id, title: "Proposta teste", ownerId: "usr_carlos" });
     const prop = await proposalsApi.create(p.id, { amountCents: 100, installments: [{ amountCents: 100, dueRule: null, dueAt: null }] });
     as("usr_fernanda");
     await expect(proposalsApi.send(prop.id)).rejects.toMatchObject({ status: 403 });

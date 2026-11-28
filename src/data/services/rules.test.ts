@@ -21,8 +21,8 @@ beforeEach(() => {
 describe("RN-05 — código do projeto", () => {
   it("gera {prefixo}-{sequencial} e nunca reutiliza", async () => {
     const before = loadDb().codeSequences.MEM;
-    const a = await projectsApi.createQuote({ clientId: someClient().id, projectTypeId: typeByPrefix("MEM").id, title: "A", ownerId: "usr_carlos" });
-    const b = await projectsApi.createQuote({ clientId: someClient().id, projectTypeId: typeByPrefix("MEM").id, title: "B", ownerId: "usr_carlos" });
+    const a = await projectsApi.createQuote({ clientId: someClient().id, projectTypeId: typeByPrefix("MEM").id, title: "Cotação A", ownerId: "usr_carlos" });
+    const b = await projectsApi.createQuote({ clientId: someClient().id, projectTypeId: typeByPrefix("MEM").id, title: "Cotação B", ownerId: "usr_carlos" });
     expect(a.code).toBe(`MEM-${String(before + 1).padStart(3, "0")}`);
     expect(b.code).toBe(`MEM-${String(before + 2).padStart(3, "0")}`);
   });

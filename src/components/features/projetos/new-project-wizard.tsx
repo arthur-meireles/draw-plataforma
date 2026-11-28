@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, EmptyState, PageBody, PageHeader, Reveal, Stepper, useSuccessFlash } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
-import { useApiMutation } from "@/data/hooks";
+import { useApiMutation, useClientOptions } from "@/data/hooks";
 import { projectsApi } from "@/data/services";
 import type { ApiError } from "@/data/services";
 import { ProjectDataStep } from "./project-data-step";
@@ -43,6 +43,8 @@ export function NewProjectWizard() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const bodyRef = useRef<HTMLDivElement>(null);
 
+  const clients = useClientOptions();
+  const termDays = clients.data?.find((c) => c.id === state.clientId)?.paymentTermDays ?? 0;
   const steps = stepsFor(state.origin);
   const step: WizardStepKey = steps[Math.min(index, steps.length - 1)].key;
   const last = index === steps.length - 1;
@@ -56,7 +58,7 @@ export function NewProjectWizard() {
       }
       // Condição pronta (à vista, 50/50) mantém as parcelas em sincronia com o valor contratado.
       const touchesPlan = p.contractedCents !== undefined || p.paymentCondition !== undefined || (p.dueAt !== undefined && next.paymentCondition === "50_50");
-      if (touchesPlan && next.paymentCondition && next.paymentCondition !== "parcelado") next.installments = installmentsForCondition(next.paymentCondition, next.contractedCents, next.dueAt, s.installments);
+      if (touchesPlan && next.paymentCondition && next.paymentCondition !== "parcelado") next.installments = installmentsForCondition(next.paymentCondition, next.contractedCents, next.dueAt, s.installments, termDays);
       return next;
     });
     if (Object.keys(errors).length) setErrors({});

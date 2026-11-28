@@ -1,14 +1,14 @@
 "use client";
 /** Cartão comercial do funil (RF-M3-01): valor e versão da última proposta, dias desde o envio, responsável. */
 import Link from "next/link";
-import { Avatar, Badge, Icon, Tooltip } from "@/components/ui";
+import { Avatar, Badge, Button, Icon, Tooltip } from "@/components/ui";
 import { Money, PriorityPill, ProjectCode, ProjectTypeIcon } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { cn } from "@/lib/cn";
 import type { QuoteItem } from "@/data/services";
 import { StalledChip } from "./stalled-chip";
 
-export function QuoteCard({ quote: q, dragging }: { quote: QuoteItem; dragging?: boolean }) {
+export function QuoteCard({ quote: q, dragging, onReopen }: { quote: QuoteItem; dragging?: boolean; onReopen?: (q: QuoteItem) => void }) {
   const { money: canSeeMoney } = usePermissions();
   const closed =q.column === "aprovada" || q.column === "perdida";
   return (
@@ -73,6 +73,22 @@ export function QuoteCard({ quote: q, dragging }: { quote: QuoteItem; dragging?:
         </div>
       )}
       {q.column === "perdida" && q.lostReason && <p className="mt-2 line-clamp-2 border-t border-line pt-2 text-fg-subtle">{q.lostReason}</p>}
+      {q.column === "perdida" && onReopen && (
+        <div className="mt-2 border-t border-line pt-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="restore"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onReopen(q);
+            }}
+          >
+            Reabrir cotação
+          </Button>
+        </div>
+      )}
     </Link>
   );
 }

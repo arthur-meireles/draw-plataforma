@@ -15,7 +15,7 @@ export function ProjectOriginStep({ value, onChange, canQuote, canDirect }: { va
     {
       value: "direto",
       label: "Projeto direto — já aprovado",
-      description: canDirect ? "Para trabalho já fechado: informe valor contratado, parcelas e equipe. O projeto nasce ativo na etapa Entrada." : "Seu perfil não cria projetos diretos.",
+      description: canDirect ? "Para trabalho já fechado: informe valor contratado, parcelas e equipe. O projeto nasce ativo na etapa Roteiro." : "Seu perfil não cria projetos diretos.",
       icon: "project",
       disabled: !canDirect,
     },
