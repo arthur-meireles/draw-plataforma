@@ -162,8 +162,10 @@ export const driveApi = {
       if (!f) throw new ApiError(404, "Pasta não encontrada.");
       if (f.systemKey) throw new ApiError(409, "Pastas-raiz da estrutura da Draw não podem ser excluídas.");
       if (!canWriteAll(me, "files")) throw new ApiError(403, "Sem permissão.");
-      const hasContent = db.folders.some((x) => !x.deletedAt && x.parentId === id) || db.files.some((x) => !x.deletedAt && x.folderId === id);
-      if (hasContent) throw new ApiError(409, "Esvazie a pasta antes de excluí-la.");
+      // conta TUDO o que há na pasta (inclusive arquivos que este perfil não enxerga) para a mensagem dizer o que falta mover
+      const subs = db.folders.filter((x) => !x.deletedAt && x.parentId === id).length;
+      const files = db.files.filter((x) => !x.deletedAt && x.folderId === id).length;
+      if (subs || files) throw new ApiError(409, `A pasta tem ${[files ? `${files} ${files === 1 ? "arquivo" : "arquivos"}` : "", subs ? `${subs} ${subs === 1 ? "subpasta" : "subpastas"}` : ""].filter(Boolean).join(" e ")}. Mova ou exclua o conteúdo antes de excluir a pasta.`);
       f.deletedAt = nowIso();
       emit(db, me, { type: "folder.deleted", entityType: "folder", entityId: f.id, data: { name: f.name } });
     }),

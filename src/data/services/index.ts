@@ -32,3 +32,4 @@ export { clientBillingApi } from "./client-billing";
 export { collectionApi, type CollectionChannel } from "./collection";
 export { projectFinanceImpactApi } from "./project-finance-impact";
 export { sessionsApi, LOGIN_MAX_FAILS, LOGIN_WINDOW_MS } from "./login-guard";
+export { driveTrashApi, TRASH_DAYS } from "./drive-trash";

@@ -27,6 +27,7 @@ import {
   useSuccessFlash,
   Switch,
   ClearFiltersButton,
+  TextField,
   Tooltip,
   SelectField,
   type Column,
@@ -36,7 +37,7 @@ import {
 import type { IconName } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation, useApiQuery } from "@/data/hooks";
-import { filesApi, projectsApi, type FileFilters } from "@/data/services";
+import { driveTrashApi, filesApi, projectsApi, type FileFilters } from "@/data/services";
 import { FILE_CATEGORY_LABEL } from "@/data/reference";
 import type { FileCategory, ID } from "@/data/types";
 import { cn } from "@/lib/cn";
@@ -436,13 +437,17 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
   const pending = onPendingChange ? (pendingProp ?? null) : pendingLocal;
   const setPending = onPendingChange ?? setPendingLocal;
   const [toDelete, setToDelete] = useState<FileRow | null>(null);
+  const [toRename, setToRename] = useState<FileRow | null>(null);
+  const [newName, setNewName] = useState("");
+  const [renameError, setRenameError] = useState<string>();
 
   const filters: FileFilters = { projectId: projectId ?? url.projeto, folderId, clientId: url.cliente, module: url.modulo as FileFilters["module"], category: url.cat as FileCategory | undefined, q: url.q };
   const query = useApiQuery(["files", filters], () => filesApi.list(filters));
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list(), { enabled: !!library, staleTime: 30_000 });
   const download = useFileDownload();
   const release = useApiMutation(({ id, value }: { id: ID; value: boolean }) => filesApi.setReleased(id, value), { success: (_d) => "Liberação atualizada" });
-  const remove = useApiMutation((id: ID) => filesApi.remove(id), { success: "Arquivo excluído", onSuccess: () => setToDelete(null) });
+  const remove = useApiMutation((id: ID) => filesApi.remove(id), { success: "Arquivo excluído. Fica 30 dias na lixeira do Drive.", onSuccess: () => setToDelete(null) });
+  const rename = useApiMutation((v: { id: ID; name: string }) => driveTrashApi.rename(v.id, v.name), { success: "Arquivo renomeado", onSuccess: () => setToRename(null), onError: (e) => setRenameError(e.fieldErrors?.name ?? e.message) });
 
   const canUpload = canWrite("files");
   const manage = canWriteAll("files");
@@ -454,6 +459,7 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
     { label: "Abrir detalhes e versões", icon: "file", onSelect: () => setUrl({ arquivo: f.id }) },
     { label: "Baixar versão atual", icon: "download", onSelect: () => download.mutate({ versionId: f.currentVersionId }) },
     { label: f.releasedToFreelancers ? "Remover liberação para freelancers" : "Liberar para freelancers", icon: "share", hidden: !manage || !f.projectId || isFreelancer, onSelect: () => release.mutate({ id: f.id, value: !f.releasedToFreelancers }) },
+    { label: "Renomear…", icon: "edit", hidden: !manage, onSelect: () => (setNewName(f.name), setRenameError(undefined), setToRename(f)) },
     { label: "Mover para…", icon: "folderMove", hidden: !onMove || !manage || !!f.projectId, onSelect: () => onMove?.(f) },
     { label: "Excluir arquivo…", icon: "delete", destructive: true, separatorBefore: true, hidden: !manage, onSelect: () => setToDelete(f) },
   ];
@@ -596,6 +602,26 @@ export function FileManager({ projectId, library, defaultCategory = "entrega", c
 
       {pending && <UploadDialog files={pending} onClose={() => setPending(null)} target={{ projectId, folderId }} askProject={!projectId && !folderId} defaultCategory={defaultCategory} />}
       <FileDetailSheet file={opened} onClose={() => setUrl({ arquivo: undefined })} showProject={library} />
+      <Dialog
+        open={!!toRename}
+        onOpenChange={(o) => !o && setToRename(null)}
+        title="Renomear arquivo"
+        description="O novo nome vale para todas as versões do arquivo."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setToRename(null)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" loading={rename.isPending} onClick={() => toRename && rename.mutate({ id: toRename.id, name: newName })}>
+              Renomear
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={(e) => (e.preventDefault(), toRename && rename.mutate({ id: toRename.id, name: newName }))} noValidate>
+          <TextField label="Nome do arquivo" autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} error={renameError} />
+        </form>
+      </Dialog>
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}

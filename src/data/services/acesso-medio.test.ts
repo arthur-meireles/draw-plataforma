@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadDb, resetDb, transaction } from "../db";
 import { SESSION_IDLE_MS, setSessionUserId } from "./_core";
-import { admApi, admExtraApi, filesApi, mailApi, authApi, notificationsApi, tasksApi, usersApi } from "./index";
+import { admApi, admExtraApi, driveTrashApi, filesApi, mailApi, authApi, metricsApi, notificationsApi, tasksApi, usersApi } from "./index";
 
 const as = (userId: string | null) => setSessionUserId(userId);
 
@@ -272,3 +272,59 @@ describe("RN-78 — sprints do Administrativo", () => {
     await expect(tasksApi.updateSprint(active.id, { name: "x", startAt: active.startAt, endAt: active.endAt })).rejects.toMatchObject({ status: 403 });
   });
 });
+
+describe("RN-79 — Drive e área do freelancer", () => {
+  it("arquivo excluído vai para a lixeira por 30 dias e volta com restaurar; só quem gerencia arquivos vê", async () => {
+    as("usr_paula");
+    const f = loadDb().files.find((x) => !x.deletedAt && !x.projectId) ?? loadDb().files.find((x) => !x.deletedAt)!;
+    await filesApi.remove(f.id);
+    expect((await driveTrashApi.list()).find((x) => x.id === f.id)?.daysLeft).toBe(30);
+    as("usr_lucas");
+    await expect(driveTrashApi.list()).rejects.toMatchObject({ status: 403 });
+    as("usr_paula");
+    await driveTrashApi.restore(f.id);
+    expect(loadDb().files.find((x) => x.id === f.id)?.deletedAt).toBeNull();
+    expect(await driveTrashApi.list()).toHaveLength(0);
+    // passou dos 30 dias: some da lixeira e não restaura mais
+    await filesApi.remove(f.id);
+    transaction((db) => (db.files.find((x) => x.id === f.id)!.deletedAt = new Date(Date.now() - 31 * 86_400_000).toISOString()));
+    expect(await driveTrashApi.list()).toHaveLength(0);
+    await expect(driveTrashApi.restore(f.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("renomear arquivo exige gerenciar arquivos, registra evento e recusa nome vazio", async () => {
+    as("usr_paula");
+    const f = loadDb().files.find((x) => !x.deletedAt)!;
+    await expect(driveTrashApi.rename(f.id, "  ")).rejects.toMatchObject({ status: 422 });
+    await driveTrashApi.rename(f.id, "Novo nome.pdf");
+    expect(loadDb().files.find((x) => x.id === f.id)?.name).toBe("Novo nome.pdf");
+    expect(loadDb().events.at(-1)).toMatchObject({ type: "file.renamed", entityId: f.id });
+    as("usr_lucas");
+    await expect(driveTrashApi.rename(f.id, "x")).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("excluir pasta com conteúdo diz o que há dentro", async () => {
+    const { driveApi } = await import("./index");
+    as("usr_paula");
+    const folder = loadDb().folders.find((x) => !x.deletedAt && !x.systemKey && loadDb().files.some((f) => !f.deletedAt && f.folderId === x.id));
+    if (!folder) return;
+    await expect(driveApi.removeFolder(folder.id)).rejects.toThrow(/A pasta tem \d+ arquivo/);
+  });
+
+  it("início do freelancer traz NF divergente com o motivo e o pagamento previsto; sem cadastro avisa", async () => {
+    const pay = loadDb().payables.find((p) => p.freelancerId && loadDb().freelancers.find((f) => f.id === p.freelancerId)?.userId)!;
+    const fl = loadDb().freelancers.find((f) => f.id === pay.freelancerId)!;
+    transaction((db) => {
+      const p = db.payables.find((x) => x.id === pay.id)!;
+      p.status = "divergente";
+      p.divergenceNote = "Valor diferente do combinado";
+    });
+    as(fl.userId!);
+    const home = await metricsApi.freelancerHome();
+    expect(home.missingRecord).toBe(false);
+    expect(home.pendingInvoices.find((i) => i.id === pay.id)).toMatchObject({ status: "divergente", divergenceNote: "Valor diferente do combinado", token: null });
+    transaction((db) => (db.freelancers.find((f) => f.id === fl.id)!.userId = null));
+    expect((await metricsApi.freelancerHome()).missingRecord).toBe(true);
+  });
+});
+

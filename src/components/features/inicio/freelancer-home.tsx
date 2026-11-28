@@ -1,7 +1,7 @@
 "use client";
 /** Início do freelancer (RF-M9-01..05): seus projetos, tarefas por prazo, NFs pendentes, agenda e materiais. */
 import Link from "next/link";
-import { Button, EmptyState, ErrorState, Section, Skeleton, Stat, ViewSwitcher } from "@/components/ui";
+import { Button, Callout, EmptyState, ErrorState, Section, Skeleton, Stat, ViewSwitcher } from "@/components/ui";
 import { ProjectCard, TaskPeek, TaskViews, useTaskView } from "@/components/domain";
 import { InstallPromptCard } from "@/components/pwa/pwa-ui";
 import { useApiQuery } from "@/data/hooks";
@@ -27,11 +27,12 @@ export function FreelancerHome() {
       <HomeGreeting />
       <InstallPromptCard />
       {home.error && <ErrorState error={home.error} onRetry={() => home.refetch()} />}
+      {home.data?.missingRecord && <Callout tone="warning" icon="warning" title="Seu cadastro de freelancer não está completo">Sem ele, seus projetos e pagamentos não aparecem. Fale com a gestão da Draw para ligar o seu acesso ao cadastro.</Callout>}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat loading={home.isLoading} icon="project" label="Projetos ativos" value={home.data?.projects} />
         <Stat loading={home.isLoading} icon="myTasks" label="Tarefas abertas" value={home.data?.openTasks} href="/minhas-tarefas" />
         <Stat loading={tasks.isLoading} icon="warning" tone={overdue ? "danger" : "success"} label="Atrasadas" value={overdue} href="/minhas-tarefas" hint={overdue ? "Atualize o status ou fale com a gestão" : "Tudo em dia"} />
-        <Stat loading={home.isLoading} icon="invoice" tone={pending.length ? "warning" : "success"} label="NFs pendentes" value={pending.length} hint={plural(pending.length, "pedido", "pedidos")} />
+        <Stat loading={home.isLoading} icon="invoice" tone={pending.length ? "warning" : "success"} label="NFs pendentes" value={pending.length} hint={plural(pending.length, "pedido ou divergência", "pedidos ou divergências")} />
       </div>
 
       {pending.length > 0 && <PendingInvoices items={pending} loading={home.isLoading} />}
@@ -78,9 +79,9 @@ export function FreelancerHome() {
               </div>
             )}
           </Section>
-          <Section title="Materiais" icon="resource" description="Manuais de marca, referências e arquivos liberados para você.">
+          <Section title="Arquivos dos projetos" icon="resource" description="Os arquivos que a equipe liberou para você e o que você enviou, por projeto.">
             <Button asChild variant="secondary" size="sm" icon="files">
-              <Link href="/arquivos">Abrir materiais</Link>
+              <Link href="/arquivos">Abrir arquivos</Link>
             </Button>
           </Section>
         </div>
