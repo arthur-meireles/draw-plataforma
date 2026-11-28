@@ -1,15 +1,17 @@
 "use client";
 /** Ficha do freelancer (RF-M2-04): cabeçalho + abas na URL. O freelancer só enxerga e edita o próprio registro. */
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, ConfirmDialog, ErrorState, PageBody, PageHeader, TabPanel, Tabs, type Crumb, type TabItem, DetailBodySkeleton } from "@/components/ui";
 import { usePermissions } from "@/components/layout/session";
 import { useApiMutation } from "@/data/hooks";
-import { freelancersApi, freelancersExtraApi } from "@/data/services";
+import { freelancerLifecycleApi, freelancersApi, freelancersExtraApi } from "@/data/services";
 import { useUrlState } from "@/lib/use-url-state";
 import { FreelancerDataTab } from "./freelancer-data-tab";
 import { FreelancerDeliveriesTab } from "./freelancer-deliveries-tab";
 import { FreelancerFormDialog } from "./freelancer-form-dialog";
 import { FreelancerHeader } from "./freelancer-header";
+import { InactivateFreelancerDialog } from "./inactivate-freelancer-dialog";
 import { FreelancerPaymentsTab } from "./freelancer-payments-tab";
 import { FreelancerProjectsTab } from "./freelancer-projects-tab";
 import { FreelancerTasksTab } from "./freelancer-tasks-tab";
@@ -22,6 +24,8 @@ export function FreelancerDetailScreen({ id }: { id: string }) {
   const q = useFreelancer(id);
   const [editing, setEditing] = useState(false);
   const [inactivating, setInactivating] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const router = useRouter();
   const [{ aba }, set] = useUrlState<{ aba?: string }>({ aba: undefined });
   const f = q.data;
   const own = perms.isFreelancer;
@@ -34,6 +38,15 @@ export function FreelancerDetailScreen({ id }: { id: string }) {
   const setStatus = useApiMutation((status: "ativo" | "inativo") => freelancersExtraApi.setStatus(id, status), {
     success: (r) => (r.status === "ativo" ? "Freelancer reativado" : "Freelancer inativado"),
     onSuccess: () => setInactivating(false),
+  });
+
+  const remove = useApiMutation(() => freelancerLifecycleApi.remove(id), {
+    success: "Cadastro excluído.",
+    onSuccess: () => {
+      setRemoving(false);
+      router.push("/freelancers");
+    },
+    onError: () => setRemoving(false),
   });
 
   const items: TabItem<Tab>[] = [
@@ -75,6 +88,11 @@ export function FreelancerDetailScreen({ id }: { id: string }) {
                   <span className="max-sm:hidden">{f.status === "ativo" ? "Inativar…" : "Reativar"}</span>
                 </Button>
               )}
+              {canManage && (
+                <Button size="sm" variant="ghost" icon="delete" onClick={() => setRemoving(true)}>
+                  <span className="max-sm:hidden">Excluir…</span>
+                </Button>
+              )}
               {(canManage || own) && (
                 <Button size="sm" variant="primary" icon="edit" onClick={() => setEditing(true)}>
                   {own ? "Editar meus dados" : "Editar"}
@@ -112,15 +130,16 @@ export function FreelancerDetailScreen({ id }: { id: string }) {
               </TabPanel>
             </Tabs>
             <FreelancerFormDialog open={editing} onOpenChange={setEditing} freelancer={f} />
+            <InactivateFreelancerDialog freelancer={inactivating ? { id, name: f.name } : null} onOpenChange={setInactivating} loading={setStatus.isPending} onConfirm={() => setStatus.mutate("inativo")} />
             <ConfirmDialog
-              open={inactivating}
-              onOpenChange={setInactivating}
-              title="Inativar freelancer"
-              description={`${f.name} deixa de aparecer nas alocações novas. O histórico de projetos e pagamentos é mantido.`}
-              confirmLabel="Inativar freelancer"
+              open={removing}
+              onOpenChange={setRemoving}
+              title="Excluir cadastro do freelancer?"
+              description={`${f.name} some das listas. Só é possível para cadastro sem projetos, sem contas a pagar e sem acesso à plataforma; do contrário, inative para preservar o histórico.`}
+              confirmLabel="Excluir cadastro"
               destructive
-              loading={setStatus.isPending}
-              onConfirm={() => setStatus.mutate("inativo")}
+              loading={remove.isPending}
+              onConfirm={() => remove.mutate(undefined)}
             />
           </>
         )}

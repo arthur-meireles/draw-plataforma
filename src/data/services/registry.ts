@@ -1,4 +1,6 @@
 /** Cadastros: clientes, contatos, grupos, freelancers, tipos de projeto (M2). */
+import { documentError, pixKeyError } from "./cadastro-rules";
+import { assertGroupNameFree } from "./cadastros-medio";
 import { baseFields, nowIso } from "../db";
 import type { Address, Client, Freelancer, ID, MemberRole, ProjectStageKey, ProjectType, Specialty } from "../types";
 import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
@@ -65,7 +67,8 @@ export const clientsApi = {
             groupName: db.clientGroups.find((g) => g.id === c.groupId)?.name ?? null,
             projectsTotal: projects.length,
             projectsActive: projects.filter((p) => p.status === "ativo").length,
-            contractedCents: canSeeMoney(me) ? projects.reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0) : null,
+            // RN-88 — contratado = projetos ativos, concluídos e arquivados; perdidos e cancelados não contam
+            contractedCents: canSeeMoney(me) ? projects.filter((p) => p.status === "ativo" || p.status === "concluido" || p.status === "arquivado").reduce((a, p) => a + (p.contractedAmountCents ?? 0), 0) : null,
             lastProjectAt: projects.map((p) => p.enteredAt).sort().at(-1) ?? null,
           };
         });
@@ -133,7 +136,13 @@ export const clientsApi = {
       if (!c) throw new ApiError(404, "Cliente não encontrado.");
       if (db.projects.some((p) => p.clientId === id && !p.deletedAt)) throw new ApiError(409, "Este cliente tem projetos e não pode ser excluído. Inative-o.");
       c.deletedAt = nowIso();
-      emit(db, me, { type: "client.deleted", entityType: "client", entityId: c.id, data: {} });
+      // RN-88 — contatos do cliente excluído não ficam órfãos
+      const contacts = db.clientContacts.filter((k) => k.clientId === id && !k.deletedAt);
+      contacts.forEach((k) => {
+        k.deletedAt = nowIso();
+        k.isBillingContact = false;
+      });
+      emit(db, me, { type: "client.deleted", entityType: "client", entityId: c.id, data: { contactsRemoved: contacts.length } });
     }),
 
   groups: () => read((db, me) => (requireAccess(me, "clients", "read"), db.clientGroups.filter((g) => !g.deletedAt).map((g) => ({ ...g, clients: db.clients.filter((c) => c.groupId === g.id && !c.deletedAt).length })))),
@@ -142,8 +151,10 @@ export const clientsApi = {
     write((db, me) => {
       requireAccess(me, "clients", "all", "Seu perfil só consulta clientes. Peça ao Comercial ou à gestão para criar o grupo.");
       if (!name.trim()) throw new ApiError(422, "Dê um nome ao grupo.", { name: "Dê um nome ao grupo" });
+      assertGroupNameFree(db, name);
       const g = { ...baseFields(me.id), name: name.trim() };
       db.clientGroups.push(g);
+      emit(db, me, { type: "client_group.created", entityType: "client_group", entityId: g.id, data: { name: g.name } });
       return g;
     }),
 
@@ -191,7 +202,7 @@ export const freelancersApi = {
             ...maskFreelancer(x, canBank || x.id === myFl),
             projectsTotal: members.length,
             // Resumo de pagamentos (planilha: Resumo Freelancers) — só com acesso a valores
-            paymentsTotalCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
+            paymentsTotalCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt && p.status !== "cancelado").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
             paymentsPaidCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt && p.status === "pago").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
             activeProjects,
             openTasks: db.tasks.filter((t) => t.assigneeFreelancerId === x.id && t.statusKey !== "concluida" && !t.deletedAt).length,
@@ -222,7 +233,12 @@ export const freelancersApi = {
           .filter((t) => t.assigneeFreelancerId === id && t.statusKey !== "concluida" && !t.deletedAt)
           .map((t) => ({ ...t, projectCode: db.projects.find((p) => p.id === t.projectId)?.code ?? "" })),
         deliveries: db.fileVersions
-          .filter((v) => db.files.find((f) => f.id === v.fileId)?.category === "entrega" && v.uploadedBy === x.userId)
+          .filter((v) => {
+            const file = db.files.find((f) => f.id === v.fileId);
+            if (file?.category !== "entrega") return false;
+            // RN-88 — também conta a entrega de tarefa atribuída ao freelancer (quem não tem login não envia arquivo)
+            return (!!x.userId && v.uploadedBy === x.userId) || (!!file.taskId && db.tasks.some((t) => t.id === file.taskId && t.assigneeFreelancerId === id));
+          })
           .map((v) => ({ ...v, fileName: db.files.find((f) => f.id === v.fileId)!.name })),
         payables: money
           ? db.payables.filter((p) => p.freelancerId === id && !p.deletedAt).map((p) => ({ ...p, projectCode: db.projects.find((pp) => pp.id === p.projectId)?.code ?? "" }))
@@ -288,9 +304,12 @@ export const freelancersApi = {
         }
         emit(db, me, { type: "freelancer.email_changed", entityType: "freelancer", entityId: f.id, data: { before: f.email, after: email, loginSynced: !!u } });
       }
+      // RN-09/RN-89 — mudança de dado bancário ou fiscal fica registrada (campos, sem os valores)
+      const bankFields = (["legalName", "document", "pixKey", "bankName", "bankAgency", "bankAccount"] as const).filter((k) => k in patch && (f[k] ?? null) !== ((patch as unknown as Record<string, string | null | undefined>)[k] ?? null));
       Object.assign(f, patch);
       touch(f);
       emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: {} });
+      if (bankFields.length) emit(db, me, { type: "freelancer.bank_data_changed", entityType: "freelancer", entityId: f.id, data: { fields: bankFields, by: id === myFl ? "freelancer" : "financeiro" } });
       return f;
     }),
 
@@ -318,6 +337,11 @@ function validateFreelancer(input: FreelancerInput) {
   if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) errors.email = "Informe um e-mail válido, ex.: nome@gmail.com";
   if (!input.specialties.length) errors.specialties = "Escolha ao menos uma especialidade";
   if (!input.jobTitle?.trim()) errors.jobTitle = "Informe o cargo, ex.: Designer gráfico";
+  // RN-89 — CPF/CNPJ e PIX validados no serviço (não só na tela)
+  const docErr = documentError(input.document);
+  if (docErr) errors.document = docErr;
+  const pixErr = pixKeyError(input.pixKey);
+  if (pixErr) errors.pixKey = pixErr;
   if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
 }
 

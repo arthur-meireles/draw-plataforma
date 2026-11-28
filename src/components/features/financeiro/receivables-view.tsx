@@ -4,14 +4,15 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Money, ProjectCode, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Button, ClearFiltersButton, DataTable, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, type Column } from "@/components/ui";
-import { useApiQuery, useClientOptions } from "@/data/hooks";
+import { Button, ClearFiltersButton, DataTable, Fab, FilterChip, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, type Column } from "@/components/ui";
+import { useApiQuery, useClientOptions, useOrganization } from "@/data/hooks";
 import { RECEIVABLE_STATUS_LABEL } from "@/data/reference";
 import { financeApi, projectsApi } from "@/data/services";
 import type { ReceivableStatus } from "@/data/types";
 import { downloadTextFile, toCsv } from "@/lib/csv";
 import { dateFull, money, formatCnpj } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
+import { NewReceivableDialog } from "./new-receivable-dialog";
 import { ReceivableSheet } from "./receivable-sheet";
 import { SummaryStrip, TotalsRow } from "./totals-row";
 import type { ReceivableRow } from "./types";
@@ -49,8 +50,9 @@ const columns: Column<ReceivableRow>[] = [
 
 export function ReceivablesView() {
   const { canWriteAll, money: canMoney } = usePermissions();
-  const [f, set, activeCount] = useUrlState({ status: "todos", cliente: undefined as string | undefined, mes: undefined as string | undefined, projeto: undefined as string | undefined, q: "", aberto: undefined as string | undefined });
+  const [f, set, activeCount] = useUrlState({ status: "todos", cliente: undefined as string | undefined, mes: undefined as string | undefined, projeto: undefined as string | undefined, vence: undefined as string | undefined, q: "", aberto: undefined as string | undefined });
   const [selected, setSelected] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
 
   const clients = useClientOptions();
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list());
@@ -64,7 +66,16 @@ export function ReceivablesView() {
     for (const s of STATUSES) c[s] = all?.filter((r) => r.status === s).length ?? 0;
     return c;
   }, [all]);
-  const rows = useMemo(() => (f.status === "todos" ? all?.filter((r) => r.status !== "cancelado") : all?.filter((r) => r.status === f.status)), [all, f.status]);
+  // RN-92 — "Vence em N dias" (janela de alerta da organização): previstos e faturados que ainda não venceram
+  const org = useOrganization();
+  const soonDays = org.data?.org.settings.dueSoonDays ?? 7;
+  const rows = useMemo(() => {
+    const base = f.status === "todos" ? all?.filter((r) => r.status !== "cancelado") : all?.filter((r) => r.status === f.status);
+    if (!f.vence) return base;
+    const now = Date.now();
+    const end = now + soonDays * 86_400_000;
+    return base?.filter((r) => (r.status === "previsto" || r.status === "faturado") && new Date(r.expectedAt).getTime() >= now - 86_400_000 && new Date(r.expectedAt).getTime() <= end);
+  }, [all, f.status, f.vence, soonDays]);
   const open = all?.find((r) => r.id === f.aberto) ?? null;
 
   const totals = rows?.reduce((a, r) => ({ amount: a.amount + r.amountCents, tax: a.tax + r.taxCents }), { amount: 0, tax: 0 });
@@ -88,18 +99,26 @@ export function ReceivablesView() {
       <PageHeader crumbs={[{ label: "Financeiro", icon: "finance", href: canWriteAll("receivables") ? "/financeiro/visao-geral" : undefined }, { label: "A receber", icon: "receivable" }]} count={rows?.length} />
       <Toolbar
         end={
-          selected.length > 0 && (
-            <Button variant="secondary" size="sm" icon="download" onClick={exportCsv}>
-              Exportar CSV ({selected.length})
-            </Button>
-          )
+          <>
+            {selected.length > 0 && (
+              <Button variant="secondary" size="sm" icon="download" onClick={exportCsv}>
+                Exportar CSV ({selected.length})
+              </Button>
+            )}
+            {canWriteAll("receivables") && (
+              <Button variant="primary" size="sm" icon="add" className="max-md:hidden" onClick={() => setCreating(true)}>
+                Novo recebível
+              </Button>
+            )}
+          </>
         }
       >
         <SearchInput className="max-md:w-48 max-md:shrink-0" value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar projeto, cliente, NF…" />
         <FilterSelectChip label="Cliente" icon="clients" value={f.cliente} onChange={(v) => set({ cliente: v })} options={clientOptions} searchPlaceholder="Buscar cliente…" />
         <FilterSelectChip label="Projeto" icon="project" value={project?.id} onChange={(v) => set({ projeto: v ? (projects.data?.find((p) => p.id === v)?.code ?? v) : undefined })} options={projectOptions} searchPlaceholder="Buscar projeto…" />
         <MonthFilterChip value={f.mes} onChange={(v) => set({ mes: v })} />
-        <ClearFiltersButton show={activeCount > 0} onClick={() => set({ status: "todos", cliente: undefined, mes: undefined, projeto: undefined, q: "", aberto: undefined })} />
+        <FilterChip label={`Vence em ${soonDays} dias`} icon="due" active={!!f.vence} aria-pressed={!!f.vence} onClick={() => set({ vence: f.vence ? undefined : "1" })} onClear={f.vence ? () => set({ vence: undefined }) : undefined} />
+        <ClearFiltersButton show={activeCount > 0} onClick={() => set({ status: "todos", cliente: undefined, mes: undefined, projeto: undefined, vence: undefined, q: "", aberto: undefined })} />
       </Toolbar>
       <div className="border-b border-line bg-surface px-3 py-2 md:px-4">
         <StatusChips label="Status" value={f.status} onChange={(v) => { set({ status: v }); setSelected([]); }} options={statusOptions} />
@@ -154,6 +173,8 @@ export function ReceivablesView() {
         />
       </PageBody>
       <ReceivableSheet row={open} onClose={() => set({ aberto: undefined })} />
+      {canWriteAll("receivables") && <Fab label="Novo recebível" onClick={() => setCreating(true)} />}
+      <NewReceivableDialog open={creating} onOpenChange={setCreating} onCreated={(id) => set({ aberto: id })} />
     </>
   );
 }

@@ -35,6 +35,8 @@ import { settleCompletionPayables, type CompletionDecision } from "./payables-ex
 import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
 import { effectiveReceivableStatus } from "./finance-rules";
+import { cancelOpenFreelancerPayables } from "./finance-medio";
+import { assertClientActive } from "./cadastros-medio";
 import { newProjectErrors, notifyDirectCreated, notifyOwner, propagateClientChange, recomputeDeliveryDue, validateNewProject, withdrawIdleApprovals, closeOpenProjectTasks } from "./project-intake";
 
 export interface ProjectFilters {
@@ -171,6 +173,7 @@ export const projectsApi = {
       if (!canWriteAll(me, "commercial")) throw new ApiError(403, "Seu perfil não pode criar cotações.");
       validateNewProject(db, input); // RN-95
       const type = db.projectTypes.find((t) => t.id === input.projectTypeId)!;
+      assertClientActive(db, input.clientId);
       const billing = db.clientContacts.find((c) => c.clientId === input.clientId && c.isBillingContact);
       const now = nowIso();
       const p: Project = {
@@ -237,6 +240,7 @@ export const projectsApi = {
       const sum = input.installments.reduce((a, i) => a + i.amountCents, 0);
       if (input.installments.length && sum !== input.contractedAmountCents) errors.installments = "A soma das parcelas deve ser igual ao valor contratado";
       if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
+      assertClientActive(db, input.clientId);
       const type = db.projectTypes.find((t) => t.id === input.projectTypeId)!;
       const billing = db.clientContacts.find((c) => c.clientId === input.clientId && c.isBillingContact);
       const now = nowIso();
@@ -321,6 +325,7 @@ export const projectsApi = {
         if (blocked.length) throw new ApiError(403, "Seu perfil edita só título, briefing, prioridade, tamanho e prazos. Peça à gestão para mudar responsável, cliente, faturamento ou valores.");
       }
       if (patch.clientId && patch.clientId !== p.clientId) {
+        assertClientActive(db, patch.clientId);
         const issued = db.receivables.some((r) => r.projectId === p.id && r.issuedAt);
         if (issued) throw new ApiError(409, "Este projeto já tem nota fiscal emitida e não pode trocar de cliente (RN-12).");
       }
@@ -511,7 +516,9 @@ export const projectsApi = {
       // RN-59 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
       // RN-73 — retira pendências com o cliente e avisa Financeiro/contas a pagar do que segue em aberto
       const closing = closeOnCancel(db, me, p);
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), ...closing } });
+      // RN-86 — contas de freelancer ainda aguardando NF viram "cancelado" (e o link de NF deixa de valer)
+      const cancelledPayableIds = cancelOpenFreelancerPayables(db, me, p.id, reason.trim());
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), cancelledPayableIds, ...closing } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),
@@ -613,7 +620,7 @@ export const projectsApi = {
 export function computeFinancials(db: Database, projectId: ID): ProjectFinancials {
   const p = db.projects.find((x) => x.id === projectId)!;
   const recs = db.receivables.filter((r) => r.projectId === projectId && !r.deletedAt && r.status !== "cancelado");
-  const pays = db.payables.filter((r) => r.projectId === projectId && !r.deletedAt);
+  const pays = db.payables.filter((r) => r.projectId === projectId && !r.deletedAt && r.status !== "cancelado");
   const contracted = p.contractedAmountCents ?? 0;
   const freelancerCommitted = db.projectMembers
     .filter((m) => m.projectId === projectId && m.freelancerId && m.agreedAmountCents && m.active && !m.deletedAt)
@@ -645,6 +652,8 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
     taxCents: tax,
     marginCents: margin,
     marginPct: revenue ? margin / revenue : null,
+    parcelsCents: parcels.reduce((a, r) => a + r.amountCents, 0),
+    parcelsGapCents: parcels.length ? parcels.reduce((a, r) => a + r.amountCents, 0) - contracted : 0,
   };
 }
 

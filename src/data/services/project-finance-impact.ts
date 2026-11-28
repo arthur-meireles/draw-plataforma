@@ -13,7 +13,7 @@ export function cancellationImpact(db: Database, p: Project) {
   const recs = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status !== "cancelado" && r.status !== "recebido");
   const toCancel = recs.filter((r) => !r.issuedAt);
   const invoiced = recs.filter((r) => !!r.issuedAt);
-  const payables = db.payables.filter((x) => x.projectId === p.id && !x.deletedAt && x.status !== "pago");
+  const payables = db.payables.filter((x) => x.projectId === p.id && !x.deletedAt && x.status !== "pago" && x.status !== "cancelado");
   return {
     receivablesToCancel: toCancel.length,
     receivablesToCancelCents: toCancel.reduce((a, r) => a + r.amountCents, 0),

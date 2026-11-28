@@ -18,10 +18,10 @@ export function FinanceTab({ q }: { q: ReturnType<typeof useIndicators> }) {
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <IndicatorCard loading={q.isLoading} icon="money" label="Contratado" value={<Money cents={f?.contractedTotal} compact />} formula="Valor contratado dos projetos aprovados no período (tipo e responsável do filtro)" />
+        <IndicatorCard loading={q.isLoading} icon="money" href="/financeiro/visao-geral" label="Contratado" value={<Money cents={f?.contractedTotal} compact />} formula="Valor contratado dos projetos aprovados no período (tipo e responsável do filtro)" />
         <IndicatorCard loading={q.isLoading} icon="margin" tone="success" label="Margem" value={<Money cents={f?.marginTotal} compact />} hint={marginPct != null ? `${fmtPct(marginPct)} do contratado` : undefined} formula="Receita (contratado + adicionais) − impostos − custos dos projetos aprovados no período (RN-65)" />
-        <IndicatorCard loading={q.isLoading} icon="invoice" label="Faturado no período" value={<Money cents={f?.invoicedInPeriod} compact />} formula="NFs emitidas no período (data de emissão)" />
-        <IndicatorCard loading={q.isLoading} icon="receivable" tone="success" label="Recebido no período" value={<Money cents={f?.receivedInPeriod} compact />} formula="Baixas registradas no período (data do recebimento)" />
+        <IndicatorCard loading={q.isLoading} icon="invoice" href="/financeiro/receber?status=faturado" label="Faturado no período" value={<Money cents={f?.invoicedInPeriod} compact />} formula="NFs emitidas no período (data de emissão)" />
+        <IndicatorCard loading={q.isLoading} icon="receivable" tone="success" href="/financeiro/receber?status=recebido" label="Recebido no período" value={<Money cents={f?.receivedInPeriod} compact />} formula="Baixas registradas no período (data do recebimento)" />
         <IndicatorCard loading={q.isLoading} icon="target" tone="info" label="Ticket médio" value={<Money cents={ticketAvg} compact />} formula="Contratado médio por projeto" />
         <IndicatorCard loading={q.isLoading} icon="client" tone="violet" label="Clientes recorrentes" value={cl ? number(cl.recurring) : "—"} hint={cl ? `${cl.projectsPerClient.toFixed(1).replace(".", ",")} projetos por cliente · ${plural(cl.total, "cliente", "clientes")}` : undefined} formula="Clientes com mais de um projeto" />
       </div>

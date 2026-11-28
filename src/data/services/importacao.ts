@@ -278,7 +278,7 @@ export interface MasterReport {
 
 const SUMMARY_KEYS = ["clientes_criados", "clientes_atualizados", "freelancers_criados", "projetos_criados", "projetos_atualizados", "membros", "recebiveis", "pagaveis", "cobrancas_adicionais"] as const;
 
-const PAYABLE_RANK: Record<Payable["status"], number> = { aguardando_nf: 0, em_conferencia: 1, divergente: 1, aprovado: 2, pago: 3 };
+const PAYABLE_RANK: Record<Payable["status"], number> = { aguardando_nf: 0, em_conferencia: 1, divergente: 1, aprovado: 2, pago: 3, cancelado: 4 };
 
 const isoAt = (d: string | null, hour = 15) => (d ? `${d}T${String(hour).padStart(2, "0")}:00:00.000Z` : null);
 const onlyDigits = (v: string) => v.replace(/\D/g, "");

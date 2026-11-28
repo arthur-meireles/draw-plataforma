@@ -196,7 +196,7 @@ export const ProjectStatusBadge = ({ status }: { status: ProjectStatus }) => <Ba
 const receivableTone: Record<ReceivableStatus, Tone> = { previsto: "neutral", faturado: "info", recebido: "success", vencido: "danger", cancelado: "neutral" };
 export const ReceivableStatusBadge = ({ status }: { status: ReceivableStatus }) => <Badge tone={receivableTone[status]} pulseKey={status} dot>{RECEIVABLE_STATUS_LABEL[status]}</Badge>;
 
-const payableTone: Record<PayableStatus, Tone> = { aguardando_nf: "warning", em_conferencia: "info", divergente: "danger", aprovado: "accent", pago: "success" };
+const payableTone: Record<PayableStatus, Tone> = { aguardando_nf: "warning", em_conferencia: "info", divergente: "danger", aprovado: "accent", pago: "success", cancelado: "neutral" };
 export const PayableStatusBadge = ({ status }: { status: PayableStatus }) => <Badge tone={payableTone[status]} pulseKey={status} dot>{PAYABLE_STATUS_LABEL[status]}</Badge>;
 
 const proposalTone: Record<ProposalStatus, Tone> = { rascunho: "neutral", enviada: "info", aprovada: "success", recusada: "danger" };

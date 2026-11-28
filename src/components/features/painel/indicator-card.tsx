@@ -2,7 +2,7 @@
 /** KPI do painel com a fórmula (seção 12) explicada em uma linha. */
 import { Icon, Stat, Tooltip, type IconName, type Tone } from "@/components/ui";
 
-export function IndicatorCard({ label, value, hint, formula, icon, tone, loading }: { label: string; value: React.ReactNode; hint?: React.ReactNode; formula: string; icon?: IconName; tone?: Tone; loading?: boolean }) {
+export function IndicatorCard({ label, value, hint, formula, icon, tone, loading, href }: { label: string; value: React.ReactNode; hint?: React.ReactNode; formula: string; icon?: IconName; tone?: Tone; loading?: boolean; /** Drill-down: lista que compõe o indicador. */ href?: string }) {
   return (
     <Stat
       label={label}
@@ -10,6 +10,7 @@ export function IndicatorCard({ label, value, hint, formula, icon, tone, loading
       icon={icon}
       tone={tone}
       loading={loading}
+      href={href}
       hint={
         <span className="flex min-w-0 flex-col gap-0.5">
           {hint && <span className="truncate text-fg-muted">{hint}</span>}

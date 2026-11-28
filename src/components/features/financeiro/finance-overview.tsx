@@ -63,12 +63,14 @@ export function FinanceOverview({ months }: { months: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat loading={loading} label="A receber" icon="receivable" tone="info" value={<Money cents={tot?.toReceive} />} href="/financeiro/receber" hint="em aberto" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Stat loading={loading} label="A receber" icon="receivable" tone="info" value={<Money cents={tot?.toReceive} />} href="/financeiro/receber" hint="a faturar + faturado + vencido" />
+        <Stat loading={loading} label="A faturar" icon="invoice" tone="neutral" value={<Money cents={tot?.toInvoice} />} href="/financeiro/receber?status=previsto" hint="previsto, sem NF" />
+        <Stat loading={loading} label="Faturado em aberto" icon="invoice" tone="info" value={<Money cents={tot?.invoicedOpen} />} href="/financeiro/receber?status=faturado" hint="NF emitida, no prazo" />
         <Stat loading={loading} label="Vencido" icon="warning" tone="danger" value={<Money cents={tot?.overdue} />} href="/financeiro/receber?status=vencido" hint="cobrar" />
         <Stat loading={loading} label="Recebido no mês" icon="success" tone="success" value={<Money cents={tot?.receivedMonth} />} href="/financeiro/receber?status=recebido" />
         <Stat loading={loading} label="A pagar" icon="payable" tone="warning" value={<Money cents={tot?.toPay} />} href="/financeiro/pagar" hint="em aberto" />
-        <Stat loading={loading} label="A pagar no mês" icon="due" tone="orange" value={<Money cents={tot?.toPayMonth} />} href="/financeiro/pagar" />
+        <Stat loading={loading} label="A pagar no mês" icon="due" tone="orange" value={<Money cents={tot?.toPayMonth} />} href={`/financeiro/pagar?mes=${new Date().toISOString().slice(0, 7)}`} hint="vence neste mês" />
         <Stat loading={loading} label="NFs aguardando" icon="invoice" tone="neutral" value={tot ? number(tot.awaitingInvoice) : ""} href="/financeiro/pagar?status=aguardando_nf" hint="freelancers" />
         <Stat loading={loading} label="Divergentes" icon="error" tone={tot && tot.divergent ? "danger" : "neutral"} value={tot ? number(tot.divergent) : ""} href="/financeiro/pagar?status=divergente" hint="valor ≠ acordado" />
         <Stat loading={loading} label="Margem total" icon="margin" tone="accent" value={<Money cents={tot?.margin} />} hint={tot && tot.contracted ? `${percent(tot.margin / tot.contracted, 1)} do contratado` : undefined} />
@@ -76,7 +78,7 @@ export function FinanceOverview({ months }: { months: number }) {
 
       <Section
         title="Fluxo por mês"
-        description="Previsto, faturado e recebido contra o que há a pagar e o que foi pago."
+        description={`Previsto, faturado e recebido contra o que há a pagar e o que foi pago, de ${months - 1} meses atrás até ${months} meses à frente (o seletor de período vale só para este gráfico).`}
         icon="chart"
         actions={
           <SegmentedControl
@@ -95,15 +97,15 @@ export function FinanceOverview({ months }: { months: number }) {
       </Section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Receita por cliente" description="Valor contratado, top 10." icon="clients">
+        <Section title="Receita por cliente" description="Valor contratado, top 10 — de todo o histórico." icon="clients">
           {loading ? <Skeleton className="h-48 w-full" /> : <RankBars format="money" items={d.byClient.map((c) => ({ label: c.label, value: c.contracted, sub: `${c.projects} proj.` }))} />}
         </Section>
-        <Section title="Por tipo de projeto" description="Contratado por tipo." icon="chartPie">
+        <Section title="Por tipo de projeto" description="Contratado por tipo — de todo o histórico." icon="chartPie">
           {loading ? <Skeleton className="h-48 w-full" /> : <DonutChart format="money" height={180} data={d.byType.map((x) => ({ label: x.label, value: x.contracted }))} centerLabel="contratado" centerValue={money(tot?.contracted).replace(/,00$/, "")} />}
         </Section>
       </div>
 
-      <Section title="Projetos e margem" description="Clique em um projeto para abrir o financeiro dele." icon="project" bodyClassName="p-0">
+      <Section title="Projetos e margem" description="Clique em um projeto para abrir o financeiro dele. Margem e totais dos cards são de todo o histórico." icon="project" bodyClassName="p-0">
         <DataTable
           rows={d?.projects}
           isLoading={loading}

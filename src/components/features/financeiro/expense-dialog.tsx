@@ -14,9 +14,11 @@ export function ExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState(0);
   const [due, setDue] = useState("");
+  const [payee, setPayee] = useState("");
+  const [category, setCategory] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list(), { enabled: open });
-  const m = useApiMutation(() => financeApi.createExpense({ kind, projectId, description, agreedAmountCents: amount, dueAt: fromDateInput(due)! }), {
+  const m = useApiMutation(() => financeApi.createExpense({ kind, projectId, description, agreedAmountCents: amount, dueAt: fromDateInput(due)!, payeeName: payee, category }), {
     success: "Despesa lançada como aprovada, pronta para pagamento.",
     onSuccess: () => onOpenChange(false),
     onError: (e) => e.fieldErrors && setErrors({ ...e.fieldErrors, amount: e.fieldErrors.agreedAmountCents ?? "" }),
@@ -81,6 +83,10 @@ export function ExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           />
         )}
         <TextField label="Descrição" required value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} placeholder="Ex.: impressão de encadernação" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Favorecido" value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="Ex.: Gráfica Alfa" hint="Fornecedor que recebe o pagamento." />
+          <TextField label="Categoria" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Ex.: Impressão" />
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <MoneyField label="Valor" required value={amount} onChange={setAmount} error={errors.amount} />
           <DateField label="Vencimento" required value={due} onChange={(e) => setDue(e.target.value)} error={errors.due} />

@@ -61,11 +61,11 @@ describe("formulário público de NF (RN-04)", () => {
 
   it("rejeita arquivo que não é PDF", async () => {
     const { token } = pending();
-    await expect(publicInvoiceExtraApi.submitWithFile(token, { legalName: "A", document: "1", pixKey: "x", invoiceNumber: "1", amountCents: 100, file: new File(["x"], "nf.png", { type: "image/png" }) })).rejects.toMatchObject({ status: 422 });
+    await expect(publicInvoiceExtraApi.submitWithFile(token, { legalName: "A", document: "12345678901", pixKey: "x", invoiceNumber: "1", amountCents: 100, file: new File(["x"], "nf.png", { type: "image/png" }) })).rejects.toMatchObject({ status: 422 });
   });
   it("valor diferente do acordado vira divergente e aparece para o financeiro", async () => {
     const { pay, token } = pending();
-    const res = await publicInvoiceExtraApi.submitWithFile(token, { legalName: "A", document: "123", pixKey: "x", invoiceNumber: "9", amountCents: pay.agreedAmountCents - 100, file: pdf() });
+    const res = await publicInvoiceExtraApi.submitWithFile(token, { legalName: "A", document: "12345678901", pixKey: "x", invoiceNumber: "9", amountCents: pay.agreedAmountCents - 100, file: pdf() });
     expect(res.status).toBe("divergente");
     const row = (await financeApi.payables({ status: ["divergente"] })).find((p) => p.id === pay.id);
     expect(row?.divergenceNote).toBeTruthy();

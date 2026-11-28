@@ -5,6 +5,7 @@ import { useApiMutation } from "@/data/hooks";
 import { financeApi } from "@/data/services";
 import type { ReceivableRow } from "./types";
 import { CollectionDialog } from "./collection-dialog";
+import { CollectionHistory } from "./collection-history";
 
 /** Nota de cobrança do recebível (planilha: Status/Comentários Cobrança). Somente leitura sem permissão de escrita. */
 export function CollectionNoteEditor({ row, writable }: { row: ReceivableRow; writable: boolean }) {
@@ -40,6 +41,7 @@ export function CollectionNoteEditor({ row, writable }: { row: ReceivableRow; wr
       ) : (
         <p className="text-sm text-fg-muted">{row.collectionNote ?? "Sem notas de cobrança."}</p>
       )}
+      <CollectionHistory receivableId={row.id} />
       {canCollect && <CollectionDialog row={row} open={collect} onOpenChange={setCollect} />}
     </Section>
   );

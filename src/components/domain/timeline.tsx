@@ -107,13 +107,23 @@ export function describeEvent(e: EventRow): { icon: IconName; text: React.ReactN
     case "receivable.additional_created":
       return { icon: "receivable", text: <>lançou a cobrança adicional {b(String(d.description ?? ""))} de {b(money(d.amountCents as number))}</> };
     case "receivable.collection_note":
-      return { icon: "comment", text: <>atualizou a nota de cobrança</> };
+      return { icon: "comment", text: <>atualizou a nota de cobrança{d.note ? <>: &ldquo;{String(d.note).slice(0, 140)}&rdquo;</> : null}</> };
     case "receivable.delivery_due":
       return { icon: "receivable", text: <>trouxe {b(`${d.count} parcela(s) "na entrega"`)} para vencer hoje na conclusão</> };
     case "receivable.delivery_rescheduled":
       return { icon: "receivable", text: <>recalculou {b(`${d.count} vencimento(s)`)} após mudar o prazo do projeto</> };
     case "receivable.cancelled":
-      return { icon: "close", text: <>cancelou o lançamento a receber</> };
+      return { icon: "close", text: <>cancelou o lançamento a receber{d.reason ? <>: {b(String(d.reason))}</> : null}</> };
+    case "receivable.created":
+      return { icon: "receivable", text: <>lançou o recebível {b(String(d.description ?? ""))} de {b(money(d.amountCents as number))}</> };
+    case "receivable.reactivated":
+      return { icon: "undo", text: <>reativou o lançamento: {b(String(d.reason ?? ""))}</> };
+    case "payable.updated":
+      return { icon: "edit", text: <>editou a conta a pagar</> };
+    case "payable.cancelled":
+      return { icon: "close", text: <>cancelou a conta a pagar: {b(String(d.reason ?? ""))}</> };
+    case "payable.reactivated":
+      return { icon: "undo", text: <>reativou a conta a pagar: {b(String(d.reason ?? ""))}</> };
     case "receivable.collection_sent":
       return { icon: "send", text: <>registrou cobrança enviada ao cliente{d.to ? <> ({b(String(d.to))})</> : null}{d.note ? <>: {String(d.note)}</> : null}</> };
     case "receivable.invoice_cancelled":

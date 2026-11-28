@@ -99,6 +99,7 @@ export const PAYABLE_STATUS_LABEL: Record<PayableStatus, string> = {
   divergente: "Divergente",
   aprovado: "Aprovado",
   pago: "Pago",
+  cancelado: "Cancelado",
 };
 
 export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {

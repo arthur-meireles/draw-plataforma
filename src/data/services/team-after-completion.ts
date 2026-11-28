@@ -20,7 +20,7 @@ export interface PaymentSuggestion {
 export function afterCompletionTeamChange(db: Database, me: User, p: Project, m: ProjectMember, beforeAmount: number | null): PaymentSuggestion | null {
   if (p.status !== "concluido" || !m.freelancerId || !m.active || !(m.agreedAmountCents && m.agreedAmountCents > 0) || m.paymentWaived) return null;
   const name = db.freelancers.find((f) => f.id === m.freelancerId)?.name ?? "Freelancer";
-  const pays = db.payables.filter((x) => x.projectMemberId === m.id && !x.deletedAt);
+  const pays = db.payables.filter((x) => x.projectMemberId === m.id && !x.deletedAt && x.status !== "cancelado");
   let suggestion: PaymentSuggestion | null = null;
   if (!pays.length) suggestion = { memberId: m.id, name, amountCents: m.agreedAmountCents, additional: false };
   else if (beforeAmount !== m.agreedAmountCents) {

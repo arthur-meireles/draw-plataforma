@@ -83,7 +83,7 @@ export function IssueInvoiceDialog({ row, open, onOpenChange }: { row: Receivabl
           error={errors.due}
           hint={termDays != null ? (dueEdited ? "Você alterou o vencimento sugerido. A mudança fica no histórico." : "Calculado pela emissão + prazo do cliente. O atraso conta a partir desta data.") : "O cliente não tem prazo cadastrado: confira a data. O atraso conta a partir dela."}
         />
-        <MoneyField label="Impostos retidos" value={tax} onChange={setTax} hint="Opcional. Aparece na coluna Impostos." />
+        <MoneyField label="Impostos sobre o faturamento" value={tax} onChange={setTax} hint="Já vem calculado pela alíquota da organização (RN-15). Ajuste só se a nota saiu com outro imposto; retenções na fonte não entram aqui." />
         <FileDropzone
           label="PDF da nota fiscal"
           accept="application/pdf,.pdf"
@@ -138,7 +138,7 @@ export function EditReceivableDialog({ row, open, onOpenChange }: { row: Receiva
   const [errors, setErrors] = useState<Record<string, string>>({});
   const m = useApiMutation(
     () => financeApi.updateReceivable(row.id, { amountCents: amount, expectedAt: fromDateInput(due)!, description: description.trim() }),
-    { success: "Lançamento atualizado.", onSuccess: () => onOpenChange(false) },
+    { success: "Lançamento atualizado.", onSuccess: () => onOpenChange(false), onError: (e) => e.fieldErrors && setErrors({ ...e.fieldErrors, amount: e.fieldErrors.amount ?? "" }) },
   );
   const submit = () => {
     const errs: Record<string, string> = {};
@@ -176,7 +176,15 @@ export function EditReceivableDialog({ row, open, onOpenChange }: { row: Receiva
       >
         <TextField label="Descrição" required value={description} onChange={(e) => setDescription(e.target.value)} error={errors.description} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <MoneyField label="Valor" required value={amount} onChange={setAmount} error={errors.amount} hint="Mudanças de valor ficam registradas no histórico, com antes e depois (RN-09)." />
+          <MoneyField
+            label="Valor"
+            required
+            value={amount}
+            onChange={setAmount}
+            disabled={!!row.issuedAt}
+            error={errors.amount}
+            hint={row.issuedAt ? "O valor é o da NF emitida. Para corrigir, cancele a NF primeiro." : "Mudanças de valor ficam no histórico, com antes e depois (RN-09), e o imposto é recalculado."}
+          />
           <DateField label="Vencimento" required value={due} onChange={(e) => setDue(e.target.value)} error={errors.due} />
         </div>
       </form>

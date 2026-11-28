@@ -66,7 +66,7 @@ export function createFreelancerPayable(
   return pay;
 }
 
-const hasPayable = (db: Database, memberId: ID) => db.payables.some((pay) => pay.projectMemberId === memberId && !pay.deletedAt);
+const hasPayable = (db: Database, memberId: ID) => db.payables.some((pay) => pay.projectMemberId === memberId && !pay.deletedAt && pay.status !== "cancelado");
 
 /** Decisão da conclusão para um freelancer pendente (RN-40). */
 export type CompletionDecision = { memberId: ID; action: "pagar" | "sem_pagamento"; amountCents?: number | null };

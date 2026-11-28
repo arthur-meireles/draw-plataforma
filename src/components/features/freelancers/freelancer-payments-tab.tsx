@@ -9,7 +9,8 @@ import type { FreelancerDetail } from "./use-freelancers";
 type Row = FreelancerDetail["payables"][number];
 
 export function FreelancerPaymentsTab({ freelancer: f, showMoney }: { freelancer: FreelancerDetail; showMoney: boolean }) {
-  const pending = f.payables.filter((p) => p.status !== "pago").reduce((a, p) => a + p.agreedAmountCents, 0);
+  // valor da NF quando houver (coerente com a lista de contas a pagar); canceladas não entram
+  const pending = f.payables.filter((p) => p.status !== "pago" && p.status !== "cancelado").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0);
   const columns: Column<Row>[] = [
     { id: "desc", header: "Descrição", mobile: "title", sortValue: (p) => p.description, cell: (p) => <span className="block max-w-80 truncate font-medium text-fg max-md:max-w-none max-md:whitespace-normal">{p.description}</span> },
     { id: "project", header: "Projeto", mobile: "subtitle", sortValue: (p) => p.projectCode, cell: (p) => <ProjectCode code={p.projectCode} /> },
@@ -24,6 +25,7 @@ export function FreelancerPaymentsTab({ freelancer: f, showMoney }: { freelancer
       rows={f.payables}
       columns={columns}
       getRowId={(p) => p.id}
+      rowHref={(p) => `/financeiro/pagar?aberto=${p.id}`}
       initialSort={{ id: "due", dir: "desc" }}
       empty={{ icon: "payable", title: "Nenhum pagamento registrado", description: "Os pagamentos nascem das alocações com valor combinado e seguem o fluxo de nota fiscal." }}
       footer={

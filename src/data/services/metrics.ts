@@ -33,14 +33,15 @@ export const metricsApi = {
       const money = canSeeMoney(me) && access(me, "receivables") === "T";
       return {
         byStage: PROJECT_STAGES.filter((s) => s.key !== "concluido").map((s) => ({ key: s.key, label: s.label, category: s.category, count: active.filter((p) => p.projectStageKey === s.key).length })),
-        overdueProjects: active.filter((p) => p.dueAt && new Date(p.dueAt).getTime() < now).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
-        dueThisWeek: active.filter((p) => p.dueAt && new Date(p.dueAt).getTime() >= now && new Date(p.dueAt).getTime() <= week).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, stageKey: p.projectStageKey, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
+        // RN-13/RN-91 — projeto pausado não conta como atrasado nem como "vence esta semana"
+        overdueProjects: active.filter((p) => !p.pausedAt && p.dueAt && new Date(p.dueAt).getTime() < now).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
+        dueThisWeek: active.filter((p) => !p.pausedAt && p.dueAt && new Date(p.dueAt).getTime() >= now && new Date(p.dueAt).getTime() <= week).map((p) => ({ id: p.id, code: p.code, title: p.title, dueAt: p.dueAt!, stageKey: p.projectStageKey, clientName: db.clients.find((c) => c.id === p.clientId)?.tradeName ?? "" })),
         openQuotes: projects.filter((p) => p.status === "cotacao").length,
         openQuotesValue: money ? db.proposals.filter((pr) => pr.status === "enviada" && projects.some((p) => p.id === pr.projectId && p.status === "cotacao")).reduce((a, pr) => a + pr.amountCents, 0) : null,
         activeCount: active.length,
         overdueTasks: db.tasks.filter((t) => !t.deletedAt && t.statusKey !== "concluida" && t.dueAt && new Date(t.dueAt).getTime() < now && (!t.projectId || projects.some((p) => p.id === t.projectId))).length,
         receivableMonth: money ? db.receivables.filter((r) => !r.deletedAt && r.status !== "cancelado" && r.status !== "recebido" && r.expectedAt.slice(0, 7) === thisMonth).reduce((a, r) => a + r.amountCents, 0) : null,
-        payableMonth: money ? db.payables.filter((p) => !p.deletedAt && p.status !== "pago" && p.dueAt.slice(0, 7) === thisMonth).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
+        payableMonth: money ? db.payables.filter((p) => !p.deletedAt && p.status !== "pago" && p.status !== "cancelado" && p.dueAt.slice(0, 7) === thisMonth).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
         mailQueueWarning: false,
       };
     }),
@@ -195,7 +196,7 @@ export const metricsApi = {
                 }, {}),
               ).map((r) => ({ ...r, ticket: r.contracted / r.count })).sort((a, b) => b.contracted - a.contracted).slice(0, 10),
               freelancerCost: Object.values(
-                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt && x.projectId && finIds.has(x.projectId)).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
+                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt && x.status !== "cancelado" && x.projectId && finIds.has(x.projectId)).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
                   acc[x.freelancerId!] ??= { label: db.freelancers.find((fl) => fl.id === x.freelancerId)?.name ?? "—", total: 0, count: 0 };
                   acc[x.freelancerId!].total += x.invoicedAmountCents ?? x.agreedAmountCents;
                   acc[x.freelancerId!].count++;
@@ -254,6 +255,8 @@ export const metricsApi = {
   /** RF-M8-05 — burndown por projeto. */
   burndown: (projectId: ID) =>
     read((db, me) => {
+      // RN-91 — burndown é um indicador: exige acesso a Indicadores, além de ver o projeto
+      if (access(me, "metrics") === "-") throw new ApiError(403, "Seu perfil não tem acesso a indicadores.");
       const p = visibleProjects(db, me).find((x) => x.id === projectId || x.code === projectId);
       if (!p) throw new ApiError(404, "Projeto não encontrado.");
       const tasks = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt);

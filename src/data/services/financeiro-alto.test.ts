@@ -155,7 +155,7 @@ describe("RN-46 — alertas e avisos financeiros só para quem está envolvido",
     link.useCount = 0;
     save(db);
     const adminBefore = notesOf("usr_paula").filter((n) => n.type === "nf_recebida").length;
-    await publicInvoiceApi.submit(link.token, { legalName: "A", document: "123", pixKey: "x", invoiceNumber: "9", amountCents: pay.agreedAmountCents, fileName: "nf.pdf", fileSize: 10, dataUrl: null });
+    await publicInvoiceApi.submit(link.token, { legalName: "A", document: "12345678901", pixKey: "x", invoiceNumber: "9", amountCents: pay.agreedAmountCents, fileName: "nf.pdf", fileSize: 10, dataUrl: null });
     expect(notesOf("usr_paula").filter((n) => n.type === "nf_recebida").length).toBe(adminBefore);
     expect(notesOf("usr_fernanda").some((n) => n.type === "nf_recebida" && n.entityId === pay.id)).toBe(true);
   });
