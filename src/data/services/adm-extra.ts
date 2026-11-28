@@ -1,7 +1,6 @@
 /** Administrativo — extensões de autorização (cofre) usadas pelas telas do M6. */
-import { nowIso } from "../db";
 import type { ID, InstitutionalDocument } from "../types";
-import { ApiError, emit, read, requireAccessNow, touch, write } from "./_core";
+import { ApiError, read, requireAccessNow, write } from "./_core";
 import { access, canWriteAll } from "@/lib/permissions";
 import { admApi } from "./admin";
 import { filesApi } from "./collab";
