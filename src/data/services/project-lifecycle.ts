@@ -180,7 +180,7 @@ function cancelImpact(db: Database, p: Project) {
   const openTasks = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida").length;
   const pendingApprovals = db.approvals.filter((a) => a.projectId === p.id && a.decision === "pendente" && !a.deletedAt);
   const freelancers = db.projectMembers
-    .filter((m) => m.projectId === p.id && !m.deletedAt && m.freelancerId && !m.paymentWaived && !db.payables.some((x) => x.projectMemberId === m.id && !x.deletedAt))
+    .filter((m) => m.projectId === p.id && !m.deletedAt && m.freelancerId && !m.paymentWaived && !db.payables.some((x) => x.projectMemberId === m.id && !x.deletedAt && x.status !== "cancelado"))
     .map((m) => ({ memberId: m.id, name: db.freelancers.find((f) => f.id === m.freelancerId)?.name ?? "Freelancer", agreedAmountCents: m.agreedAmountCents }));
   const previsto = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status === "previsto").length;
   return { invoiced, openTasks, pendingApprovals, freelancers, previsto };

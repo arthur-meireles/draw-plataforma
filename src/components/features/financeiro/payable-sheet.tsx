@@ -6,14 +6,15 @@ import { usePermissions } from "@/components/layout/session";
 import { toast } from "sonner";
 import { Badge, Button, Callout, ConfirmDialog, DateField, DescriptionList, Dialog, Section, Sheet, copyText } from "@/components/ui";
 import { useApiMutation, useOrganization } from "@/data/hooks";
-import { financeApi, payablesExtraApi, reversalsApi } from "@/data/services";
+import { financeApi, financeMedioApi, payablesExtraApi, reversalsApi } from "@/data/services";
 import { dateFull, fromDateInput, money, toDateInput } from "@/lib/format";
 import { PAYABLE_KIND_LABEL, PayableAmount, payableDiff } from "./payable-bits";
+import { EditPayableDialog } from "./edit-payable-dialog";
 import { RegisterInvoiceDialog } from "./register-invoice-dialog";
 import { DeclaredDataSection, PayeeSummary } from "./payee-data";
 import type { PayableRow } from "./types";
 
-type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | "undoApproval" | "reversePayment" | null;
+type Dlg = "pay" | "divergent" | "approve" | "register" | "reissue" | "undoApproval" | "reversePayment" | "edit" | "cancel" | "reactivate" | null;
 
 const linkUrl = (token: string) => `${typeof window === "undefined" ? "" : window.location.origin}/nf/${token}`;
 
@@ -65,6 +66,8 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
   const reissue = useApiMutation((a: { id: string; reason: string }) => payablesExtraApi.requestNewInvoice(a.id, a.reason), { success: "Pedido de nova NF enviado ao freelancer, com o motivo.", onSuccess: () => setDlg(null) });
   const undoApproval = useApiMutation((a: { id: string; reason: string }) => reversalsApi.undoPayableApproval(a.id, a.reason), { success: "Aprovação desfeita. A NF voltou para conferência.", onSuccess: () => setDlg(null) });
   const reversePayment = useApiMutation((a: { id: string; reason: string }) => reversalsApi.reversePayment(a.id, a.reason), { success: "Pagamento estornado. A conta voltou para Aprovado.", onSuccess: () => setDlg(null) });
+  const cancel = useApiMutation((a: { id: string; reason: string }) => financeMedioApi.cancelPayable(a.id, a.reason), { success: "Conta cancelada. Ela sai das somas e do custo do projeto.", onSuccess: () => setDlg(null) });
+  const reactivate = useApiMutation((a: { id: string; reason: string }) => financeMedioApi.reactivatePayable(a.id, a.reason), { success: "Conta reativada.", onSuccess: () => setDlg(null) });
   const org = useOrganization();
   const payDay = org.data?.org.settings.freelancerPaymentDay ?? 20;
 
@@ -75,6 +78,10 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
   const canUndoApproval = canPay && row?.kind === "freelancer" && row.invoicedAmountCents != null;
   const canReversePayment = !!row && writable && row.status === "pago";
   const isFl = row?.kind === "freelancer";
+  // RN-86 — editar vencimento/descrição, cancelar (não paga) e reativar
+  const canEdit = !!row && writable && row.status !== "pago" && row.status !== "cancelado";
+  const canCancel = canEdit;
+  const canReactivate = !!row && writable && row.status === "cancelado";
   // RN-41: NF chegou por outro canal · RN-42: NF em conferência/divergente volta ao freelancer
   const canRegister = !!row && writable && isFl && (row.status === "aguardando_nf" || row.status === "divergente");
   const canReissue = !!row && writable && isFl && (row.status === "em_conferencia" || row.status === "divergente");
@@ -91,9 +98,24 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         ariaTitle="Detalhe da conta a pagar"
         title={row ? `${row.projectCode ?? "Administrativo"} · A pagar` : undefined}
         footer={
-          row && (canReview || canPay || canRegister || canReversePayment) ? (
+          row && (canReview || canPay || canRegister || canReversePayment || canEdit || canReactivate) ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
+                {canEdit && (
+                  <Button variant="secondary" icon="edit" onClick={() => setDlg("edit")}>
+                    Editar
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button variant="ghost" className="text-danger" onClick={() => setDlg("cancel")}>
+                    Cancelar conta…
+                  </Button>
+                )}
+                {canReactivate && (
+                  <Button variant="secondary" icon="undo" onClick={() => setDlg("reactivate")}>
+                    Reativar conta…
+                  </Button>
+                )}
                 {canUndoApproval && (
                   <Button variant="ghost" icon="undo" onClick={() => setDlg("undoApproval")}>
                     Desfazer aprovação…
@@ -178,7 +200,10 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
               items={[
                 { label: "Projeto", hidden: !row.projectCode, value: <Link href={`/projetos/${row.projectCode}?aba=financeiro`} className="inline-flex items-center gap-2 hover:underline"><ProjectCode code={row.projectCode ?? ""} />{row.projectTitle}</Link> },
                 { label: "Valor", hidden: row.kind === "freelancer", value: <PayableAmount cents={row.agreedAmountCents} /> },
-                { label: "Vencimento", value: <span className={row.isOverdue ? "text-danger" : undefined}>{dateFull(row.dueAt)}{row.kind === "freelancer" ? ` · dia ${payDay} do mês seguinte à conclusão (RN-06)` : ""}</span> },
+                { label: "Favorecido", hidden: row.kind === "freelancer" || !row.payeeName, value: row.payeeName, copy: row.payeeName },
+                { label: "Categoria", hidden: row.kind === "freelancer" || !row.category, value: row.category },
+                { label: "Motivo do cancelamento", hidden: row.status !== "cancelado" || !row.cancelReason, value: row.cancelReason },
+                { label: "Vencimento", value: <span className={row.isOverdue ? (row.status === "aguardando_nf" ? "text-warning" : "text-danger") : undefined}>{dateFull(row.dueAt)}{row.isOverdue && row.status === "aguardando_nf" ? " · NF atrasada" : ""}{row.kind === "freelancer" ? ` · dia ${payDay} do mês seguinte à conclusão (RN-06)` : ""}</span> },
                 { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.invoiceIssuedAt ? ` · emitida em ${dateFull(row.invoiceIssuedAt)}` : ""}` : "Ainda não enviada", copy: row.invoiceNumber },
                 { label: "Pagamento", hidden: !row.paidAt, value: dateFull(row.paidAt) },
               ]}
@@ -263,6 +288,30 @@ export function PayableSheet({ row, onClose }: { row: PayableRow | null; onClose
         )}
       </Sheet>
       {row && dlg === "pay" && <PayDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
+      {row && dlg === "edit" && <EditPayableDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
+      <ConfirmDialog
+        open={!!row && dlg === "cancel"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Cancelar esta conta a pagar?"
+        description="A conta sai das somas e do custo do projeto e o link de NF do freelancer deixa de valer. O histórico é mantido e dá para reativar depois."
+        confirmLabel="Cancelar conta"
+        cancelLabel="Voltar"
+        destructive
+        reason={{ label: "Motivo do cancelamento", placeholder: "Ex.: lançada em duplicidade", required: true }}
+        loading={cancel.isPending}
+        onConfirm={(reason) => row && cancel.mutate({ id: row.id, reason: reason ?? "" })}
+      />
+      <ConfirmDialog
+        open={!!row && dlg === "reactivate"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Reativar a conta a pagar?"
+        description="A conta volta a contar nas somas e no custo do projeto (Aguardando NF, para freelancer; Aprovado, para despesa) e o link de NF volta a valer por 30 dias."
+        confirmLabel="Reativar conta"
+        cancelLabel="Voltar"
+        reason={{ label: "Motivo da reativação", placeholder: "Ex.: cancelada por engano", required: true }}
+        loading={reactivate.isPending}
+        onConfirm={(reason) => row && reactivate.mutate({ id: row.id, reason: reason ?? "" })}
+      />
       {row && dlg === "register" && <RegisterInvoiceDialog row={row} open onOpenChange={(o) => !o && setDlg(null)} />}
       <ConfirmDialog
         open={!!row && dlg === "reissue"}

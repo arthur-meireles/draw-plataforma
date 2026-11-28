@@ -89,7 +89,7 @@ describe("RN-03 / RN-04 — conclusão e NF do freelancer", () => {
     expect(pay.status).toBe("aguardando_nf");
     expect(new Date(pay.dueAt).getUTCDate()).toBe(20); // RN-06
     const link = db.shareLinks.find((s) => s.targetId === pay.id)!;
-    const res = await publicInvoiceApi.submit(link.token, { legalName: "Ana ME", document: "123", pixKey: "ana@x.com", invoiceNumber: "77", amountCents: 150_000, fileName: "nf.pdf", fileSize: 1000, dataUrl: null });
+    const res = await publicInvoiceApi.submit(link.token, { legalName: "Ana ME", document: "12345678901", pixKey: "ana@x.com", invoiceNumber: "77", amountCents: 150_000, fileName: "nf.pdf", fileSize: 1000, dataUrl: null });
     expect(res.status).toBe("divergente");
     await financeApi.approvePayable(pay.id);
     expect(loadDb().payables.find((x) => x.id === pay.id)!.status).toBe("aprovado");
@@ -99,7 +99,7 @@ describe("RN-03 / RN-04 — conclusão e NF do freelancer", () => {
     const pending = loadDb().payables.find((x) => x.status === "aguardando_nf")!;
     const link = loadDb().shareLinks.find((s) => s.targetId === pending.id)!;
     link.expiresAt = new Date(Date.now() + 86_400_000).toISOString();
-    const res = await publicInvoiceApi.submit(link.token, { legalName: "X", document: "1", pixKey: "", invoiceNumber: "1", amountCents: pending.agreedAmountCents, fileName: "nf.pdf", fileSize: 10, dataUrl: null });
+    const res = await publicInvoiceApi.submit(link.token, { legalName: "X", document: "12345678901", pixKey: "", invoiceNumber: "1", amountCents: pending.agreedAmountCents, fileName: "nf.pdf", fileSize: 10, dataUrl: null });
     expect(res.status).toBe("em_conferencia");
   });
 });

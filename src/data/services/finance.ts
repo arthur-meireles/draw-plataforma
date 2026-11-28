@@ -6,6 +6,7 @@ import { applyInvoiceAmount } from "./payables-extra";
 import { computeFinancials } from "./projects";
 import { clientTermDays, dueFromInvoice, effectiveReceivableStatus, financeAudience, financeContactOf, maskTail } from "./finance-rules";
 import { notifyMany } from "./audience";
+import { documentError } from "./cadastro-rules";
 import { access, canWriteAll } from "@/lib/permissions";
 
 export interface ReceivableFilters {
@@ -202,7 +203,7 @@ export const financeApi = {
             freelancerColor: fl?.avatarColor ?? null,
             invoiceRequest: req ?? null,
             shareToken: link && !link.revokedAt ? link.token : null,
-            isOverdue: p.status !== "pago" && new Date(p.dueAt).getTime() < Date.now(),
+            isOverdue: p.status !== "pago" && p.status !== "cancelado" && new Date(p.dueAt).getTime() < Date.now(),
           };
         })
         .filter((p) => !q || `${p.projectCode ?? ""} ${p.freelancerName ?? ""} ${p.description}`.toLowerCase().includes(q))
@@ -210,7 +211,7 @@ export const financeApi = {
     }),
 
   /** RF-M5-03 — despesas lançadas manualmente. */
-  createExpense: (input: { kind: "despesa_projeto" | "despesa_adm"; projectId?: ID | null; description: string; agreedAmountCents: number; dueAt: string }) =>
+  createExpense: (input: { kind: "despesa_projeto" | "despesa_adm"; projectId?: ID | null; description: string; agreedAmountCents: number; dueAt: string; payeeName?: string | null; category?: string | null }) =>
     write((db, me) => {
       if (!canWriteAll(me, "payables")) throw new ApiError(403, "Sem permissão.");
       const errors: Record<string, string> = {};
@@ -233,6 +234,8 @@ export const financeApi = {
         paidAt: null,
         status: "aprovado",
         divergenceNote: null,
+        payeeName: input.payeeName?.trim() || null,
+        category: input.category?.trim() || null,
       };
       db.payables.push(p);
       emit(db, me, { type: "payable.created", entityType: "payable", entityId: p.id, project: p.projectId ? db.projects.find((x) => x.id === p.projectId) : null, data: { amountCents: p.agreedAmountCents, kind: p.kind } });
@@ -290,6 +293,7 @@ export const financeApi = {
       if (!canWriteAll(me, "payables")) throw new ApiError(403, "Seu perfil não reenvia pedidos de NF. Peça ao Financeiro.");
       const p = db.payables.find((x) => x.id === payableId);
       if (!p || !p.freelancerId) throw new ApiError(404, "Lançamento não encontrado.");
+      if (p.status === "cancelado") throw new ApiError(409, "Esta conta está cancelada. Reative-a antes de reenviar o link.");
       const req = db.freelancerInvoiceRequests.find((r) => r.payableId === p.id);
       const link = req ? db.shareLinks.find((s) => s.id === req.shareLinkId) : null;
       if (link) {
@@ -409,7 +413,8 @@ export const publicInvoiceApi = {
       const pixKey = input.pixKey.trim() || payFl?.pixKey || "";
       const errors: Record<string, string> = {};
       if (!input.legalName.trim()) errors.legalName = "Informe a razão social ou nome";
-      if (!document) errors.document = "Informe CPF ou CNPJ";
+      const docErr = documentError(document, true);
+      if (docErr) errors.document = docErr;
       if (!pixKey) errors.pixKey = "Informe a chave PIX para o pagamento";
       if (!input.invoiceNumber.trim()) errors.invoiceNumber = "Informe o número da NF";
       if (input.amountCents <= 0) errors.amountCents = "Informe o valor da NF";

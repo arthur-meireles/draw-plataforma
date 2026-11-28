@@ -1,4 +1,5 @@
 /** Cadastros: clientes, contatos, grupos, freelancers, tipos de projeto (M2). */
+import { documentError, pixKeyError } from "./cadastro-rules";
 import { baseFields, nowIso } from "../db";
 import type { Address, Client, Freelancer, ID, MemberRole, ProjectStageKey, ProjectType, Specialty } from "../types";
 import { ApiError, emit, freelancerIdOf, read, requireAccess, touch, visibleProjects, write } from "./_core";
@@ -288,9 +289,12 @@ export const freelancersApi = {
         }
         emit(db, me, { type: "freelancer.email_changed", entityType: "freelancer", entityId: f.id, data: { before: f.email, after: email, loginSynced: !!u } });
       }
+      // RN-09/RN-89 — mudança de dado bancário ou fiscal fica registrada (campos, sem os valores)
+      const bankFields = (["legalName", "document", "pixKey", "bankName", "bankAgency", "bankAccount"] as const).filter((k) => k in patch && (f[k] ?? null) !== ((patch as unknown as Record<string, string | null | undefined>)[k] ?? null));
       Object.assign(f, patch);
       touch(f);
       emit(db, me, { type: "freelancer.updated", entityType: "freelancer", entityId: f.id, data: {} });
+      if (bankFields.length) emit(db, me, { type: "freelancer.bank_data_changed", entityType: "freelancer", entityId: f.id, data: { fields: bankFields, by: id === myFl ? "freelancer" : "financeiro" } });
       return f;
     }),
 
@@ -318,6 +322,11 @@ function validateFreelancer(input: FreelancerInput) {
   if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) errors.email = "Informe um e-mail válido, ex.: nome@gmail.com";
   if (!input.specialties.length) errors.specialties = "Escolha ao menos uma especialidade";
   if (!input.jobTitle?.trim()) errors.jobTitle = "Informe o cargo, ex.: Designer gráfico";
+  // RN-89 — CPF/CNPJ e PIX validados no serviço (não só na tela)
+  const docErr = documentError(input.document);
+  if (docErr) errors.document = docErr;
+  const pixErr = pixKeyError(input.pixKey);
+  if (pixErr) errors.pixKey = pixErr;
   if (Object.keys(errors).length) throw new ApiError(422, "Revise os campos destacados.", errors);
 }
 
