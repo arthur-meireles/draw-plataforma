@@ -29,7 +29,7 @@ function undoApprovalPlan(db: Database, p: Project) {
   const recs = db.receivables.filter((r) => r.projectId === p.id && !r.deletedAt && r.status !== "cancelado");
   const billed = recs.filter((r) => r.issuedAt || r.status !== "previsto");
   if (billed.length) blockers.push(`${billed.length} recebível(is) já faturado(s) ou recebido(s). Cancele a NF no Financeiro antes.`);
-  const payables = db.payables.filter((x) => x.projectId === p.id && !x.deletedAt);
+  const payables = db.payables.filter((x) => x.projectId === p.id && !x.deletedAt && x.status !== "cancelado");
   if (payables.length) blockers.push(`${payables.length} conta(s) a pagar já criada(s) para o projeto.`);
   const tasks = db.tasks.filter((t) => t.projectId === p.id && !t.deletedAt && t.statusKey !== "concluida" && t.stageKey && EXECUTION_STAGES.has(t.stageKey));
   return { proposal, receivables: recs, tasks, blockers };
@@ -129,6 +129,16 @@ export const projectLifecycleApi = {
       restored.forEach((r) => {
         r.status = "previsto";
         touch(r);
+      });
+      // RN-86 — contas de freelancer que o cancelamento derrubou voltam a aguardar a NF
+      const payIds = new Set<ID>(((cancelEvent?.data.cancelledPayableIds as ID[] | undefined) ?? []));
+      db.payables.filter((x) => payIds.has(x.id) && x.status === "cancelado" && !x.deletedAt).forEach((x) => {
+        x.status = "aguardando_nf";
+        x.cancelReason = null;
+        const req = db.freelancerInvoiceRequests.find((r) => r.payableId === x.id);
+        const link = req ? db.shareLinks.find((s) => s.id === req.shareLinkId) : null;
+        if (link) link.revokedAt = null;
+        touch(x);
       });
       p.status = "ativo";
       p.projectStageKey = p.projectStageKey && p.projectStageKey !== "concluido" ? p.projectStageKey : "validacao_cliente";

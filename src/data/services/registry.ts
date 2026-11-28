@@ -191,7 +191,7 @@ export const freelancersApi = {
             ...maskFreelancer(x, canBank || x.id === myFl),
             projectsTotal: members.length,
             // Resumo de pagamentos (planilha: Resumo Freelancers) — só com acesso a valores
-            paymentsTotalCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
+            paymentsTotalCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt && p.status !== "cancelado").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
             paymentsPaidCents: canSeeMoney(me) || x.id === myFl ? db.payables.filter((p) => p.freelancerId === x.id && !p.deletedAt && p.status === "pago").reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
             activeProjects,
             openTasks: db.tasks.filter((t) => t.assigneeFreelancerId === x.id && t.statusKey !== "concluida" && !t.deletedAt).length,

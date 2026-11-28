@@ -5,18 +5,19 @@ import { EventTimeline, Money, ProjectCode, ReceivableKindBadge, ReceivableStatu
 import { usePermissions } from "@/components/layout/session";
 import { Button, ConfirmDialog, DescriptionList, Section, Sheet } from "@/components/ui";
 import { useApiMutation } from "@/data/hooks";
-import { financeApi, reversalsApi } from "@/data/services";
+import { financeApi, financeMedioApi, reversalsApi } from "@/data/services";
 import { dateFull, formatCnpj } from "@/lib/format";
 import { CollectionNoteEditor } from "./collection-note-editor";
 import { EditReceivableDialog, IssueInvoiceDialog, ReceiveDialog } from "./receivable-dialogs";
 import type { ReceivableRow } from "./types";
 
-type Dlg = "issue" | "receive" | "edit" | "cancel" | "cancelInvoice" | "undoReceipt" | null;
+type Dlg = "issue" | "receive" | "edit" | "cancel" | "reactivate" | "cancelInvoice" | "undoReceipt" | null;
 
 export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; onClose: () => void }) {
   const { canWriteAll } = usePermissions();
   const [dlg, setDlg] = useState<Dlg>(null);
-  const cancel = useApiMutation((id: string) => financeApi.cancelReceivable(id), { success: "Lançamento cancelado.", onSuccess: () => setDlg(null) });
+  const cancel = useApiMutation((a: { id: string; reason: string }) => financeApi.cancelReceivable(a.id, a.reason), { success: "Lançamento cancelado.", onSuccess: () => setDlg(null) });
+  const reactivate = useApiMutation((a: { id: string; reason: string }) => financeMedioApi.reactivateReceivable(a.id, a.reason), { success: "Lançamento reativado.", onSuccess: () => setDlg(null) });
   const cancelInvoice = useApiMutation((a: { id: string; reason: string }) => reversalsApi.cancelInvoice(a.id, a.reason), { success: "NF cancelada. O lançamento voltou para Previsto.", onSuccess: () => setDlg(null) });
   const undoReceipt = useApiMutation((a: { id: string; reason: string }) => reversalsApi.undoReceipt(a.id, a.reason), { success: "Baixa estornada. O lançamento voltou para Faturado.", onSuccess: () => setDlg(null) });
   const writable = canWriteAll("receivables");
@@ -64,6 +65,12 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
                 </Button>
               )}
             </div>
+          ) : row && writable && row.status === "cancelado" ? (
+            <div className="flex w-full justify-end">
+              <Button variant="secondary" icon="undo" onClick={() => setDlg("reactivate")}>
+                Reativar lançamento…
+              </Button>
+            </div>
           ) : undefined
         }
       >
@@ -95,7 +102,8 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
                 { label: "CNPJ", value: formatCnpj(row.clientCnpj) },
                 { label: "Origem", value: row.kind === "adicional" ? "Cobrança adicional" : row.proposalInstallmentId ? "Parcela da proposta aprovada (RN-01/RN-02)" : "Lançamento avulso ou importado" },
                 { label: "Vencimento", value: row.dueBasis ? `${dateFull(row.expectedAt)} · ${row.dueBasis}` : dateFull(row.expectedAt) },
-                { label: "Impostos", value: <Money cents={row.taxCents} /> },
+                { label: "Impostos sobre o faturamento", value: <Money cents={row.taxCents} /> },
+                ...(row.status === "cancelado" && row.cancelReason ? [{ label: "Motivo do cancelamento", value: row.cancelReason }] : []),
                 { label: "NF", value: row.invoiceNumber ? `Nº ${row.invoiceNumber}${row.issuedAt ? ` · emitida em ${dateFull(row.issuedAt)}` : ""}` : "Ainda não emitida" },
                 { label: "Recebimento", value: row.receivedAt ? dateFull(row.receivedAt) : "—" },
               ]}
@@ -142,8 +150,20 @@ export function ReceivableSheet({ row, onClose }: { row: ReceivableRow | null; o
         confirmLabel="Cancelar lançamento"
         cancelLabel="Voltar"
         destructive
+        reason={{ label: "Motivo do cancelamento", placeholder: "Ex.: parcela lançada em duplicidade", required: true }}
         loading={cancel.isPending}
-        onConfirm={() => row && cancel.mutate(row.id)}
+        onConfirm={(reason) => row && cancel.mutate({ id: row.id, reason: reason ?? "" })}
+      />
+      <ConfirmDialog
+        open={!!row && dlg === "reactivate"}
+        onOpenChange={(o) => !o && setDlg(null)}
+        title="Reativar o lançamento?"
+        description="O lançamento volta a contar em contas a receber e na margem do projeto (Previsto, ou Faturado se a NF continuar emitida). A reativação fica no histórico."
+        confirmLabel="Reativar lançamento"
+        cancelLabel="Voltar"
+        reason={{ label: "Motivo da reativação", placeholder: "Ex.: cancelado por engano", required: true }}
+        loading={reactivate.isPending}
+        onConfirm={(reason) => row && reactivate.mutate({ id: row.id, reason: reason ?? "" })}
       />
     </>
   );

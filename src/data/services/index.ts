@@ -30,4 +30,5 @@ export { reversalsApi } from "./finance-reversals";
 export { freelancerPaymentDataApi } from "./freelancer-payment-data";
 export { clientBillingApi } from "./client-billing";
 export { collectionApi, type CollectionChannel } from "./collection";
+export { financeMedioApi, type NewReceivableInput, type PayablePatch } from "./finance-medio";
 export { projectFinanceImpactApi } from "./project-finance-impact";

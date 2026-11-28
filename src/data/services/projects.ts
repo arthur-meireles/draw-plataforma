@@ -34,7 +34,8 @@ import { canSeeMoney, canWriteAll } from "@/lib/permissions";
 import { settleCompletionPayables, type CompletionDecision } from "./payables-extra";
 import { afterCompletionTeamChange } from "./team-after-completion";
 import { billDeliveryOnCompletion, closeOnCancel } from "./project-lifecycle";
-import { effectiveReceivableStatus } from "./finance-rules";
+import { effectiveReceivableStatus, financeAudience } from "./finance-rules";
+import { cancelOpenFreelancerPayables } from "./finance-medio";
 
 export interface ProjectFilters {
   status?: Project["status"][];
@@ -308,6 +309,8 @@ export const projectsApi = {
       }
       generateTasksFromTemplate(db, me, p);
       emit(db, me, { type: "project.direct_created", entityType: "project", entityId: p.id, project: p, data: { contractedAmountCents: p.contractedAmountCents, installments: input.installments.length } });
+      // RN-90 — o Financeiro também precisa saber de projeto direto (mesmo aviso da aprovação de proposta)
+      notifyMany(db, me, financeAudience(db, p), { type: "aprovacao", title: "Novo projeto direto — recebíveis criados", body: `${p.code} · ${input.installments.length} parcela(s) previstas`, project: p, entityType: "project", entityId: p.id });
       return p;
     }),
 
@@ -503,7 +506,9 @@ export const projectsApi = {
       // RN-59 — guarda quais recebíveis o cancelamento derrubou para a reativação devolver.
       // RN-73 — retira pendências com o cliente e avisa Financeiro/contas a pagar do que segue em aberto
       const closing = closeOnCancel(db, me, p);
-      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), ...closing } });
+      // RN-86 — contas de freelancer ainda aguardando NF viram "cancelado" (e o link de NF deixa de valer)
+      const cancelledPayableIds = cancelOpenFreelancerPayables(db, me, p.id, reason.trim());
+      emit(db, me, { type: "project.cancelled", entityType: "project", entityId: p.id, project: p, data: { reason, cancelledReceivableIds: cancelled.map((r) => r.id), cancelledPayableIds, ...closing } });
       notifyMany(db, me, projectAudience(db, p), { type: "projeto", title: "Projeto cancelado", body: `Motivo: ${reason.trim()}`, project: p });
       return p;
     }),
@@ -594,7 +599,7 @@ export const projectsApi = {
 export function computeFinancials(db: Database, projectId: ID): ProjectFinancials {
   const p = db.projects.find((x) => x.id === projectId)!;
   const recs = db.receivables.filter((r) => r.projectId === projectId && !r.deletedAt && r.status !== "cancelado");
-  const pays = db.payables.filter((r) => r.projectId === projectId && !r.deletedAt);
+  const pays = db.payables.filter((r) => r.projectId === projectId && !r.deletedAt && r.status !== "cancelado");
   const contracted = p.contractedAmountCents ?? 0;
   const freelancerCommitted = db.projectMembers
     .filter((m) => m.projectId === projectId && m.freelancerId && m.agreedAmountCents && !m.deletedAt)
@@ -626,6 +631,8 @@ export function computeFinancials(db: Database, projectId: ID): ProjectFinancial
     taxCents: tax,
     marginCents: margin,
     marginPct: revenue ? margin / revenue : null,
+    parcelsCents: parcels.reduce((a, r) => a + r.amountCents, 0),
+    parcelsGapCents: parcels.length ? parcels.reduce((a, r) => a + r.amountCents, 0) - contracted : 0,
   };
 }
 

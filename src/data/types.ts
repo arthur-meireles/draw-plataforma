@@ -511,10 +511,13 @@ export interface Receivable extends BaseEntity {
   collectionNote: string | null;
   /** Regra que definiu o vencimento (RN-45), ex.: "Aprovação + 30 dias (prazo do cliente)". Ausente = informado à mão. */
   dueBasis?: string | null;
+  /** RN-85 — motivo do cancelamento do lançamento (obrigatório ao cancelar). */
+  cancelReason?: string | null;
 }
 
 export type PayableKind = "freelancer" | "despesa_projeto" | "despesa_adm";
-export type PayableStatus = "aguardando_nf" | "em_conferencia" | "divergente" | "aprovado" | "pago";
+/** `cancelado` (RN-86): pagável que deixou de existir (projeto cancelado, lançamento indevido); sai de somas e custos. */
+export type PayableStatus = "aguardando_nf" | "em_conferencia" | "divergente" | "aprovado" | "pago" | "cancelado";
 
 export interface Payable extends BaseEntity {
   projectId: ID | null;
@@ -532,6 +535,11 @@ export interface Payable extends BaseEntity {
   divergenceNote: string | null;
   /** Data de emissão da NF do freelancer, quando registrada manualmente (RN-41). */
   invoiceIssuedAt?: ISODate | null;
+  /** RN-86 — motivo do cancelamento. */
+  cancelReason?: string | null;
+  /** RN-87 — despesa: quem recebe (fornecedor) e a categoria; vazios nas contas de freelancer. */
+  payeeName?: string | null;
+  category?: string | null;
 }
 
 export interface FreelancerInvoiceRequest extends BaseEntity {
@@ -571,6 +579,10 @@ export interface ProjectFinancials {
   marginCents: number;
   /** Margem sobre a receita. */
   marginPct: number | null;
+  /** RN-90 — soma das parcelas do contrato (não canceladas, sem adicionais); 0 quando não há parcelas. */
+  parcelsCents: number;
+  /** RN-90 — parcelas − contratado; ≠ 0 mostra o aviso "parcelas somam X ≠ contratado Y" (só quando há parcelas). */
+  parcelsGapCents: number;
 }
 
 /* ───────────── 6.7 Administrativo ───────────── */

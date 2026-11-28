@@ -93,6 +93,10 @@ export const financeApi = {
       const r = db.receivables.find((x) => x.id === id);
       if (!r) throw new ApiError(404, "Lançamento não encontrado.");
       if (!r.issuedAt) throw new ApiError(409, "Emita a NF antes de dar baixa.");
+      if (r.status === "recebido" || r.status === "cancelado") throw new ApiError(409, "Este lançamento já foi encerrado.");
+      // RN-85 — a data do recebimento não é anterior à emissão da NF nem futura
+      if (new Date(receivedAt).getTime() < new Date(r.issuedAt).getTime() - 86_400_000) throw new ApiError(422, "A data do recebimento não pode ser antes da emissão da NF.", { date: "Antes da emissão da NF" });
+      if (new Date(receivedAt).getTime() > Date.now() + 86_400_000) throw new ApiError(422, "A data do recebimento não pode estar no futuro.", { date: "Data no futuro" });
       r.status = "recebido";
       r.receivedAt = receivedAt;
       touch(r);
@@ -107,7 +111,17 @@ export const financeApi = {
       const r = db.receivables.find((x) => x.id === id);
       if (!r) throw new ApiError(404, "Lançamento não encontrado.");
       const p = db.projects.find((x) => x.id === r.projectId)!;
-      if (patch.amountCents !== undefined) emitValueChange(db, me, "receivable", r.id, p, "amountCents", r.amountCents, patch.amountCents);
+      if (r.status === "recebido" || r.status === "cancelado") throw new ApiError(409, "Este lançamento já foi encerrado. Estorne a baixa ou reative o lançamento para editar.");
+      if (patch.amountCents !== undefined && patch.amountCents !== r.amountCents) {
+        if (patch.amountCents <= 0) throw new ApiError(422, "Informe um valor maior que zero.", { amount: "Informe um valor maior que zero" });
+        // RN-85 — depois da NF o valor é o da nota: cancele a NF (RN-47) para corrigir
+        if (r.issuedAt) throw new ApiError(409, "Este lançamento já tem NF emitida: o valor é o da nota. Cancele a NF, corrija o valor e emita de novo.");
+        emitValueChange(db, me, "receivable", r.id, p, "amountCents", r.amountCents, patch.amountCents);
+        // RN-85 — o imposto acompanha o valor (RN-15) enquanto não há NF
+        const tax = taxOf(db, patch.amountCents);
+        emitValueChange(db, me, "receivable", r.id, p, "taxCents", r.taxCents, tax);
+        r.taxCents = tax;
+      }
       if (patch.expectedAt !== undefined && patch.expectedAt !== r.expectedAt) {
         emitValueChange(db, me, "receivable", r.id, p, "expectedAt", r.expectedAt, patch.expectedAt);
         r.dueBasis = "Alterado manualmente";
@@ -123,6 +137,7 @@ export const financeApi = {
       if (!canWriteAll(me, "receivables")) throw new ApiError(403, "Sem permissão.");
       const p = db.projects.find((x) => x.id === projectId || x.code === projectId);
       if (!p) throw new ApiError(404, "Projeto não encontrado.");
+      if (p.status !== "ativo" && p.status !== "concluido") throw new ApiError(409, "Cobrança adicional só em projeto ativo ou concluído.");
       const errors: Record<string, string> = {};
       if (!input.description.trim()) errors.description = "Descreva o que está sendo cobrado";
       if (input.amountCents <= 0) errors.amountCents = "Informe o valor";
@@ -145,14 +160,19 @@ export const financeApi = {
       return r;
     }),
 
-  cancelReceivable: (id: ID) =>
+  /** RN-85 — cancelar exige motivo; lançamento recebido não cancela (estorne a baixa antes). */
+  cancelReceivable: (id: ID, reason: string) =>
     write((db, me) => {
       if (!canWriteAll(me, "receivables")) throw new ApiError(403, "Sem permissão.");
       const r = db.receivables.find((x) => x.id === id);
       if (!r) throw new ApiError(404, "Lançamento não encontrado.");
+      if (!reason?.trim()) throw new ApiError(422, "Informe o motivo. Ele fica no histórico do lançamento.", { reason: "Informe o motivo" });
+      if (r.status === "recebido") throw new ApiError(409, "Lançamento recebido não pode ser cancelado. Estorne a baixa antes (Estornar baixa…).");
+      if (r.status === "cancelado") throw new ApiError(409, "Este lançamento já está cancelado.");
       r.status = "cancelado";
+      r.cancelReason = reason.trim();
       touch(r);
-      emit(db, me, { type: "receivable.cancelled", entityType: "receivable", entityId: r.id, project: db.projects.find((x) => x.id === r.projectId), data: {} });
+      emit(db, me, { type: "receivable.cancelled", entityType: "receivable", entityId: r.id, project: db.projects.find((x) => x.id === r.projectId), data: { reason: reason.trim() } });
     }),
 
   payables: (f: PayableFilters = {}) =>
@@ -299,7 +319,7 @@ export const financeApi = {
         return d.toISOString().slice(0, 7);
       });
       const recs = db.receivables.filter((r) => !r.deletedAt && r.status !== "cancelado").map((r) => ({ ...r, status: effectiveReceivableStatus(r) }));
-      const pays = db.payables.filter((p) => !p.deletedAt);
+      const pays = db.payables.filter((p) => !p.deletedAt && p.status !== "cancelado");
       const byMonth = keys.map((k) => ({
         month: k,
         previsto: recs.filter((r) => r.expectedAt.slice(0, 7) === k).reduce((a, r) => a + r.amountCents, 0),

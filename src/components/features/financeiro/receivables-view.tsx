@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Money, ProjectCode, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
-import { Button, ClearFiltersButton, DataTable, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, type Column } from "@/components/ui";
+import { Button, ClearFiltersButton, DataTable, Fab, FilterSelectChip, MonthFilterChip, PageBody, PageHeader, SearchInput, StatusChips, Toolbar, type Column } from "@/components/ui";
 import { useApiQuery, useClientOptions } from "@/data/hooks";
 import { RECEIVABLE_STATUS_LABEL } from "@/data/reference";
 import { financeApi, projectsApi } from "@/data/services";
@@ -12,6 +12,7 @@ import type { ReceivableStatus } from "@/data/types";
 import { downloadTextFile, toCsv } from "@/lib/csv";
 import { dateFull, money, formatCnpj } from "@/lib/format";
 import { useUrlState } from "@/lib/use-url-state";
+import { NewReceivableDialog } from "./new-receivable-dialog";
 import { ReceivableSheet } from "./receivable-sheet";
 import { SummaryStrip, TotalsRow } from "./totals-row";
 import type { ReceivableRow } from "./types";
@@ -51,6 +52,7 @@ export function ReceivablesView() {
   const { canWriteAll, money: canMoney } = usePermissions();
   const [f, set, activeCount] = useUrlState({ status: "todos", cliente: undefined as string | undefined, mes: undefined as string | undefined, projeto: undefined as string | undefined, q: "", aberto: undefined as string | undefined });
   const [selected, setSelected] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
 
   const clients = useClientOptions();
   const projects = useApiQuery(["projects", "options"], () => projectsApi.list());
@@ -88,11 +90,18 @@ export function ReceivablesView() {
       <PageHeader crumbs={[{ label: "Financeiro", icon: "finance", href: canWriteAll("receivables") ? "/financeiro/visao-geral" : undefined }, { label: "A receber", icon: "receivable" }]} count={rows?.length} />
       <Toolbar
         end={
-          selected.length > 0 && (
-            <Button variant="secondary" size="sm" icon="download" onClick={exportCsv}>
-              Exportar CSV ({selected.length})
-            </Button>
-          )
+          <>
+            {selected.length > 0 && (
+              <Button variant="secondary" size="sm" icon="download" onClick={exportCsv}>
+                Exportar CSV ({selected.length})
+              </Button>
+            )}
+            {canWriteAll("receivables") && (
+              <Button variant="primary" size="sm" icon="add" className="max-md:hidden" onClick={() => setCreating(true)}>
+                Novo recebível
+              </Button>
+            )}
+          </>
         }
       >
         <SearchInput className="max-md:w-48 max-md:shrink-0" value={f.q} onChange={(v) => set({ q: v })} placeholder="Buscar projeto, cliente, NF…" />
@@ -154,6 +163,8 @@ export function ReceivablesView() {
         />
       </PageBody>
       <ReceivableSheet row={open} onClose={() => set({ aberto: undefined })} />
+      {canWriteAll("receivables") && <Fab label="Novo recebível" onClick={() => setCreating(true)} />}
+      <NewReceivableDialog open={creating} onOpenChange={setCreating} onCreated={(id) => set({ aberto: id })} />
     </>
   );
 }

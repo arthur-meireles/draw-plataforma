@@ -40,7 +40,7 @@ export const metricsApi = {
         activeCount: active.length,
         overdueTasks: db.tasks.filter((t) => !t.deletedAt && t.statusKey !== "concluida" && t.dueAt && new Date(t.dueAt).getTime() < now && (!t.projectId || projects.some((p) => p.id === t.projectId))).length,
         receivableMonth: money ? db.receivables.filter((r) => !r.deletedAt && r.status !== "cancelado" && r.status !== "recebido" && r.expectedAt.slice(0, 7) === thisMonth).reduce((a, r) => a + r.amountCents, 0) : null,
-        payableMonth: money ? db.payables.filter((p) => !p.deletedAt && p.status !== "pago" && p.dueAt.slice(0, 7) === thisMonth).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
+        payableMonth: money ? db.payables.filter((p) => !p.deletedAt && p.status !== "pago" && p.status !== "cancelado" && p.dueAt.slice(0, 7) === thisMonth).reduce((a, p) => a + (p.invoicedAmountCents ?? p.agreedAmountCents), 0) : null,
         mailQueueWarning: false,
       };
     }),
@@ -195,7 +195,7 @@ export const metricsApi = {
                 }, {}),
               ).map((r) => ({ ...r, ticket: r.contracted / r.count })).sort((a, b) => b.contracted - a.contracted).slice(0, 10),
               freelancerCost: Object.values(
-                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt && x.projectId && finIds.has(x.projectId)).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
+                db.payables.filter((x) => x.kind === "freelancer" && !x.deletedAt && x.status !== "cancelado" && x.projectId && finIds.has(x.projectId)).reduce<Record<string, { label: string; total: number; count: number }>>((acc, x) => {
                   acc[x.freelancerId!] ??= { label: db.freelancers.find((fl) => fl.id === x.freelancerId)?.name ?? "—", total: 0, count: 0 };
                   acc[x.freelancerId!].total += x.invoicedAmountCents ?? x.agreedAmountCents;
                   acc[x.freelancerId!].count++;

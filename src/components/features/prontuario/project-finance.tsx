@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Button, DataTable, Section, Stat, type Column } from "@/components/ui";
+import { Button, Callout, DataTable, Section, Stat, type Column } from "@/components/ui";
 import { AdditionalChargeDialog, Money, PayableStatusBadge, ReceivableKindBadge, ReceivableStatusBadge } from "@/components/domain";
 import { usePermissions } from "@/components/layout/session";
 import { useApiQuery } from "@/data/hooks";
@@ -69,6 +69,21 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
         </div>
       )}
 
+      {f && f.parcelsGapCents !== 0 && (
+        <Callout
+          tone="warning"
+          title="As parcelas não fecham com o valor contratado"
+          action={
+            canRec ? (
+              <Button asChild size="sm" variant="secondary">
+                <Link href={`/financeiro/receber?projeto=${project.code}`}>Ajustar parcelas</Link>
+              </Button>
+            ) : undefined
+          }
+        >
+          As parcelas somam <Money cents={f.parcelsCents} /> e o contratado é <Money cents={f.contractedCents} /> ({f.parcelsGapCents > 0 ? "sobram" : "faltam"} <Money cents={Math.abs(f.parcelsGapCents)} />). Ajuste uma parcela ou o valor contratado para que fechem.
+        </Callout>
+      )}
       {canRec && (
         <Section
           title="Contas a receber"
@@ -81,12 +96,12 @@ export function ProjectFinance({ project }: { project: ProjectDetail }) {
           }
           bodyClassName="p-0"
         >
-          <DataTable rows={recs.data} columns={recColumns} getRowId={(r) => r.id} isLoading={recs.isLoading} error={recs.error} onRetry={() => recs.refetch()} empty={{ compact: true, icon: "receivable", title: "Nenhum recebível", description: "Os recebíveis nascem das parcelas da proposta aprovada." }} />
+          <DataTable rows={recs.data} columns={recColumns} getRowId={(r) => r.id} rowHref={(r) => `/financeiro/receber?aberto=${r.id}`} isLoading={recs.isLoading} error={recs.error} onRetry={() => recs.refetch()} empty={{ compact: true, icon: "receivable", title: "Nenhum recebível", description: "Os recebíveis nascem das parcelas da proposta aprovada." }} />
         </Section>
       )}
       {canPay && (
         <Section title="Contas a pagar" icon="payable" bodyClassName="p-0">
-          <DataTable rows={pays.data} columns={payColumns} getRowId={(p) => p.id} isLoading={pays.isLoading} error={pays.error} onRetry={() => pays.refetch()} empty={{ compact: true, icon: "payable", title: "Nenhum pagamento", description: "Ao concluir o projeto, o sistema gera a conta a pagar de cada freelancer com valor combinado." }} />
+          <DataTable rows={pays.data} columns={payColumns} getRowId={(p) => p.id} rowHref={access("payables") === "-" ? undefined : (p) => `/financeiro/pagar?aberto=${p.id}`} isLoading={pays.isLoading} error={pays.error} onRetry={() => pays.refetch()} empty={{ compact: true, icon: "payable", title: "Nenhum pagamento", description: "Ao concluir o projeto, o sistema gera a conta a pagar de cada freelancer com valor combinado." }} />
         </Section>
       )}
       <AdditionalChargeDialog projectId={project.id} projectCode={project.code} open={chargeOpen} onOpenChange={setChargeOpen} />
